@@ -15,6 +15,9 @@ RUN cargo install \
     cargo-chef \
     jaq
 
+# Install hdf5 development libraries.
+RUN apt update && apt install -y libhdf5-dev libhdf5-doc
+
 # This target prepares the recipe.json file for the build stage.
 chef-prepare:
     COPY --dir crates Cargo.toml .

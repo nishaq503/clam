@@ -16,17 +16,12 @@ ndarray-npy = "0.8.1"
 serde = { version = "1.0.118", features = ["derive"] }
 serde_json = "1.0.105"
 
+num-complex = { version = "0.4.4", features = ["serde"] }
+
 clap = { version = "4.4.4", features = ["derive"] }
-log = "0.4.19"
-env_logger = "0.10.0"
 num-format = "0.4.4"
 csv = "1.2.2"
 rand = "0.8.5"
-
-[[bin]]
-name = "knn-results"
-path = "src/knn_reports.rs"
-
-[[bin]]
-name = "scaling-results"
-path = "src/scaling_reports.rs"
+rayon = "1.8.0"
+mt_logger = "3.0.2"
+hdf5 = { git = "https://github.com/aldanor/hdf5-rust.git", rev = "2e44e9033cb06551fea9769a816eca4895b6267a" }
