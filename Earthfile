@@ -56,7 +56,8 @@ test:
 # This target runs the tests on aarch64, it can be expanded to run tests on additional platforms, but it is SLOW.
 cross-test:
     FROM +fmt
-    RUN cargo install cross --git  https://github.com/cross-rs/cross
+    RUN cargo install cross
+    # RUN cargo install cross --git https://github.com/cross-rs/cross
     WITH DOCKER
         RUN cross test --target aarch64-unknown-linux-gnu --all-features
     END

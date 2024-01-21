@@ -1,3 +1,6 @@
+[![abd-clam](https://img.shields.io/crates/v/abd-clam.svg)](https://crates.io/crates/abd-clam)
+[![Tests](https://github.com/URI-ABD/clam/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/URI-ABD/clam/actions/workflows/tests.yml)
+
 # CLAM: Clustering, Learning and Approximation with Manifolds (v0.27.0)
 
 The Rust implementation of CLAM.
