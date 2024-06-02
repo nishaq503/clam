@@ -55,6 +55,8 @@ libm = "0.2.7"
 # TODO: Break sharded datasets out into an optional feature
 # memmap2 = "0.8.0"
 smartcore = "0.2.1"
+ndarray = { version = "0.15.6", features = ["rayon", "serde"] }
+ndarray-npy = "0.8.1"
 
 
 [dev-dependencies]

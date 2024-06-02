@@ -1,48 +1,29 @@
 //! A trait to be implemented by machine learning regressors.
 
-use automl::IntoSupervisedData;
-use smartcore::linalg::naive::dense_matrix::DenseMatrix;
 use std::path::Path;
 
-/// Trait to represent types that can be used as a meta-ML model
+use automl::IntoSupervisedData;
+use ndarray::prelude::*;
+use smartcore::linalg::naive::dense_matrix::DenseMatrix;
+
+/// Trait to represent types that can be used as a Meta-ML model
 pub trait MetaMLModel {
     /// Train the model on the given features and targets.
     ///
-    /// This function is used to train the model using the provided dataset, consisting of features and targets.
-    ///
     /// # Arguments
     ///
-    /// * `dataset`: A `MetaMLDataset` containing the features and targets used for training.
-    ///
-    /// # Panics
-    ///
-    /// This function may panic in the following situations:
-    ///
-    /// * If the number of columns in the features data isn't 6.
-    /// * If the number of rows in the features data doesn't match the number of elements in the targets data.
-    ///
-    fn train(&mut self, dataset: MetaMLDataset);
+    /// * `dataset`: A `MetaMLDataset` for training.
+    #[must_use]
+    fn train(&mut self, dataset: MetaMLDataset) -> Self
+    where
+        Self: Sized;
 
     /// Makes a prediction given a trained model and 6 feature values.
-    ///
-    /// This function is used to make a prediction using the provided feature values and a previously
-    /// trained model.
     ///
     /// # Arguments
     ///
     /// * `features`: A reference to an array of 6 feature values.
-    ///
-    /// # Panics
-    ///
-    /// This function may panic in the following situation:
-    ///
-    /// * If the model hasn't been trained.
-    ///
-    /// # Errors
-    ///
-    /// Will throw error if model is not saved
-    ///
-    fn predict(&self, features: &[f32; 6]) -> Result<f32, String>;
+    fn predict(&self, features: &[f32; 6]) -> f32;
 
     /// Loads a trained meta-ml model from disk.
     ///
@@ -52,17 +33,16 @@ pub trait MetaMLModel {
     ///
     /// * `path`: A reference to the file path where the model is stored.
     ///
+    /// # Returns
+    ///
+    /// If successful, this function returns the loaded `MetaMLModel`.
+    ///
     /// # Errors
     ///
     /// This function can return errors in the following cases:
     ///
     /// * If the serialized model cannot be read from the input file path.
     /// * If the trained model cannot be deserialized.
-    ///
-    /// # Returns
-    ///
-    /// If successful, this function returns the loaded meta-ml model.
-    ///
     fn load(path: &Path) -> Result<Self, String>
     where
         Self: Sized;
@@ -73,22 +53,18 @@ pub trait MetaMLModel {
     ///
     /// * `path`: A reference to the file path where the model will be saved.
     ///
-    /// # Returns
-    ///
-    /// Returns `Result<(), String>` where `Ok(())` indicates success, and `Err` contains an error message.
-    ///
     /// # Errors
+    ///
     /// * If the model hasn't been trained.
     /// * If the trained model cannot be serialized.
     /// * If the serialized model cannot be written to the output file path.
-    ///
     fn save(&self, path: &Path) -> Result<(), String>;
 }
 
 /// Represents the training data for a `MetaML` model
 ///
 /// # Invariants:
-/// * The number of columns in the features data is 6
+///
 /// * The number of rows in the features data is equal to the number of rows in the target data
 /// * The data at row `i` of the features data corresponds to the data at row `i` of the targets data
 pub struct MetaMLDataset {
@@ -99,97 +75,54 @@ pub struct MetaMLDataset {
 }
 
 impl MetaMLDataset {
-    /// Creates a dataset for training a meta-ml model from a set of feature values and their corresponding target values.
+    /// Creates a dataset for training a meta-ml model from a set of feature
+    /// values and their corresponding target values.
     ///
     /// # Arguments
     ///
-    /// * `_features`: A slice of arrays representing feature values, where each array has 6 elements.
-    /// * `_targets`: A slice of target values.
+    /// * `features`: A slice of arrays representing feature values, where each array has 6 elements.
+    /// * `targets`: A slice of target values.
     ///
     /// # Returns
     ///
-    /// Returns a `Result<Self, String>` where `Ok(Self)` indicates success, and `Err` contains an error message.
+    /// A `MetaMLDataset` containing the provided feature and target data.
     ///
     /// # Errors
-    /// * If the number of columns in the features data isn't 6.
-    /// * If the number of rows in the features data doesn't match the number of elements in the targets data.
     ///
-    pub fn new(_features: &[[f32; 6]], _targets: &[f32]) -> Result<Self, String> {
-        todo!()
+    /// * If the number of rows in the features data doesn't match the number of elements in the targets data.
+    pub fn new(features: &Array2<f32>, targets: &Array1<f32>) -> Result<Self, String> {
         // TODO: better error checking once the rust branch is merged into master
-        // if features.len() == targets.len() {
-        //     Err("Different number of features and targets in input data".to_string())
-        // } else {
-        //     let features = DenseMatrix::from_2d_vec(&features.iter().map(|f| f.to_vec()).collect::<Vec<_>>());
-        //     let targets = targets.to_vec();
-        //     Ok(Self { features, targets })
-        // }
+        if features.nrows() == targets.len() {
+            return Err("Different number of features and targets in input data".to_string());
+        }
+
+        let values = features.iter().copied().collect::<Vec<_>>();
+        let features = DenseMatrix::from_array(features.nrows(), features.ncols(), &values);
+        let targets = targets.to_vec();
+        Ok(Self { features, targets })
     }
 
     /// Creates a dataset for training a meta-ml model from input data on disk.
     ///
     /// # Arguments
     ///
-    /// * `_features_file_path`: Path to the file containing feature data.
-    /// * `_targets_file_path`: Path to the file containing target data.
+    /// * `features_file_path`: Path to the file containing feature data.
+    /// * `targets_file_path`: Path to the file containing target data.
     ///
     /// # Returns
     ///
     /// Returns a `Result<Self, String>` where `Ok(Self)` indicates success, and `Err` contains an error message.
     ///
     /// # Errors
-    /// * If either of the given paths can't be converted to a string.
+    ///
     /// * If either of the given files can't be found, opened, or parsed as `f32`s.
     /// * If the data contained within the features file isn't two-dimensional.
     /// * If the data contained within the targets file isn't one-dimensional.
-    /// * If the number of columns in the features data isn't 6.
     /// * If the number of rows in the features data doesn't match the number of elements in the targets data.
-    ///
-    pub fn from_npy(_features_file_path: &Path, _targets_file_path: &Path) -> Result<Self, String> {
-        todo!()
-
-        // let features_f64: Array2<f64> = read_npy(
-        //     features_file_path
-        //         .to_str()
-        //         .ok_or_else(|| "failed to convert PathBuf to string".to_string())?,
-        // )
-        // .map_err(|_| "failed to read the features data file".to_string())?;
-        // let targets_f64: Array1<f64> = read_npy(
-        //     targets_file_path
-        //         .to_str()
-        //         .ok_or_else(|| "failed to convert PathBuf to string".to_string())?,
-        // )
-        // .map_err(|_| "failed to read the outputs data file".to_string())?;
-        //
-        // // Ensure the input data has the correct shape
-        // if features_f64.ncols() != 6 {
-        //     return Err(format!(
-        //         "Input features had {} columns (expected 6)",
-        //         features_f64.ncols()
-        //     ));
-        // }
-        // if features_f64.nrows() != targets_f64.len() {
-        //     return Err(format!(
-        //         "Input features had {} data points, but targets had {}",
-        //         features_f64.nrows(),
-        //         targets_f64.len(),
-        //     ));
-        // }
-        //
-        // // Transform the training data from f64 to f32 (we are given f64, but automl uses f32s)
-        // let features: Array2<f32> = features_f64.map(|x| *x as f32);
-        // let targets: Array1<f32> = targets_f64.map(|x| *x as f32);
-        //
-        // // Transform the training data to vectors. This won't fail, we checked
-        // // that the data has the correct shape earlier
-        // let features: Vec<[f32; 6]> = features
-        //     .rows()
-        //     .into_iter()
-        //     .map(|row| row.into_iter().copied().collect::<Vec<_>>().try_into().unwrap())
-        //     .collect();
-        // let targets: Vec<f32> = targets.to_vec();
-        //
-        // Self::new(&features, &targets)
+    pub fn from_npy(features_file_path: &Path, targets_file_path: &Path) -> Result<Self, String> {
+        let features = ndarray_npy::read_npy(features_file_path).map_err(|e| e.to_string())?;
+        let targets = ndarray_npy::read_npy(targets_file_path).map_err(|e| e.to_string())?;
+        Self::new(&features, &targets)
     }
 }
 
