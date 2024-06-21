@@ -17,14 +17,14 @@
 #![doc = include_str!("../README.md")]
 
 mod cakes;
-pub mod chaoda;
+// pub mod chaoda;
 pub mod codec;
 mod core;
 pub mod utils;
 
 pub use crate::{
     cakes::{knn, rnn, Cakes},
-    chaoda::graph,
+    // chaoda::graph,
     core::{
         cluster::{Cluster, MaxDepth, MinCardinality, PartitionCriteria, PartitionCriterion, UniBall},
         dataset::{Dataset, Instance, VecDataset},
