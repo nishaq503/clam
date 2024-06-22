@@ -7,12 +7,18 @@ use crate::utils;
 use super::{Graph, OddBall};
 
 mod cc;
+mod gn;
 mod sc;
+mod vd;
 
 #[allow(unused_imports)]
 pub use cc::CC;
 #[allow(unused_imports)]
+pub use gn::GN;
+#[allow(unused_imports)]
 pub use sc::SC;
+#[allow(unused_imports)]
+pub use vd::VD;
 
 /// A trait for an algorithm in the CHAODA ensemble.
 pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
@@ -22,7 +28,7 @@ pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    fn evaluate(&self, g: &Graph<U, C, N>) -> Vec<f32>;
+    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32>;
 
     /// Whether to normalize anomaly scores by cluster or by point.
     fn normalize_by_cluster(&self) -> bool;
@@ -48,7 +54,7 @@ pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    fn call(&self, g: &Graph<U, C, N>) -> Vec<f32> {
+    fn call(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
         let cluster_scores = {
             let scores = self.evaluate(g);
             if self.normalize_by_cluster() {

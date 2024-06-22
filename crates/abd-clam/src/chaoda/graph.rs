@@ -1,7 +1,5 @@
 //! A `Graph` is a collection of `OddBall`s.
 
-#![allow(dead_code, unused_variables)]
-
 use core::{cmp::Reverse, ops::Index};
 use std::collections::BinaryHeap;
 
@@ -38,9 +36,6 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
         cluster_scorer: fn(&C) -> f32,
         min_depth: usize,
     ) -> Self {
-        let root = tree.root();
-        let data = tree.data();
-
         // We use `OrderedFloat` to have the `Ord` trait implemented for `f64` so that we can use it in a `BinaryHeap`.
         // We use `Reverse` on `OddBall` so that we can bias towards selecting shallower `OddBall`s.
         // `OddBall`s are selected by highest score and then by shallowest depth.
@@ -60,7 +55,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
             candidates.retain(|&(_, Reverse(o))| !c.is_ancestor_of(o) && !c.is_descendant_of(o));
         }
 
-        Self::from_clusters(clusters, data)
+        Self::from_clusters(clusters, tree.data())
     }
 
     /// Create a new `Graph` from a collection of `OddBall`s.
@@ -91,10 +86,28 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
         self.components.iter().flat_map(Component::iter_clusters)
     }
 
+    /// Iterate over the lists of neighbors of the `OddBall`s in the `Graph`.
+    pub fn iter_neighbors(&self) -> impl Iterator<Item = &[(usize, U)]> {
+        self.components.iter().flat_map(Component::iter_neighbors)
+    }
+
+    /// Get the diameter of the `Graph`.
+    pub fn diameter(&mut self) -> usize {
+        self.components.iter_mut().map(Component::diameter).max().unwrap_or(0)
+    }
+
+    /// Get the neighborhood sizes of all `OddBall`s in the `Graph`.
+    pub fn neighborhood_sizes(&mut self) -> Vec<&Vec<usize>> {
+        self.components
+            .iter_mut()
+            .flat_map(Component::neighborhood_sizes)
+            .collect()
+    }
+
     /// Get the total number of points in the `Graph`.
     #[must_use]
     pub fn population(&self) -> usize {
-        *self.populations.last().unwrap_or(&0)
+        self.populations.last().copied().unwrap_or(0)
     }
 
     /// Iterate over the `Component`s in the `Graph`.
@@ -115,6 +128,12 @@ pub struct Component<'a, U: Number, C: OddBall<U, N>, const N: usize> {
     adjacency_list: Vec<Vec<(usize, U)>>,
     /// The total number of points in the `OddBall`s in the `Component`.
     population: usize,
+    /// Eccentricity of each `OddBall` in the `Component`.
+    eccentricities: Option<Vec<usize>>,
+    /// Diameter of the `Component`.
+    diameter: Option<usize>,
+    /// neighborhood sizes of each `OddBall` in the `Component` at each step through a BFT.
+    neighborhood_sizes: Option<Vec<Vec<usize>>>,
 }
 
 impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
@@ -147,6 +166,9 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
             clusters,
             adjacency_list,
             population,
+            eccentricities: None,
+            diameter: None,
+            neighborhood_sizes: None,
         }
     }
 
@@ -157,6 +179,10 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
     ///
     /// This method is used when first constructing the `Graph` to find the
     /// connected subgraphs of the `Graph`.
+    ///
+    /// This method is meant to be used in a loop to find all connected subgraphs
+    /// of a `Graph`. It resets the internal members of the `Component` that are
+    /// computed lazily, i.e. the eccentricities, diameter, and neighborhood sizes.
     fn partition(mut self) -> [Self; 2] {
         // Perform a traversal of the adjacency list to find a connected subgraph.
         let mut visited = vec![false; self.clusters.len()];
@@ -198,6 +224,9 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
             clusters,
             adjacency_list,
             population,
+            eccentricities: None,
+            diameter: None,
+            neighborhood_sizes: None,
         };
 
         // Set the current component to the visited clusters.
@@ -217,6 +246,9 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         self.clusters = clusters;
         self.adjacency_list = adjacency_list;
         self.population = self.clusters.iter().map(|c| c.cardinality()).sum();
+        self.eccentricities = None;
+        self.diameter = None;
+        self.neighborhood_sizes = None;
 
         [self, other]
     }
@@ -231,6 +263,11 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         self.clusters.iter().copied()
     }
 
+    /// Iterate over the lists of neighbors of the `OddBall`s in the `Component`.
+    fn iter_neighbors(&self) -> impl Iterator<Item = &[(usize, U)]> {
+        self.adjacency_list.iter().map(Vec::as_slice)
+    }
+
     /// Get the number of `OddBall`s in the `Component`.
     pub fn cardinality(&self) -> usize {
         self.clusters.len()
@@ -239,6 +276,68 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
     /// Get the total number of points in the `Component`.
     pub const fn population(&self) -> usize {
         self.population
+    }
+
+    /// Get the diameter of the `Component`.
+    pub fn diameter(&mut self) -> usize {
+        if self.diameter.is_none() {
+            if self.eccentricities.is_none() {
+                self.compute_eccentricities();
+            }
+            let ecc = self
+                .eccentricities
+                .as_ref()
+                .unwrap_or_else(|| unreachable!("We just computed the eccentricities"));
+            self.diameter = Some(ecc.iter().copied().max().unwrap_or(0));
+        }
+        self.diameter
+            .unwrap_or_else(|| unreachable!("We just computed the diameter"))
+    }
+
+    /// Compute the eccentricity of each `OddBall` in the `Component`.
+    pub fn compute_eccentricities(&mut self) {
+        self.eccentricities = Some(self.neighborhood_sizes().iter().map(Vec::len).collect());
+    }
+
+    /// Get the neighborhood sizes of all `OddBall`s in the `Component`.
+    pub fn neighborhood_sizes(&mut self) -> &[Vec<usize>] {
+        if self.neighborhood_sizes.is_none() {
+            self.neighborhood_sizes = Some(
+                (0..self.cardinality())
+                    .map(|i| self.compute_neighborhood_sizes(i))
+                    .collect(),
+            );
+        }
+        self.neighborhood_sizes
+            .as_ref()
+            .unwrap_or_else(|| unreachable!("We just computed the neighborhood sizes"))
+    }
+
+    /// Get the cumulative number of neighbors encountered after each step through a BFT.
+    fn compute_neighborhood_sizes(&self, i: usize) -> Vec<usize> {
+        let mut visited = vec![false; self.cardinality()];
+        let mut neighborhood_sizes = Vec::new();
+        let mut stack = vec![i];
+        while let Some(i) = stack.pop() {
+            if visited[i] {
+                continue;
+            }
+            visited[i] = true;
+            let new_neighbors = self.adjacency_list[i]
+                .iter()
+                .filter(|(j, _)| !visited[*j])
+                .collect::<Vec<_>>();
+            neighborhood_sizes.push(new_neighbors.len());
+            stack.extend(new_neighbors.iter().map(|(j, _)| *j));
+        }
+
+        neighborhood_sizes
+            .iter()
+            .scan(0, |acc, x| {
+                *acc += x;
+                Some(*acc)
+            })
+            .collect()
     }
 }
 

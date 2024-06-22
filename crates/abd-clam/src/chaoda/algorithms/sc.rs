@@ -10,7 +10,7 @@ use super::Algorithm;
 pub struct SC;
 
 impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for SC {
-    fn evaluate(&self, g: &Graph<U, C, N>) -> Vec<f32> {
+    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
         g.iter_components()
             .flat_map(|sg| {
                 let p = -sg.population().as_f32();

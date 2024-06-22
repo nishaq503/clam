@@ -10,7 +10,7 @@ use super::Algorithm;
 pub struct CC;
 
 impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for CC {
-    fn evaluate(&self, g: &Graph<U, C, N>) -> Vec<f32> {
+    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
         g.iter_clusters().map(|c| -c.cardinality().as_f32()).collect()
     }
 
