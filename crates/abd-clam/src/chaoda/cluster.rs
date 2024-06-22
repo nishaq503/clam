@@ -1,4 +1,4 @@
-//! A `Vertex` for a `Graph`.
+//! An extension fo the `Cluster` trait to allow for anomaly detection.
 
 use core::{
     cmp::Ordering,
@@ -16,8 +16,15 @@ use serde::{
 
 use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
+/// An extension of the `Cluster` trait to allow for anomaly detection.
+pub trait OddBall<U: Number, const N: usize>: Cluster<U> {
+    /// Return a 2-tuple of the properties of the cluster used for anomaly detection,
+    /// and the exponential moving averages of those properties.
+    fn properties(&self) -> ([f32; N], [f32; N]);
+}
+
 /// The ratios used for anomaly detection.
-pub type Ratios = [f64; 6];
+pub type Ratios = [f32; 6];
 
 /// A `Vertex` for a `Graph`.
 #[derive(Debug)]
@@ -28,6 +35,13 @@ pub struct Vertex<U: Number> {
     ratios: Ratios,
     /// Child Vertices
     children: Option<Children<U, Self>>,
+}
+
+impl<U: Number> OddBall<U, 3> for Vertex<U> {
+    fn properties(&self) -> ([f32; 3], [f32; 3]) {
+        let [c, r, l, c_, r_, l_] = self.ratios;
+        ([c, r, l], [c_, r_, l_])
+    }
 }
 
 impl<I: Instance, U: Number, D: Dataset<I, U>> crate::Tree<I, U, D, Vertex<U>> {
@@ -86,9 +100,9 @@ impl<U: Number> Vertex<U> {
     pub(crate) fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
         let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
 
-        let c = self.cardinality().as_f64() / pc;
-        let r = self.radius().as_f64() / pr;
-        let l = self.lfd() / pl;
+        let c = self.cardinality().as_f32() / pc;
+        let r = self.radius().as_f32() / pr;
+        let l = self.lfd().as_f32() / pl;
 
         let c_ = utils::next_ema(c, pc_);
         let r_ = utils::next_ema(r, pr_);
@@ -145,8 +159,8 @@ impl<U: Number> Vertex<U> {
             .into_iter()
             .zip(means)
             .zip(sds)
-            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f64::consts::SQRT_2, f64::EPSILON))
-            .map(libm::erf)
+            .map(|((value, mean), std)| (value - mean) / std.mul_add(core::f32::consts::SQRT_2, f32::EPSILON))
+            .map(libm::erff)
             .map(|v| (1. + v) / 2.)
             .collect::<Vec<_>>();
 

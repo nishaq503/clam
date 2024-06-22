@@ -1,4 +1,4 @@
-//! A `Graph` is a collection of `Cluster`s.
+//! A `Graph` is a collection of `OddBall`s.
 
 #![allow(dead_code, unused_variables)]
 
@@ -9,49 +9,53 @@ use distances::Number;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
-use crate::{Cluster, Dataset, Instance, Tree};
+use crate::{Dataset, Instance, Tree};
 
-/// A `Graph` is a collection of `Cluster`s.
+use super::OddBall;
+
+/// A `Graph` is a collection of `OddBall`s.
 ///
-/// Two `Cluster`s have an edge between them if they have any overlapping volume,
+/// Two `OddBall`s have an edge between them if they have any overlapping volume,
 /// i.e. if the distance between their centers is no greater than the sum of their
 /// radii.
-pub struct Graph<'a, U: Number, C: Cluster<U>> {
+pub struct Graph<'a, U: Number, C: OddBall<U, N>, const N: usize> {
     /// The collection of `Component`s in the `Graph`.
-    components: Vec<Component<'a, U, C>>,
+    components: Vec<Component<'a, U, C, N>>,
+    /// Cumulative populations of the `Component`s in the `Graph`.
+    populations: Vec<usize>,
 }
 
-impl<'a, U: Number, C: Cluster<U>> Graph<'a, U, C> {
+impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
     /// Create a new `Graph` from a `Tree`.
     ///
     /// # Arguments
     ///
     /// * `tree`: The `Tree` to create the `Graph` from.
-    /// * `cluster_scorer`: A function that scores a `Cluster`.
-    /// * `min_depth`: The minimum depth at which to consider a `Cluster`.
+    /// * `cluster_scorer`: A function that scores a `OddBall`.
+    /// * `min_depth`: The minimum depth at which to consider a `OddBall`.
     pub fn from_tree<I: Instance, D: Dataset<I, U>>(
         tree: &'a Tree<I, U, D, C>,
-        cluster_scorer: fn(&C) -> f64,
+        cluster_scorer: fn(&C) -> f32,
         min_depth: usize,
     ) -> Self {
         let root = tree.root();
         let data = tree.data();
 
         // We use `OrderedFloat` to have the `Ord` trait implemented for `f64` so that we can use it in a `BinaryHeap`.
-        // We use `Reverse` on `Cluster` so that we can bias towards selecting shallower `Cluster`s.
-        // `Cluster`s are selected by highest score and then by shallowest depth.
+        // We use `Reverse` on `OddBall` so that we can bias towards selecting shallower `OddBall`s.
+        // `OddBall`s are selected by highest score and then by shallowest depth.
         let mut candidates = tree
             .root()
             .subtree()
             .into_iter()
-            .filter(|c| c.depth() >= min_depth)
+            .filter(|c| c.is_leaf() || c.depth() >= min_depth)
             .map(|c| (OrderedFloat(cluster_scorer(c)), Reverse(c)))
             .collect::<BinaryHeap<_>>();
 
         let mut clusters = vec![];
         while let Some((_, Reverse(c))) = candidates.pop() {
             clusters.push(c);
-            // Remove `Cluster`s that are ancestors or descendants of the selected `Cluster`, so as not to have duplicates
+            // Remove `OddBall`s that are ancestors or descendants of the selected `OddBall`, so as not to have duplicates
             // in the `Graph`.
             candidates.retain(|&(_, Reverse(o))| !c.is_ancestor_of(o) && !c.is_descendant_of(o));
         }
@@ -59,7 +63,7 @@ impl<'a, U: Number, C: Cluster<U>> Graph<'a, U, C> {
         Self::from_clusters(clusters, data)
     }
 
-    /// Create a new `Graph` from a collection of `Cluster`s.
+    /// Create a new `Graph` from a collection of `OddBall`s.
     pub fn from_clusters<I: Instance, D: Dataset<I, U>>(clusters: Vec<&'a C>, data: &D) -> Self {
         let c = Component::new(clusters, data);
         let [mut c, mut other] = c.partition();
@@ -68,7 +72,34 @@ impl<'a, U: Number, C: Cluster<U>> Graph<'a, U, C> {
             [c, other] = other.partition();
             components.push(c);
         }
-        Self { components }
+        let populations = components
+            .iter()
+            .map(|c| c.population)
+            .scan(0, |acc, x| {
+                *acc += x;
+                Some(*acc)
+            })
+            .collect();
+        Self {
+            components,
+            populations,
+        }
+    }
+
+    /// Iterate over the `OddBall`s in the `Graph`.
+    pub fn iter_clusters(&self) -> impl Iterator<Item = &C> {
+        self.components.iter().flat_map(Component::iter_clusters)
+    }
+
+    /// Get the total number of points in the `Graph`.
+    #[must_use]
+    pub fn population(&self) -> usize {
+        *self.populations.last().unwrap_or(&0)
+    }
+
+    /// Iterate over the `Component`s in the `Graph`.
+    pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U, C, N>> {
+        self.components.iter()
     }
 }
 
@@ -76,16 +107,18 @@ impl<'a, U: Number, C: Cluster<U>> Graph<'a, U, C> {
 ///
 /// We break the `Graph` into connected `Component`s because this makes several
 /// computations significantly easier to think about and implement.
-struct Component<'a, U: Number, C: Cluster<U>> {
-    /// The collection of `Cluster`s in the `Component`.
+pub struct Component<'a, U: Number, C: OddBall<U, N>, const N: usize> {
+    /// The collection of `OddBall`s in the `Component`.
     clusters: Vec<&'a C>,
-    /// The adjacency list of the `Component`. Each `usize` is the index of a `Cluster`
-    /// in the `clusters` field and the distance between the two `Cluster`s.
+    /// The adjacency list of the `Component`. Each `usize` is the index of a `OddBall`
+    /// in the `clusters` field and the distance between the two `OddBall`s.
     adjacency_list: Vec<Vec<(usize, U)>>,
+    /// The total number of points in the `OddBall`s in the `Component`.
+    population: usize,
 }
 
-impl<'a, U: Number, C: Cluster<U>> Component<'a, U, C> {
-    /// Create a new `Component` from a collection of `Cluster`s.
+impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
+    /// Create a new `Component` from a collection of `OddBall`s.
     fn new<I: Instance, D: Dataset<I, U>>(clusters: Vec<&'a C>, data: &D) -> Self {
         let adjacency_list = clusters
             .par_iter()
@@ -108,9 +141,12 @@ impl<'a, U: Number, C: Cluster<U>> Component<'a, U, C> {
             })
             .collect();
 
+        let population = clusters.iter().map(|c| c.cardinality()).sum();
+
         Self {
             clusters,
             adjacency_list,
+            population,
         }
     }
 
@@ -153,13 +189,15 @@ impl<'a, U: Number, C: Cluster<U>> Component<'a, U, C> {
                 let pos = clusters
                     .iter()
                     .position(|c| c.name() == old_c.name())
-                    .unwrap_or_else(|| unreachable!("Cluster not found in partitioned component"));
+                    .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
                 *j = pos;
             }
         }
+        let population = clusters.iter().map(|c| c.cardinality()).sum();
         let other = Self {
             clusters,
             adjacency_list,
+            population,
         };
 
         // Set the current component to the visited clusters.
@@ -172,23 +210,39 @@ impl<'a, U: Number, C: Cluster<U>> Component<'a, U, C> {
                 let pos = clusters
                     .iter()
                     .position(|c| c.name() == old_c.name())
-                    .unwrap_or_else(|| unreachable!("Cluster not found in partitioned component"));
+                    .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
                 *j = pos;
             }
         }
         self.clusters = clusters;
         self.adjacency_list = adjacency_list;
+        self.population = self.clusters.iter().map(|c| c.cardinality()).sum();
 
         [self, other]
     }
 
-    /// Check if the `Component` has any `Cluster`s.
+    /// Check if the `Component` has any `OddBall`s.
     fn is_empty(&self) -> bool {
         self.clusters.is_empty()
     }
+
+    /// Iterate over the `OddBall`s in the `Component`.
+    fn iter_clusters(&self) -> impl Iterator<Item = &C> {
+        self.clusters.iter().copied()
+    }
+
+    /// Get the number of `OddBall`s in the `Component`.
+    pub fn cardinality(&self) -> usize {
+        self.clusters.len()
+    }
+
+    /// Get the total number of points in the `Component`.
+    pub const fn population(&self) -> usize {
+        self.population
+    }
 }
 
-impl<'a, U: Number, C: Cluster<U>> Index<usize> for Component<'a, U, C> {
+impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Index<usize> for Component<'a, U, C, N> {
     type Output = C;
 
     fn index(&self, index: usize) -> &Self::Output {

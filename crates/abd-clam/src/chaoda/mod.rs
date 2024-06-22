@@ -1,9 +1,11 @@
 //! Clustered Hierarchical Anomaly and Outlier Detection Algorithms (CHAODA)
 
+mod algorithms;
+mod cluster;
 mod graph;
 mod meta_ml;
-mod vertex;
 
+pub use algorithms::Algorithm;
+pub use cluster::{OddBall, Ratios, Vertex};
 pub use graph::Graph;
-pub use meta_ml::{linear_regression::LinearRegression, Model};
-pub use vertex::{Ratios, Vertex};
+pub use meta_ml::Model;
