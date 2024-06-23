@@ -20,7 +20,10 @@ use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, Partitio
 pub trait OddBall<U: Number, const N: usize>: Cluster<U> {
     /// Return a 2-tuple of the properties of the cluster used for anomaly detection,
     /// and the exponential moving averages of those properties.
-    fn properties(&self) -> ([f32; N], [f32; N]);
+    fn ratios(&self) -> ([f32; N], [f32; N]);
+
+    /// Return the accumulated child-parent cardinality ratio.
+    fn accumulated_cp_car_ratio(&self) -> f32;
 }
 
 /// The ratios used for anomaly detection.
@@ -35,12 +38,18 @@ pub struct Vertex<U: Number> {
     ratios: Ratios,
     /// Child Vertices
     children: Option<Children<U, Self>>,
+    /// The accumulated child-parent cardinality ratio.
+    accumulated_ratio: f32,
 }
 
 impl<U: Number> OddBall<U, 3> for Vertex<U> {
-    fn properties(&self) -> ([f32; 3], [f32; 3]) {
+    fn ratios(&self) -> ([f32; 3], [f32; 3]) {
         let [c, r, l, c_, r_, l_] = self.ratios;
         ([c, r, l], [c_, r_, l_])
+    }
+
+    fn accumulated_cp_car_ratio(&self) -> f32 {
+        self.accumulated_ratio
     }
 }
 
@@ -66,12 +75,13 @@ impl<U: Number> Vertex<U> {
             uni_ball,
             ratios,
             children,
+            accumulated_ratio: 1.0,
         }
     }
 
     /// Creates a new `Vertex` tree.
     pub fn from_base_tree(root: UniBall<U>) -> Self {
-        Self::from_uni_ball(root).set_child_parent_ratios([1.0; 6])
+        Self::from_uni_ball(root).set_child_parent_ratios([1.0; 6], 1.0)
     }
 
     /// Recursively creates a new `Vertex` tree.
@@ -97,7 +107,7 @@ impl<U: Number> Vertex<U> {
     /// Set the child-parent ratios.
     #[must_use]
     #[allow(clippy::similar_names)]
-    pub(crate) fn set_child_parent_ratios(mut self, parent_ratios: Ratios) -> Self {
+    fn set_child_parent_ratios(mut self, parent_ratios: Ratios, p_cp: f32) -> Self {
         let [pc, pr, pl, pc_, pr_, pl_] = parent_ratios;
 
         let c = self.cardinality().as_f32() / pc;
@@ -110,6 +120,7 @@ impl<U: Number> Vertex<U> {
 
         let ratios = [c, r, l, c_, r_, l_];
         self.ratios = ratios;
+        self.accumulated_ratio = p_cp + c;
 
         if let Some(Children {
             left,
@@ -119,8 +130,8 @@ impl<U: Number> Vertex<U> {
             polar_distance,
         }) = self.children
         {
-            let left = Box::new(left.set_child_parent_ratios(ratios));
-            let right = Box::new(right.set_child_parent_ratios(ratios));
+            let left = Box::new(left.set_child_parent_ratios(ratios, self.accumulated_ratio));
+            let right = Box::new(right.set_child_parent_ratios(ratios, self.accumulated_ratio));
             let children = Children {
                 left,
                 right,
@@ -137,7 +148,7 @@ impl<U: Number> Vertex<U> {
     /// Normalizes the ratios in the subtree.
     #[must_use]
     pub fn normalize_ratios(mut self) -> Self {
-        let all_ratios = self.subtree().into_iter().map(Self::ratios).collect::<Vec<_>>();
+        let all_ratios = self.subtree().into_iter().map(|v| v.ratios).collect::<Vec<_>>();
 
         let all_ratios = utils::rows_to_cols(&all_ratios);
 
@@ -175,16 +186,6 @@ impl<U: Number> Vertex<U> {
             }
             None => (),
         }
-    }
-
-    /// The base `UniBall` of the `Vertex`.
-    pub const fn uni_ball(&self) -> &UniBall<U> {
-        &self.uni_ball
-    }
-
-    /// The ratios of the `Vertex`.
-    pub const fn ratios(&self) -> Ratios {
-        self.ratios
     }
 }
 

@@ -18,7 +18,6 @@ impl StationaryProbability {
     /// # Arguments
     ///
     /// * `num_steps`: The Random Walk will be simulated for 2^`num_steps` steps.
-    #[allow(dead_code)]
     pub const fn new(num_steps: usize) -> Self {
         Self { num_steps }
     }

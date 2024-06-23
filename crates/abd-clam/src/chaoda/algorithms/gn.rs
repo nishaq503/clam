@@ -18,7 +18,6 @@ impl GraphNeighborhood {
     /// # Parameters
     ///
     /// * `diameter_fraction`: The fraction of graph diameter to use as the neighborhood radius.
-    #[allow(dead_code)]
     pub fn new(diameter_fraction: f32) -> Result<Self, String> {
         if diameter_fraction <= 0.0 || diameter_fraction >= 1.0 {
             Err("Diameter fraction must be in the range [0, 1]".to_string())

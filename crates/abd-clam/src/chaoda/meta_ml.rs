@@ -2,23 +2,20 @@
 
 use std::path::Path;
 
-use distances::Number;
 use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
 use smartcore::{
     api::{Predictor, SupervisedEstimator},
     ensemble::random_forest_regressor::RandomForestRegressor,
     linalg::basic::matrix::DenseMatrix,
-    linear::linear_regression::LinearRegression,
+    linear::{
+        elastic_net::ElasticNet, lasso::Lasso, linear_regression::LinearRegression, ridge_regression::RidgeRegression,
+    },
     tree::decision_tree_regressor::DecisionTreeRegressor,
 };
 
-use super::OddBall;
-
-// pub mod linear_regression;
-
 /// A trait for a Meta Machine Learning model for CHAODA.
-pub trait Model<U: Number, C: OddBall<U, 3>> {
+pub trait Model {
     /// Train the model on data from a `Graph`.
     ///
     /// # Arguments
@@ -29,6 +26,10 @@ pub trait Model<U: Number, C: OddBall<U, 3>> {
     /// # Errors
     ///
     /// * If the number of `labels` is not equal to the cardinality of the data.
+    ///
+    /// # Generics
+    ///
+    /// * `P`: The type of the parameters of the model.
     fn train<P: Clone + Default>(data: &DenseMatrix<f32>, roc_scores: &Array1<f32>) -> Result<Self, String>
     where
         Self: Sized + SupervisedEstimator<DenseMatrix<f32>, Array1<f32>, P>,
@@ -36,34 +37,27 @@ pub trait Model<U: Number, C: OddBall<U, 3>> {
         Self::fit(data, roc_scores, P::default()).map_err(|e| e.to_string())
     }
 
-    /// Predict the suitability of a `Cluster` for selection in a `Graph`.
+    /// Predict the suitability of several `Cluster`s for selection in a `Graph`.
+    ///
+    /// This method is convenient when we want to predict the suitability of several `Cluster`s at once,
+    /// and using several `MetaML` models.
     ///
     /// # Arguments
     ///
-    /// * `c`: The `Cluster` to predict the suitability of.
+    /// * `data`: A matrix where each row contains the aggregated anomaly properties of `Cluster`s in a `Graph`.
     ///
     /// # Returns
     ///
-    /// The suitability of the `Cluster` for selection in a `Graph`.
+    /// The suitability of the `Cluster`s for selection in a `Graph`.
     ///
     /// # Errors
     ///
     /// * If the prediction fails.
-    fn predict(&self, c: &C) -> Result<f32, String>
+    fn predict(&self, data: &DenseMatrix<f32>) -> Result<Array1<f32>, String>
     where
         Self: Predictor<DenseMatrix<f32>, Array1<f32>>,
     {
-        let (p, p_) = c.properties();
-        // join the properties
-        let mut properties = p.to_vec();
-        properties.extend_from_slice(&p_);
-
-        // Create a DenseMatrix from the properties
-        let properties = DenseMatrix::from_2d_array(&[properties.as_slice()]);
-
-        // Predict the suitability of the Cluster
-        let prediction = Predictor::predict(self, &properties).map_err(|e| e.to_string())?;
-        Ok(prediction[0])
+        Predictor::predict(self, data).map_err(|e| e.to_string())
     }
 
     /// Save the model to a file.
@@ -96,28 +90,19 @@ pub trait Model<U: Number, C: OddBall<U, 3>> {
 }
 
 /// A Meta Machine Learning model for CHAODA using a Linear Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C> for LinearRegression<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
+impl Model for LinearRegression<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
 
 /// A Meta Machine Learning model for CHAODA using an Elastic Net Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C>
-    for smartcore::linear::elastic_net::ElasticNet<f32, f32, DenseMatrix<f32>, Array1<f32>>
-{
-}
+impl Model for ElasticNet<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
 
 /// A Meta Machine Learning model for CHAODA using a Lasso Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C>
-    for smartcore::linear::lasso::Lasso<f32, f32, DenseMatrix<f32>, Array1<f32>>
-{
-}
+impl Model for Lasso<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
 
 /// A Meta Machine Learning model for CHAODA using a Ridge Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C>
-    for smartcore::linear::ridge_regression::RidgeRegression<f32, f32, DenseMatrix<f32>, Array1<f32>>
-{
-}
+impl Model for RidgeRegression<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
 
 /// A Meta Machine Learning model for CHAODA using a Decision Tree Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C> for DecisionTreeRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
+impl Model for DecisionTreeRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
 
 /// A Meta Machine Learning model for CHAODA using a Random Forest Regression model.
-impl<U: Number, C: OddBall<U, 3>> Model<U, C> for RandomForestRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>> {}
+impl Model for RandomForestRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>> {}

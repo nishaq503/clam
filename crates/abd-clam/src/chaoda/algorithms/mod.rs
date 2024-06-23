@@ -10,12 +10,14 @@ use super::{Graph, OddBall};
 
 mod cc;
 mod gn;
+mod pc;
 mod sc;
 mod sp;
 mod vd;
 
 pub use cc::ClusterCardinality;
 pub use gn::GraphNeighborhood;
+pub use pc::ParentCardinality;
 pub use sc::SubgraphCardinality;
 pub use sp::StationaryProbability;
 pub use vd::VertexDegree;
