@@ -4,6 +4,7 @@ use core::{cmp::Reverse, ops::Index};
 use std::collections::BinaryHeap;
 
 use distances::Number;
+use ndarray::prelude::*;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
@@ -113,6 +114,15 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
     /// Iterate over the `Component`s in the `Graph`.
     pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U, C, N>> {
         self.components.iter()
+    }
+
+    /// Compute the stationary probability of each `OddBall` in the `Graph`.
+    #[must_use]
+    pub fn compute_stationary_probabilities(&self, num_steps: usize) -> Vec<f32> {
+        self.components
+            .par_iter()
+            .flat_map(|c| c.compute_stationary_probabilities(num_steps))
+            .collect()
     }
 }
 
@@ -338,6 +348,33 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
                 Some(*acc)
             })
             .collect()
+    }
+
+    /// Compute the stationary probability of each `OddBall` in the `Component`.
+    pub fn compute_stationary_probabilities(&self, num_steps: usize) -> Vec<f32> {
+        let mut transition_matrix = vec![0_f32; self.cardinality() * self.cardinality()];
+        for (i, neighbors) in self.adjacency_list.iter().enumerate() {
+            for &(j, d) in neighbors {
+                transition_matrix[i * self.cardinality() + j] = 1.0 / d.as_f32();
+            }
+        }
+        // Convert the transition matrix to an Array2
+        let mut transition_matrix = Array2::from_shape_vec((self.cardinality(), self.cardinality()), transition_matrix)
+            .unwrap_or_else(|e| unreachable!("We created a square Transition matrix: {e}"));
+
+        // Normalize the transition matrix so that each row sums to 1
+        for i in 0..self.cardinality() {
+            let row_sum = transition_matrix.row(i).sum();
+            transition_matrix.row_mut(i).mapv_inplace(|x| x / row_sum);
+        }
+
+        // Compute the stationary probabilities by squaring the transition matrix `num_steps` times
+        for _ in 0..num_steps {
+            transition_matrix = transition_matrix.dot(&transition_matrix);
+        }
+
+        // Compute the stationary probabilities by summing the rows of the transition matrix
+        transition_matrix.sum_axis(Axis(1)).to_vec()
     }
 }
 

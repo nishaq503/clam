@@ -7,13 +7,13 @@ use crate::chaoda::{Graph, OddBall};
 use super::Algorithm;
 
 /// `Cluster`s in an isolated neighborhood are more likely to be anomalous.
-pub struct GN {
+pub struct GraphNeighborhood {
     /// The fraction of graph diameter to use as the neighborhood radius.
     diameter_fraction: f32,
 }
 
-impl GN {
-    /// Create a new `GN` algorithm.
+impl GraphNeighborhood {
+    /// Create a new `GraphNeighborhood` algorithm.
     ///
     /// # Parameters
     ///
@@ -28,7 +28,7 @@ impl GN {
     }
 }
 
-impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for GN {
+impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for GraphNeighborhood {
     fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]

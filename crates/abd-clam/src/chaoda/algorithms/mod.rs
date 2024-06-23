@@ -1,5 +1,7 @@
 //! The individual algorithms that make up the CHAODA ensemble.
 
+#![allow(unused_imports)]
+
 use distances::Number;
 
 use crate::utils;
@@ -9,16 +11,14 @@ use super::{Graph, OddBall};
 mod cc;
 mod gn;
 mod sc;
+mod sp;
 mod vd;
 
-#[allow(unused_imports)]
-pub use cc::CC;
-#[allow(unused_imports)]
-pub use gn::GN;
-#[allow(unused_imports)]
-pub use sc::SC;
-#[allow(unused_imports)]
-pub use vd::VD;
+pub use cc::ClusterCardinality;
+pub use gn::GraphNeighborhood;
+pub use sc::SubgraphCardinality;
+pub use sp::StationaryProbability;
+pub use vd::VertexDegree;
 
 /// A trait for an algorithm in the CHAODA ensemble.
 pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
