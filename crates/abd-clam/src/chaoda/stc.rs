@@ -65,6 +65,48 @@ where
         }
     }
 
+    /// Train the ensemble.
+    ///
+    /// # Parameters
+    ///
+    /// * `num_epochs`: The number of epochs to train the ensemble.
+    /// * `labels`: The labels for the data. `true` indicates an anomaly.
+    /// * `algorithms`: The algorithms to use in the ensemble.
+    /// * `selectors`: The graph selectors to use in the ensemble.
+    /// * `starting_graphs`: The starting `Graph`s for the ensemble.
+    ///
+    /// # Errors
+    ///
+    /// * If the number of labels does not match the number of instances.
+    /// * If the number of starting graphs does not equal the number of algorithms times the number of starting graphs.
+    #[allow(dead_code, unused_mut)]
+    pub fn train(
+        &mut self,
+        num_epochs: usize,
+        labels: &[bool],
+        algorithms: Vec<Box<dyn Algorithm<U>>>,
+        mut starting_graphs: Vec<Graph<U>>,
+    ) -> Result<(), String> {
+        // Check that the number of labels matches the number of instances.
+        if labels.len() != self.data.cardinality() {
+            return Err("The number of labels must match the number of instances".to_string());
+        }
+
+        // Check that the number of algorithms matches the number of starting graphs.
+        if algorithms.len() != starting_graphs.len() {
+            return Err("The number of algorithms must match the number of starting graphs".to_string());
+        }
+
+        self.algorithms = algorithms;
+
+        // Train the ensemble.
+        for _ in 0..num_epochs {
+            todo!()
+        }
+
+        Ok(())
+    }
+
     /// Create the default algorithms for the CHAODA ensemble.
     fn default_algorithms() -> Vec<Box<dyn Algorithm<U>>> {
         let cc = ClusterCardinality;
