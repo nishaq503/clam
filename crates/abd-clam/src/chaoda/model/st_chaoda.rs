@@ -1,16 +1,17 @@
-//! CHAODA ensemble on a single tree.
+//! Chaoda on a single tree.
 
 use distances::Number;
 
 use crate::{
-    chaoda::algorithms::{
-        ClusterCardinality, GraphNeighborhood, ParentCardinality, StationaryProbability, SubgraphCardinality,
-        VertexDegree,
+    chaoda::{
+        algorithms::{
+            ClusterCardinality, GraphNeighborhood, ParentCardinality, StationaryProbability, SubgraphCardinality,
+            VertexDegree,
+        },
+        Algorithm, Graph, OddBall,
     },
     Dataset, Instance, PartitionCriterion,
 };
-
-use super::{Algorithm, Graph, OddBall};
 
 /// A CHAODA ensemble on a single tree.
 ///
