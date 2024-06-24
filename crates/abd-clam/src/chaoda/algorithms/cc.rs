@@ -9,9 +9,9 @@ use super::Algorithm;
 /// `Cluster`s with relatively few points are more likely to be anomalous.
 pub struct ClusterCardinality;
 
-impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for ClusterCardinality {
-    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
-        g.iter_clusters().map(|c| -c.cardinality().as_f32()).collect()
+impl<U: Number> Algorithm<U> for ClusterCardinality {
+    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
+        g.iter_clusters().map(|&(_, c)| -c.as_f32()).collect()
     }
 
     fn normalize_by_cluster(&self) -> bool {

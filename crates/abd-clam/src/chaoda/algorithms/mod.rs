@@ -23,24 +23,24 @@ pub use sp::StationaryProbability;
 pub use vd::VertexDegree;
 
 /// A trait for an algorithm in the CHAODA ensemble.
-pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
+pub trait Algorithm<U: Number> {
     /// Evaluate the algorithm on a `Graph` and return a vector of scores for each
     /// `OddBall` in the `Graph`.
     ///
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32>;
+    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32>;
 
     /// Whether to normalize anomaly scores by cluster or by point.
     fn normalize_by_cluster(&self) -> bool;
 
     /// Have points inherit scores from `OddBall`s.
-    fn inherit_scores(&self, g: &Graph<U, C, N>, scores: &[f32]) -> Vec<f32> {
+    fn inherit_scores(&self, g: &Graph<U>, scores: &[f32]) -> Vec<f32> {
         let mut points_scores = vec![0.0; g.population()];
-        for (c, &s) in g.iter_clusters().zip(scores.iter()) {
-            for i in c.indices() {
-                points_scores[i] = s;
+        for (&(c_start, c_car), &s) in g.iter_clusters().zip(scores.iter()) {
+            for i in points_scores.iter_mut().skip(c_start).take(c_car) {
+                *i = s;
             }
         }
         points_scores
@@ -56,7 +56,7 @@ pub trait Algorithm<U: Number, C: OddBall<U, N>, const N: usize> {
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    fn call(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
+    fn call(&self, g: &mut Graph<U>) -> Vec<f32> {
         let cluster_scores = {
             let scores = self.evaluate(g);
             if self.normalize_by_cluster() {

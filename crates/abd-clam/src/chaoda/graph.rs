@@ -17,14 +17,15 @@ use super::OddBall;
 /// Two `OddBall`s have an edge between them if they have any overlapping volume,
 /// i.e. if the distance between their centers is no greater than the sum of their
 /// radii.
-pub struct Graph<'a, U: Number, C: OddBall<U, N>, const N: usize> {
+pub struct Graph<U: Number> {
     /// The collection of `Component`s in the `Graph`.
-    components: Vec<Component<'a, U, C, N>>,
+    components: Vec<Component<U>>,
     /// Cumulative populations of the `Component`s in the `Graph`.
     populations: Vec<usize>,
 }
 
-impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
+// , C: OddBall<U, N>, const N: usize
+impl<U: Number> Graph<U> {
     /// Create a new `Graph` from a `Tree`.
     ///
     /// # Arguments
@@ -32,8 +33,8 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
     /// * `tree`: The `Tree` to create the `Graph` from.
     /// * `cluster_scorer`: A function that scores a `OddBall`.
     /// * `min_depth`: The minimum depth at which to consider a `OddBall`.
-    pub fn from_tree<I: Instance, D: Dataset<I, U>>(
-        tree: &'a Tree<I, U, D, C>,
+    pub fn from_tree<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(
+        tree: &Tree<I, U, D, C>,
         cluster_scorer: fn(&C) -> f32,
         min_depth: usize,
     ) -> Self {
@@ -56,11 +57,14 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
             candidates.retain(|&(_, Reverse(o))| !c.is_ancestor_of(o) && !c.is_descendant_of(o));
         }
 
-        Self::from_clusters(clusters, tree.data())
+        Self::from_clusters(&clusters, tree.data())
     }
 
     /// Create a new `Graph` from a collection of `OddBall`s.
-    pub fn from_clusters<I: Instance, D: Dataset<I, U>>(clusters: Vec<&'a C>, data: &D) -> Self {
+    pub fn from_clusters<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(
+        clusters: &[&C],
+        data: &D,
+    ) -> Self {
         let c = Component::new(clusters, data);
         let [mut c, mut other] = c.partition();
         let mut components = vec![c];
@@ -83,7 +87,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
     }
 
     /// Iterate over the `OddBall`s in the `Graph`.
-    pub fn iter_clusters(&self) -> impl Iterator<Item = &C> {
+    pub fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize)> {
         self.components.iter().flat_map(Component::iter_clusters)
     }
 
@@ -112,7 +116,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
     }
 
     /// Iterate over the `Component`s in the `Graph`.
-    pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U, C, N>> {
+    pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U>> {
         self.components.iter()
     }
 
@@ -124,15 +128,25 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Graph<'a, U, C, N> {
             .flat_map(|c| c.compute_stationary_probabilities(num_steps))
             .collect()
     }
+
+    /// Get the accumulated child-parent cardinality ratio of each `OddBall` in the `Graph`.
+    #[must_use]
+    pub fn accumulated_cp_car_ratios(&self) -> Vec<f32> {
+        self.components
+            .iter()
+            .flat_map(Component::accumulated_cp_car_ratios)
+            .copied()
+            .collect()
+    }
 }
 
 /// A `Component` is a single connected subgraph of a `Graph`.
 ///
 /// We break the `Graph` into connected `Component`s because this makes several
 /// computations significantly easier to think about and implement.
-pub struct Component<'a, U: Number, C: OddBall<U, N>, const N: usize> {
-    /// The collection of `OddBall`s in the `Component`.
-    clusters: Vec<&'a C>,
+pub struct Component<U: Number> {
+    /// The offsets and cardinalities of the `OddBall`s in the `Component`.
+    c_off_car: Vec<(usize, usize)>,
     /// The adjacency list of the `Component`. Each `usize` is the index of a `OddBall`
     /// in the `clusters` field and the distance between the two `OddBall`s.
     adjacency_list: Vec<Vec<(usize, U)>>,
@@ -144,11 +158,13 @@ pub struct Component<'a, U: Number, C: OddBall<U, N>, const N: usize> {
     diameter: Option<usize>,
     /// neighborhood sizes of each `OddBall` in the `Component` at each step through a BFT.
     neighborhood_sizes: Option<Vec<Vec<usize>>>,
+    /// The accumulated child-parent cardinality ratio of each `OddBall` in the `Component`.
+    accumulated_cp_car_ratios: Vec<f32>,
 }
 
-impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
+impl<U: Number> Component<U> {
     /// Create a new `Component` from a collection of `OddBall`s.
-    fn new<I: Instance, D: Dataset<I, U>>(clusters: Vec<&'a C>, data: &D) -> Self {
+    fn new<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(clusters: &[&C], data: &D) -> Self {
         let adjacency_list = clusters
             .par_iter()
             .enumerate()
@@ -171,14 +187,17 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
             .collect();
 
         let population = clusters.iter().map(|c| c.cardinality()).sum();
+        let cluster_indices = clusters.iter().map(|c| (c.offset(), c.cardinality())).collect();
+        let accumulated_cp_car_ratios = clusters.iter().map(|c| c.accumulated_cp_car_ratio()).collect();
 
         Self {
-            clusters,
+            c_off_car: cluster_indices,
             adjacency_list,
             population,
             eccentricities: None,
             diameter: None,
             neighborhood_sizes: None,
+            accumulated_cp_car_ratios,
         }
     }
 
@@ -195,7 +214,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
     /// computed lazily, i.e. the eccentricities, diameter, and neighborhood sizes.
     fn partition(mut self) -> [Self; 2] {
         // Perform a traversal of the adjacency list to find a connected subgraph.
-        let mut visited = vec![false; self.clusters.len()];
+        let mut visited = vec![false; self.c_off_car.len()];
         let mut stack = vec![0];
         while let Some(i) = stack.pop() {
             if visited[i] {
@@ -208,7 +227,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         }
         let (c1, c2) = visited
             .iter()
-            .zip(self.clusters.iter().copied())
+            .zip(self.c_off_car.iter().copied())
             .partition::<Vec<_>, _>(|&(&v, _)| v);
         let (a1, a2) = visited
             .iter()
@@ -221,22 +240,29 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         // Remap indices in adjacency list
         for a in &mut adjacency_list {
             for (j, _) in a {
-                let old_c = self.clusters[*j];
+                let (old_o, _) = self.c_off_car[*j];
                 let pos = clusters
                     .iter()
-                    .position(|c| c.name() == old_c.name())
+                    .position(|&(o, _)| o == old_o)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
                 *j = pos;
             }
         }
-        let population = clusters.iter().map(|c| c.cardinality()).sum();
+        let population = clusters.iter().map(|&(_, c)| c).sum();
+        let accumulated_cp_car_ratios = self
+            .accumulated_cp_car_ratios
+            .iter()
+            .zip(visited.iter())
+            .filter_map(|(&r, &v)| if v { None } else { Some(r) })
+            .collect();
         let other = Self {
-            clusters,
+            c_off_car: clusters,
             adjacency_list,
             population,
             eccentricities: None,
             diameter: None,
             neighborhood_sizes: None,
+            accumulated_cp_car_ratios,
         };
 
         // Set the current component to the visited clusters.
@@ -245,32 +271,38 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         // Remap indices in adjacency list
         for a in &mut adjacency_list {
             for (j, _) in a {
-                let old_c = self.clusters[*j];
+                let (old_o, _phantom) = self.c_off_car[*j];
                 let pos = clusters
                     .iter()
-                    .position(|c| c.name() == old_c.name())
+                    .position(|&(o, _)| o == old_o)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
                 *j = pos;
             }
         }
-        self.clusters = clusters;
+        self.c_off_car = clusters;
         self.adjacency_list = adjacency_list;
-        self.population = self.clusters.iter().map(|c| c.cardinality()).sum();
+        self.population = self.c_off_car.iter().map(|&(c, _)| c).sum();
         self.eccentricities = None;
         self.diameter = None;
         self.neighborhood_sizes = None;
+        self.accumulated_cp_car_ratios = self
+            .accumulated_cp_car_ratios
+            .iter()
+            .zip(visited.iter())
+            .filter_map(|(&r, &v)| if v { Some(r) } else { None })
+            .collect();
 
         [self, other]
     }
 
     /// Check if the `Component` has any `OddBall`s.
     fn is_empty(&self) -> bool {
-        self.clusters.is_empty()
+        self.c_off_car.is_empty()
     }
 
     /// Iterate over the `OddBall`s in the `Component`.
-    fn iter_clusters(&self) -> impl Iterator<Item = &C> {
-        self.clusters.iter().copied()
+    fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize)> {
+        self.c_off_car.iter()
     }
 
     /// Iterate over the lists of neighbors of the `OddBall`s in the `Component`.
@@ -280,7 +312,7 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
 
     /// Get the number of `OddBall`s in the `Component`.
     pub fn cardinality(&self) -> usize {
-        self.clusters.len()
+        self.c_off_car.len()
     }
 
     /// Get the total number of points in the `Component`.
@@ -376,12 +408,17 @@ impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Component<'a, U, C, N> {
         // Compute the stationary probabilities by summing the rows of the transition matrix
         transition_matrix.sum_axis(Axis(1)).to_vec()
     }
+
+    /// Get the accumulated child-parent cardinality ratio of each `OddBall` in the `Component`.
+    pub fn accumulated_cp_car_ratios(&self) -> &[f32] {
+        &self.accumulated_cp_car_ratios
+    }
 }
 
-impl<'a, U: Number, C: OddBall<U, N>, const N: usize> Index<usize> for Component<'a, U, C, N> {
-    type Output = C;
+impl<U: Number> Index<usize> for Component<U> {
+    type Output = (usize, usize);
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.clusters[index]
+        &self.c_off_car[index]
     }
 }

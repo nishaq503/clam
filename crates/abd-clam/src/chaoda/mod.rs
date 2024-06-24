@@ -65,7 +65,13 @@ where
 
     /// Get each set of algorithms in the ensemble.
     #[must_use]
-    pub fn algorithms(&self) -> Vec<&[Box<dyn Algorithm<U, C, N>>]> {
+    pub fn algorithms(&self) -> Vec<&[Box<dyn Algorithm<U>>]> {
         self.trees.iter().map(stc::SingleTreeChaoda::algorithms).collect()
+    }
+
+    /// Get the `Graph`s in the ensemble.
+    #[must_use]
+    pub fn graphs(&self) -> Vec<&Graph<U>> {
+        self.trees.iter().flat_map(SingleTreeChaoda::graphs).collect()
     }
 }

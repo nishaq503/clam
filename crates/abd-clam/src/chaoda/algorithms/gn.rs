@@ -27,8 +27,8 @@ impl GraphNeighborhood {
     }
 }
 
-impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for GraphNeighborhood {
-    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
+impl<U: Number> Algorithm<U> for GraphNeighborhood {
+    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let k = (self.diameter_fraction * diameter.as_f32()).round() as usize;

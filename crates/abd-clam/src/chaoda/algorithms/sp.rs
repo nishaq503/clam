@@ -23,8 +23,8 @@ impl StationaryProbability {
     }
 }
 
-impl<U: Number, C: OddBall<U, N>, const N: usize> Algorithm<U, C, N> for StationaryProbability {
-    fn evaluate(&self, g: &mut Graph<U, C, N>) -> Vec<f32> {
+impl<U: Number> Algorithm<U> for StationaryProbability {
+    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
     }
 

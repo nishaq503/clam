@@ -10,7 +10,7 @@ use crate::{
     Dataset, Instance, PartitionCriterion,
 };
 
-use super::{Algorithm, OddBall};
+use super::{Algorithm, Graph, OddBall};
 
 /// A CHAODA ensemble on a single tree.
 ///
@@ -33,9 +33,11 @@ where
     /// The root `Cluster` of the tree.
     root: C,
     /// The algorithms in the ensemble.
-    algorithms: Vec<Box<dyn Algorithm<U, C, N>>>,
+    algorithms: Vec<Box<dyn Algorithm<U>>>,
     /// Phantom data to satisfy the compiler.
     _phantom: std::marker::PhantomData<I>,
+    /// The `Graph`s in the ensemble.
+    graphs: Vec<Graph<U>>,
 }
 
 impl<I, U, D, C, const N: usize> SingleTreeChaoda<I, U, D, C, N>
@@ -50,7 +52,7 @@ where
         mut data: D,
         criteria: &P,
         seed: Option<u64>,
-        algs: Option<Vec<Box<dyn Algorithm<U, C, N>>>>,
+        algs: Option<Vec<Box<dyn Algorithm<U>>>>,
     ) -> Self {
         let root = C::new_root(&data, seed).partition(&mut data, criteria, seed);
         let algorithms = algs.unwrap_or_else(|| Self::default_algorithms());
@@ -59,11 +61,12 @@ where
             root,
             algorithms,
             _phantom: std::marker::PhantomData,
+            graphs: Vec::new(),
         }
     }
 
     /// Create the default algorithms for the CHAODA ensemble.
-    fn default_algorithms() -> Vec<Box<dyn Algorithm<U, C, N>>> {
+    fn default_algorithms() -> Vec<Box<dyn Algorithm<U>>> {
         let cc = ClusterCardinality;
         let gn = GraphNeighborhood::new(0.1).unwrap_or_else(|_| unreachable!("We chose the neighborhood radius"));
         let pc = ParentCardinality;
@@ -92,7 +95,12 @@ where
     }
 
     /// Get the algorithms in the ensemble.
-    pub fn algorithms(&self) -> &[Box<dyn Algorithm<U, C, N>>] {
+    pub fn algorithms(&self) -> &[Box<dyn Algorithm<U>>] {
         &self.algorithms
+    }
+
+    /// Get the `Graph`s in the ensemble.
+    pub fn graphs(&self) -> &[Graph<U>] {
+        &self.graphs
     }
 }
