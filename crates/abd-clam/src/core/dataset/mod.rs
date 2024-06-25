@@ -25,7 +25,9 @@ pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Ou
     fn clone_with_new_metric(&self, metric: fn(&I, &I) -> U, is_expensive: bool, name: String) -> Self;
 
     /// Returns the name of the type of the dataset.
-    fn type_name() -> String;
+    fn type_name() -> String
+    where
+        Self: Sized;
 
     /// Returns the name of the dataset. This is used to identify the dataset in
     /// various places.
