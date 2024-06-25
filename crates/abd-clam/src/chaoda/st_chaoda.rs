@@ -4,10 +4,9 @@ use distances::Number;
 use ndarray::prelude::*;
 use smartcore::{linalg::basic::matrix::DenseMatrix, metrics::roc_auc_score};
 
-use crate::{
-    chaoda::{Graph, Member, MlModel, OddBall},
-    Dataset, Instance, PartitionCriterion,
-};
+use crate::{Dataset, Instance, PartitionCriterion};
+
+use super::{Graph, Member, MlModel, OddBall};
 
 /// A CHAODA ensemble on a single tree.
 ///
