@@ -81,7 +81,9 @@ impl<U: Number> Vertex<U> {
 
     /// Creates a new `Vertex` tree.
     pub fn from_base_tree(root: UniBall<U>) -> Self {
-        Self::from_uni_ball(root).set_child_parent_ratios([1.0; 6], 1.0)
+        Self::from_uni_ball(root)
+            .set_child_parent_ratios([1.0; 6], 1.0)
+            .normalize_ratios()
     }
 
     /// Recursively creates a new `Vertex` tree.

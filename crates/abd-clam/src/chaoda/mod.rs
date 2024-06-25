@@ -53,7 +53,7 @@ impl Chaoda {
     }
 
     /// Predict the anomaly scores for the given dataset and root `Cluster`.
-    pub fn predict<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Vec<f32>
+    pub fn predict<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Array2<f32>
     where
         I: Instance,
         U: Number,
@@ -70,13 +70,20 @@ impl Chaoda {
 
         let num_predictions = predictions.len();
         let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
-        let predictions = Array2::from_shape_vec((num_predictions, data.cardinality()), predictions)
-            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
+        Array2::from_shape_vec((num_predictions, data.cardinality()), predictions)
+            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
+    }
 
-        // Take the mean of the predictions for each point.
-        predictions
+    /// Aggregate the predictions of the ensemble.
+    ///
+    /// For now, we take the mean of the anomaly scores for each point. Later,
+    /// we may want to consider other aggregation methods.
+    #[must_use]
+    pub fn aggregate_predictions(scores: &Array2<f32>) -> Vec<f32> {
+        // Take the mean of the anomaly scores for each point
+        scores
             .mean_axis(Axis(0))
-            .unwrap_or_else(|| unreachable!("We made sure no axis was empty."))
+            .unwrap_or_else(|| unreachable!("We made sure the shape was correct."))
             .to_vec()
     }
 

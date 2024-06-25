@@ -1,0 +1,11 @@
+[package]
+name = "chaoda-results"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+abd-clam = { path = "../abd-clam" }
+distances = { path = "../distances" }
+ndarray = "0.15.6"
+ndarray-npy = "0.8.1"
+smartcore = "0.3.2"
