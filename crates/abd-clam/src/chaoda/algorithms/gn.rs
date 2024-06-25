@@ -2,11 +2,12 @@
 
 use distances::Number;
 
-use crate::chaoda::{Graph, OddBall};
+use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s in an isolated neighborhood are more likely to be anomalous.
+#[derive(Clone)]
 pub struct GraphNeighborhood {
     /// The fraction of graph diameter to use as the neighborhood radius.
     diameter_fraction: f32,
@@ -27,8 +28,12 @@ impl GraphNeighborhood {
     }
 }
 
-impl<U: Number> Algorithm<U> for GraphNeighborhood {
-    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
+impl Algorithm for GraphNeighborhood {
+    fn name(&self) -> String {
+        format!("gn-{}", self.diameter_fraction)
+    }
+
+    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let k = (self.diameter_fraction * diameter.as_f32()).round() as usize;
@@ -41,5 +46,11 @@ impl<U: Number> Algorithm<U> for GraphNeighborhood {
 
     fn normalize_by_cluster(&self) -> bool {
         true
+    }
+}
+
+impl Default for GraphNeighborhood {
+    fn default() -> Self {
+        Self { diameter_fraction: 0.1 }
     }
 }

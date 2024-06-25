@@ -2,11 +2,12 @@
 
 use distances::Number;
 
-use crate::chaoda::{Graph, OddBall};
+use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// Clusters with smaller stationary probabilities are more anomalous.
+#[derive(Clone)]
 pub struct StationaryProbability {
     /// The Random Walk will be simulated for 2^`num_steps` steps.
     num_steps: usize,
@@ -23,12 +24,22 @@ impl StationaryProbability {
     }
 }
 
-impl<U: Number> Algorithm<U> for StationaryProbability {
-    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
+impl Algorithm for StationaryProbability {
+    fn name(&self) -> String {
+        format!("sp-{}", self.num_steps)
+    }
+
+    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
     }
 
     fn normalize_by_cluster(&self) -> bool {
         true
+    }
+}
+
+impl Default for StationaryProbability {
+    fn default() -> Self {
+        Self { num_steps: 16 }
     }
 }

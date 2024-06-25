@@ -17,6 +17,13 @@ pub use vec2d::VecDataset;
 
 /// A common interface for datasets used in CLAM.
 pub trait Dataset<I: Instance, U: Number>: Debug + Send + Sync + Index<usize, Output = I> {
+    /// Changes the metric used to calculate distances between instances.
+    ///
+    /// This method could potentially be very expensive with memory usage, as it
+    /// would likely require cloning the entire dataset.
+    #[must_use]
+    fn clone_with_new_metric(&self, metric: fn(&I, &I) -> U, is_expensive: bool, name: String) -> Self;
+
     /// Returns the name of the type of the dataset.
     fn type_name() -> String;
 

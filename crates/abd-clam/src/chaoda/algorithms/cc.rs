@@ -2,19 +2,30 @@
 
 use distances::Number;
 
-use crate::chaoda::{Graph, OddBall};
+use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s with relatively few points are more likely to be anomalous.
+#[derive(Clone)]
 pub struct ClusterCardinality;
 
-impl<U: Number> Algorithm<U> for ClusterCardinality {
-    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
+impl Algorithm for ClusterCardinality {
+    fn name(&self) -> String {
+        "cc".to_string()
+    }
+
+    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
         g.iter_clusters().map(|&(_, c)| -c.as_f32()).collect()
     }
 
     fn normalize_by_cluster(&self) -> bool {
         true
+    }
+}
+
+impl Default for ClusterCardinality {
+    fn default() -> Self {
+        Self
     }
 }

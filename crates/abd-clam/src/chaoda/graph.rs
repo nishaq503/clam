@@ -8,7 +8,7 @@ use ndarray::prelude::*;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
-use crate::{Dataset, Instance, Tree};
+use crate::{Dataset, Instance};
 
 use super::OddBall;
 
@@ -17,36 +17,40 @@ use super::OddBall;
 /// Two `OddBall`s have an edge between them if they have any overlapping volume,
 /// i.e. if the distance between their centers is no greater than the sum of their
 /// radii.
-pub struct Graph<U: Number> {
+#[derive(Clone)]
+pub struct Graph<U: Number, const N: usize> {
     /// The collection of `Component`s in the `Graph`.
-    components: Vec<Component<U>>,
+    components: Vec<Component<U, N>>,
     /// Cumulative populations of the `Component`s in the `Graph`.
     populations: Vec<usize>,
 }
 
 // , C: OddBall<U, N>, const N: usize
-impl<U: Number> Graph<U> {
+impl<U: Number, const N: usize> Graph<U, N> {
     /// Create a new `Graph` from a `Tree`.
     ///
     /// # Arguments
     ///
     /// * `tree`: The `Tree` to create the `Graph` from.
-    /// * `cluster_scorer`: A function that scores a `OddBall`.
+    /// * `cluster_scorer`: A function that scores `OddBall`s.
     /// * `min_depth`: The minimum depth at which to consider a `OddBall`.
-    pub fn from_tree<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(
-        tree: &Tree<I, U, D, C>,
-        cluster_scorer: fn(&C) -> f32,
+    pub fn from_tree<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>>(
+        root: &C,
+        data: &D,
+        cluster_scorer: impl Fn(&[&C]) -> Vec<f32>,
         min_depth: usize,
     ) -> Self {
+        let clusters = root.subtree();
+        let scores = cluster_scorer(&clusters);
+
         // We use `OrderedFloat` to have the `Ord` trait implemented for `f64` so that we can use it in a `BinaryHeap`.
         // We use `Reverse` on `OddBall` so that we can bias towards selecting shallower `OddBall`s.
         // `OddBall`s are selected by highest score and then by shallowest depth.
-        let mut candidates = tree
-            .root()
-            .subtree()
+        let mut candidates = clusters
             .into_iter()
-            .filter(|c| c.is_leaf() || c.depth() >= min_depth)
-            .map(|c| (OrderedFloat(cluster_scorer(c)), Reverse(c)))
+            .zip(scores.into_iter().map(OrderedFloat))
+            .filter(|(c, _)| c.is_leaf() || c.depth() >= min_depth)
+            .map(|(c, s)| (s, Reverse(c)))
             .collect::<BinaryHeap<_>>();
 
         let mut clusters = vec![];
@@ -57,14 +61,11 @@ impl<U: Number> Graph<U> {
             candidates.retain(|&(_, Reverse(o))| !c.is_ancestor_of(o) && !c.is_descendant_of(o));
         }
 
-        Self::from_clusters(&clusters, tree.data())
+        Self::from_clusters(&clusters, data)
     }
 
     /// Create a new `Graph` from a collection of `OddBall`s.
-    pub fn from_clusters<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(
-        clusters: &[&C],
-        data: &D,
-    ) -> Self {
+    pub fn from_clusters<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>>(clusters: &[&C], data: &D) -> Self {
         let c = Component::new(clusters, data);
         let [mut c, mut other] = c.partition();
         let mut components = vec![c];
@@ -96,6 +97,11 @@ impl<U: Number> Graph<U> {
         self.components.iter().flat_map(Component::iter_neighbors)
     }
 
+    /// Iterate over the anomaly properties of the `OddBall`s in the `Graph`.
+    pub fn iter_anomaly_properties(&self) -> impl Iterator<Item = &([f32; N], [f32; N])> {
+        self.components.iter().flat_map(Component::iter_anomaly_properties)
+    }
+
     /// Get the diameter of the `Graph`.
     pub fn diameter(&mut self) -> usize {
         self.components.iter_mut().map(Component::diameter).max().unwrap_or(0)
@@ -116,7 +122,7 @@ impl<U: Number> Graph<U> {
     }
 
     /// Iterate over the `Component`s in the `Graph`.
-    pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U>> {
+    pub(crate) fn iter_components(&self) -> impl Iterator<Item = &Component<U, N>> {
         self.components.iter()
     }
 
@@ -144,7 +150,8 @@ impl<U: Number> Graph<U> {
 ///
 /// We break the `Graph` into connected `Component`s because this makes several
 /// computations significantly easier to think about and implement.
-pub struct Component<U: Number> {
+#[derive(Clone)]
+pub struct Component<U: Number, const N: usize> {
     /// The offsets and cardinalities of the `OddBall`s in the `Component`.
     c_off_car: Vec<(usize, usize)>,
     /// The adjacency list of the `Component`. Each `usize` is the index of a `OddBall`
@@ -160,11 +167,13 @@ pub struct Component<U: Number> {
     neighborhood_sizes: Option<Vec<Vec<usize>>>,
     /// The accumulated child-parent cardinality ratio of each `OddBall` in the `Component`.
     accumulated_cp_car_ratios: Vec<f32>,
+    /// The anomaly properties of the `OddBall`s in the `Component`.
+    anomaly_properties: Vec<([f32; N], [f32; N])>,
 }
 
-impl<U: Number> Component<U> {
+impl<U: Number, const N: usize> Component<U, N> {
     /// Create a new `Component` from a collection of `OddBall`s.
-    fn new<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>, const N: usize>(clusters: &[&C], data: &D) -> Self {
+    fn new<I: Instance, D: Dataset<I, U>, C: OddBall<U, N>>(clusters: &[&C], data: &D) -> Self {
         let adjacency_list = clusters
             .par_iter()
             .enumerate()
@@ -189,6 +198,7 @@ impl<U: Number> Component<U> {
         let population = clusters.iter().map(|c| c.cardinality()).sum();
         let cluster_indices = clusters.iter().map(|c| (c.offset(), c.cardinality())).collect();
         let accumulated_cp_car_ratios = clusters.iter().map(|c| c.accumulated_cp_car_ratio()).collect();
+        let anomaly_properties = clusters.iter().map(|c| c.ratios()).collect::<Vec<_>>();
 
         Self {
             c_off_car: cluster_indices,
@@ -198,6 +208,7 @@ impl<U: Number> Component<U> {
             diameter: None,
             neighborhood_sizes: None,
             accumulated_cp_car_ratios,
+            anomaly_properties,
         }
     }
 
@@ -255,6 +266,12 @@ impl<U: Number> Component<U> {
             .zip(visited.iter())
             .filter_map(|(&r, &v)| if v { None } else { Some(r) })
             .collect();
+        let anomaly_properties = self
+            .anomaly_properties
+            .iter()
+            .zip(visited.iter())
+            .filter_map(|(&r, &v)| if v { None } else { Some(r) })
+            .collect::<Vec<_>>();
         let other = Self {
             c_off_car: clusters,
             adjacency_list,
@@ -263,6 +280,7 @@ impl<U: Number> Component<U> {
             diameter: None,
             neighborhood_sizes: None,
             accumulated_cp_car_ratios,
+            anomaly_properties,
         };
 
         // Set the current component to the visited clusters.
@@ -291,6 +309,12 @@ impl<U: Number> Component<U> {
             .zip(visited.iter())
             .filter_map(|(&r, &v)| if v { Some(r) } else { None })
             .collect();
+        self.anomaly_properties = self
+            .anomaly_properties
+            .iter()
+            .zip(visited.iter())
+            .filter_map(|(&r, &v)| if v { Some(r) } else { None })
+            .collect::<Vec<_>>();
 
         [self, other]
     }
@@ -308,6 +332,11 @@ impl<U: Number> Component<U> {
     /// Iterate over the lists of neighbors of the `OddBall`s in the `Component`.
     fn iter_neighbors(&self) -> impl Iterator<Item = &[(usize, U)]> {
         self.adjacency_list.iter().map(Vec::as_slice)
+    }
+
+    /// Iterate over the anomaly properties of the `OddBall`s in the `Component`.
+    fn iter_anomaly_properties(&self) -> impl Iterator<Item = &([f32; N], [f32; N])> {
+        self.anomaly_properties.iter()
     }
 
     /// Get the number of `OddBall`s in the `Component`.
@@ -415,7 +444,7 @@ impl<U: Number> Component<U> {
     }
 }
 
-impl<U: Number> Index<usize> for Component<U> {
+impl<U: Number, const N: usize> Index<usize> for Component<U, N> {
     type Output = (usize, usize);
 
     fn index(&self, index: usize) -> &Self::Output {

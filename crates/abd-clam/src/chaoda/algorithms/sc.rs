@@ -2,15 +2,20 @@
 
 use distances::Number;
 
-use crate::chaoda::{Graph, OddBall};
+use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s in subgraphs with relatively small population are more likely to be anomalous.
+#[derive(Clone)]
 pub struct SubgraphCardinality;
 
-impl<U: Number> Algorithm<U> for SubgraphCardinality {
-    fn evaluate(&self, g: &mut Graph<U>) -> Vec<f32> {
+impl Algorithm for SubgraphCardinality {
+    fn name(&self) -> String {
+        "sc".to_string()
+    }
+
+    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
         g.iter_components()
             .flat_map(|sg| {
                 let p = -sg.population().as_f32();
@@ -21,5 +26,11 @@ impl<U: Number> Algorithm<U> for SubgraphCardinality {
 
     fn normalize_by_cluster(&self) -> bool {
         true
+    }
+}
+
+impl Default for SubgraphCardinality {
+    fn default() -> Self {
+        Self
     }
 }

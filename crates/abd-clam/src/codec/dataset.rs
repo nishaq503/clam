@@ -99,6 +99,15 @@ impl<U: UInt> SquishyDataset<String, U> for GenomicDataset<U> {
 }
 
 impl<U: UInt> Dataset<String, U> for GenomicDataset<U> {
+    fn clone_with_new_metric(&self, metric: fn(&String, &String) -> U, is_expensive: bool, name: String) -> Self {
+        Self {
+            base_data: self.base_data.clone_with_new_metric(metric, is_expensive, name),
+            bytes_per_unit_distance: self.bytes_per_unit_distance,
+            encoder: self.encoder,
+            decoder: self.decoder,
+        }
+    }
+
     fn type_name() -> String {
         format!("GenomicDataset<{}>", U::type_name())
     }

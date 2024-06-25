@@ -1,15 +1,11 @@
 //! Chaoda on a single tree.
 
 use distances::Number;
+use ndarray::prelude::*;
+use smartcore::{linalg::basic::matrix::DenseMatrix, metrics::roc_auc_score};
 
 use crate::{
-    chaoda::{
-        algorithms::{
-            ClusterCardinality, GraphNeighborhood, ParentCardinality, StationaryProbability, SubgraphCardinality,
-            VertexDegree,
-        },
-        Algorithm, Graph, OddBall,
-    },
+    chaoda::{Graph, Member, MlModel, OddBall},
     Dataset, Instance, PartitionCriterion,
 };
 
@@ -33,12 +29,10 @@ where
     data: D,
     /// The root `Cluster` of the tree.
     root: C,
-    /// The algorithms in the ensemble.
-    algorithms: Vec<Box<dyn Algorithm<U>>>,
+    /// The pairs of Chaoda member and associated `Graph`s for each member.
+    member_graphs: Vec<(Member, Vec<Graph<U, N>>)>,
     /// Phantom data to satisfy the compiler.
     _phantom: std::marker::PhantomData<I>,
-    /// The `Graph`s in the ensemble.
-    graphs: Vec<Graph<U>>,
 }
 
 impl<I, U, D, C, const N: usize> SingleTreeChaoda<I, U, D, C, N>
@@ -49,20 +43,13 @@ where
     C: OddBall<U, N>,
 {
     /// Create a new `SingleTreeChaoda` ensemble.
-    pub fn new<P: PartitionCriterion<U>>(
-        mut data: D,
-        criteria: &P,
-        seed: Option<u64>,
-        algs: Option<Vec<Box<dyn Algorithm<U>>>>,
-    ) -> Self {
+    pub fn new<P: PartitionCriterion<U>>(mut data: D, criteria: &P, seed: Option<u64>) -> Self {
         let root = C::new_root(&data, seed).partition(&mut data, criteria, seed);
-        let algorithms = algs.unwrap_or_else(|| Self::default_algorithms());
         Self {
             data,
             root,
-            algorithms,
             _phantom: std::marker::PhantomData,
-            graphs: Vec::new(),
+            member_graphs: Vec::new(),
         }
     }
 
@@ -72,59 +59,133 @@ where
     ///
     /// * `num_epochs`: The number of epochs to train the ensemble.
     /// * `labels`: The labels for the data. `true` indicates an anomaly.
-    /// * `algorithms`: The algorithms to use in the ensemble.
-    /// * `selectors`: The graph selectors to use in the ensemble.
-    /// * `starting_graphs`: The starting `Graph`s for the ensemble.
+    /// * `min_depth`: The minimum depth in the tree at which to consider a cluster for selection.
+    /// * `algorithms`: The pairs of `CHAODA` algorithm and collection of `meta_ml` models to use in the ensemble.
     ///
     /// # Errors
     ///
     /// * If the number of labels does not match the number of instances.
-    /// * If the number of starting graphs does not equal the number of algorithms times the number of starting graphs.
-    #[allow(dead_code, unused_mut)]
+    /// * if the number of meta-ML models is not a multiple of the number of algorithms.
+    ///
+    /// # Returns
+    ///
+    /// The pairs of (meta-ml model, name of chaoda algorithm) used in the ensemble.
     pub fn train(
         &mut self,
         num_epochs: usize,
         labels: &[bool],
-        algorithms: Vec<Box<dyn Algorithm<U>>>,
-        mut starting_graphs: Vec<Graph<U>>,
-    ) -> Result<(), String> {
+        min_depth: usize,
+        mut algorithms: Vec<(Member, Vec<MlModel>)>,
+    ) -> Result<Vec<(String, MlModel)>, String> {
         // Check that the number of labels matches the number of instances.
         if labels.len() != self.data.cardinality() {
             return Err("The number of labels must match the number of instances".to_string());
         }
 
-        // Check that the number of algorithms matches the number of starting graphs.
-        if algorithms.len() != starting_graphs.len() {
-            return Err("The number of algorithms must match the number of starting graphs".to_string());
-        }
+        let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
 
-        self.algorithms = algorithms;
+        let scorer = |clusters: &[&C]| {
+            clusters
+                .iter()
+                .map(|c| {
+                    if c.depth() == min_depth || (c.is_leaf() && c.depth() < min_depth) {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        let graph = Graph::from_tree(&self.root, &self.data, scorer, 4);
+        let mut graphs = algorithms
+            .iter()
+            .map(|(_, models)| models.iter().map(|_| graph.clone()).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        let mut full_train_x = algorithms
+            .iter()
+            .map(|(_, models)| models.iter().map(|_| Vec::<Vec<f32>>::new()).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        let mut full_train_y = algorithms
+            .iter()
+            .map(|(_, models)| models.iter().map(|_| Vec::<f32>::new()).collect::<Vec<_>>())
+            .collect::<Vec<_>>();
 
         // Train the ensemble.
         for _ in 0..num_epochs {
-            todo!()
+            for ((((alg, meta_ml_models), alg_graphs), alg_train_x), alg_train_y) in algorithms
+                .iter_mut()
+                .zip(graphs.iter_mut())
+                .zip(full_train_x.iter_mut())
+                .zip(full_train_y.iter_mut())
+            {
+                // Run the CHAODA algorithms on each graph and create training data
+                for (((ml_model, graph), train_x), train_y) in meta_ml_models
+                    .iter_mut()
+                    .zip(alg_graphs.iter_mut())
+                    .zip(alg_train_x.iter_mut())
+                    .zip(alg_train_y.iter_mut())
+                {
+                    // For each cluster, get the anomaly properties
+                    train_x.extend(graph.iter_anomaly_properties().map(|(p, p_)| {
+                        let mut properties = p.to_vec();
+                        properties.extend_from_slice(p_);
+                        properties
+                    }));
+
+                    // Evaluate the algorithm on the graph to get anomaly for clusters
+                    let anomaly_ratings = Member::normalize_scores(&alg.evaluate_clusters(graph));
+                    // For each cluster, get a roc-auc score
+                    train_y.extend(graph.iter_clusters().zip(anomaly_ratings.iter()).map(
+                        |(&(start, cardinality), &rating)| {
+                            let mut y_true = labels[start..(start + cardinality)].to_vec();
+                            y_true.push(1.0);
+                            y_true.push(0.0);
+                            let mut y_pred = vec![rating; cardinality];
+                            y_pred.push(1.0);
+                            y_pred.push(0.0);
+                            roc_auc_score(&y_true, &y_pred).as_f32()
+                        },
+                    ));
+
+                    // Train the meta-ML model with the updated data
+                    let data = DenseMatrix::from_2d_vec(train_x);
+                    let target = Array1::from_vec(train_y.clone());
+                    ml_model.train(&data, &target)?;
+
+                    // Update graphs
+                    let cluster_scorer = |clusters: &[&C]| {
+                        let anomaly_properties = clusters
+                            .iter()
+                            .map(|c| {
+                                let (p, p_) = c.ratios();
+                                let mut properties = p.to_vec();
+                                properties.extend_from_slice(p_.as_ref());
+                                properties
+                            })
+                            .collect::<Vec<_>>();
+                        let properties = DenseMatrix::from_2d_vec(&anomaly_properties);
+                        ml_model
+                            .predict(&properties)
+                            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
+                            .to_vec()
+                    };
+                    *graph = Graph::from_tree(&self.root, &self.data, cluster_scorer, min_depth);
+                }
+            }
         }
 
-        Ok(())
-    }
+        self.member_graphs = algorithms
+            .iter()
+            .map(|(member, _)| member.clone())
+            .zip(graphs)
+            .collect();
 
-    /// Create the default algorithms for the CHAODA ensemble.
-    fn default_algorithms() -> Vec<Box<dyn Algorithm<U>>> {
-        let cc = ClusterCardinality;
-        let gn = GraphNeighborhood::new(0.1).unwrap_or_else(|_| unreachable!("We chose the neighborhood radius"));
-        let pc = ParentCardinality;
-        let sc = SubgraphCardinality;
-        let sp = StationaryProbability::new(16);
-        let vd = VertexDegree;
+        let out_names = algorithms
+            .into_iter()
+            .flat_map(|(member, models)| models.into_iter().map(move |model| (member.name(), model)))
+            .collect::<Vec<_>>();
 
-        vec![
-            Box::new(cc),
-            Box::new(gn),
-            Box::new(pc),
-            Box::new(sc),
-            Box::new(sp),
-            Box::new(vd),
-        ]
+        Ok(out_names)
     }
 
     /// Get the root `Cluster` of the tree.
@@ -135,15 +196,5 @@ where
     /// Get the data.
     pub const fn data(&self) -> &D {
         &self.data
-    }
-
-    /// Get the algorithms in the ensemble.
-    pub fn algorithms(&self) -> &[Box<dyn Algorithm<U>>] {
-        &self.algorithms
-    }
-
-    /// Get the `Graph`s in the ensemble.
-    pub fn graphs(&self) -> &[Graph<U>] {
-        &self.graphs
     }
 }
