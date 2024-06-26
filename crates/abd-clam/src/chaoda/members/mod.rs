@@ -8,13 +8,14 @@ mod sp;
 mod vd;
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::utils;
 
 use super::Graph;
 
 /// The algorithms that make up the CHAODA ensemble.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Member {
     /// The Cluster Cardinality algorithm.
     CC(cc::ClusterCardinality),
@@ -57,10 +58,10 @@ impl Member {
     pub fn default_members() -> Vec<Self> {
         vec![
             Self::CC(cc::ClusterCardinality),
-            Self::GN(gn::GraphNeighborhood::default()),
+            // Self::GN(gn::GraphNeighborhood::default()),
             Self::PC(pc::ParentCardinality),
             Self::SC(sc::SubgraphCardinality),
-            Self::SP(sp::StationaryProbability::default()),
+            // Self::SP(sp::StationaryProbability::default()),
             Self::VD(vd::VertexDegree),
         ]
     }
@@ -139,7 +140,7 @@ impl Member {
 }
 
 /// A trait for an algorithm in the CHAODA ensemble.
-trait Algorithm: Default + Clone + Send + Sync {
+trait Algorithm: Default + Clone + Send + Sync + Serialize + for<'de> Deserialize<'de> {
     /// Get the name of the algorithm.
     fn name(&self) -> String;
 

@@ -1,13 +1,14 @@
 //! Stationary Probabilities Algorithm.
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// Clusters with smaller stationary probabilities are more anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct StationaryProbability {
     /// The Random Walk will be simulated for 2^`num_steps` steps.
     num_steps: usize,

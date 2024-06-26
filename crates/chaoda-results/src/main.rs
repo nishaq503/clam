@@ -25,23 +25,42 @@ fn manhattan(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
 
-    if args.len() != 2 {
+    if args.len() != 3 {
         return Err(format!(
-            "Expected single input parameter, the directory where dataset will be read from. Got {args:?} instead",
+            "Expected two input parameters, the directory where dataset will be read from and whether to use a pre-trained model (if found). Got {args:?} instead",
         )
         );
     }
 
-    // Parse args[0] into path object
+    // Parse args[1] into path object
     let data_dir = Path::new(&args[1]);
     let data_dir = std::fs::canonicalize(data_dir).map_err(|e| e.to_string())?;
     println!("Reading datasets from: {data_dir:?}");
 
-    // Read the datasets and assign the metrics
+    // Parse args[2] into boolean
+    let use_pre_trained = args[2].parse::<String>().map_err(|e| e.to_string())?;
+    let use_pre_trained = {
+        match use_pre_trained.as_str() {
+            "true" => true,
+            "false" => false,
+            _ => {
+                return Err(format!(
+                "Invalid value for use_pre_trained: {use_pre_trained}. Expected 'true' or 'false'"
+            ))
+            }
+        }
+    };
+    // Build path to pre-trained model
+    let model_path = data_dir.join("pre-trained-chaoda-model.bin");
+    let use_pre_trained = use_pre_trained && model_path.exists();
+
+    // Set some parameters for tree building
     let seed = Some(42);
     let criteria = PartitionCriteria::default();
+
+    // Read the datasets and assign the metrics
     let (train_datasets, roots): (Vec<_>, Vec<_>) = {
-        let data = data::Data::read_paper_train(&data_dir)
+        let data = data::Data::read_paper_train(&data_dir)?
             .into_iter()
             .map(|(name, (train, labels))| {
                 let train = VecDataset::new(format!("{name}-manhattan"), train, manhattan, false);
@@ -65,18 +84,30 @@ fn main() -> Result<(), String> {
         println!("{}: {}", d.name(), r.name());
     }
 
-    // Train the CHAODA model
-    let num_epochs = 10;
-    let mut model = Chaoda::default();
-    let mut training_data = None;
-    for e in 0..num_epochs {
-        println!("Starting Outer Epoch {}/{num_epochs}", e + 1);
+    let model = if use_pre_trained {
+        // Load the pre-trained CHAODA model
+        println!("Loading pre-trained model from: {model_path:?}");
+        Chaoda::load(&model_path)?
+    } else {
+        // Train the CHAODA model
+        let num_epochs_outer = 10;
+        let num_epochs_inner = 2;
+        let mut model = Chaoda::default();
+        let mut training_data = None;
+        for e in 0..num_epochs_outer {
+            println!("Starting Outer Epoch {}/{num_epochs_outer}", e + 1);
 
-        for (d, root) in train_datasets.iter().zip(roots.iter()) {
-            let labels = d.metadata();
-            training_data = Some(model.train(d, root, labels, 2, training_data));
+            for (d, root) in train_datasets.iter().zip(roots.iter()) {
+                println!("Training on dataset: {}", d.name());
+
+                let labels = d.metadata();
+                training_data = Some(model.train(d, root, labels, num_epochs_inner, training_data));
+            }
         }
-    }
+        println!("Training complete. Saving model to: {model_path:?}");
+        model.save(&model_path)?;
+        model
+    };
 
     // Print the ROC scores for the training datasets
 
@@ -91,25 +122,40 @@ fn main() -> Result<(), String> {
 
             // Reorder the labels to match the original dataset
             let labels = d.metadata().to_vec();
-            let labels = permutation
+            let mut labels = permutation
                 .iter()
-                .map(|&i| labels[i])
-                .collect::<Vec<bool>>();
+                .zip(labels)
+                .map(|(&i, l)| (i, l))
+                .collect::<Vec<_>>();
+            labels.sort_unstable_by_key(|(i, _)| *i);
+            let labels = labels.into_iter().map(|(_, l)| l).collect::<Vec<_>>();
 
             // Reorder the predictions to match the original dataset
-            let predictions = model
-                .predict(d, root)
+            let predictions = model.predict(d, root);
+            assert_eq!(
+                predictions.ncols(),
+                labels.len(),
+                "Number of predictions do not match the number of labels."
+            );
+            let mut predictions = predictions
                 .columns()
                 .into_iter()
                 .map(|v| v.to_owned().to_vec())
+                .zip(permutation.iter())
                 .collect::<Vec<_>>();
-            let n_rows = predictions.len();
-            let predictions = permutation
-                .iter()
-                .flat_map(|&i| predictions[i].clone())
+            predictions.sort_unstable_by_key(|(_, &i)| i);
+            let predictions = predictions
+                .into_iter()
+                .flat_map(|(v, _)| v)
                 .collect::<Vec<_>>();
-            let predictions = Array2::from_shape_vec((n_rows, labels.len()), predictions)
-                .map_err(|_| "Invalid shape".to_string())?;
+            assert_eq!(
+                predictions.len(),
+                model.num_predictors() * labels.len(),
+                "Predictions do not match after inverting permutation."
+            );
+            let predictions =
+                Array2::from_shape_vec((model.num_predictors(), labels.len()), predictions)
+                    .map_err(|e| format!("Invalid shape: {e:?}"))?;
             Ok((d.name(), labels, predictions))
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -128,7 +174,7 @@ fn main() -> Result<(), String> {
                 .next()
                 .ok_or_else(|| "Invalid dataset name".to_string())?;
             let predictions = ndarray::concatenate![Axis(0), l1_pred, l2_pred];
-            let predictions = Chaoda::aggregate_predictions(&predictions);
+            let predictions = Chaoda::aggregate_predictions(&predictions).to_vec();
             let y_true = labels
                 .iter()
                 .map(|&l| if l { 1.0 } else { 0.0 })
@@ -143,14 +189,18 @@ fn main() -> Result<(), String> {
     }
 
     // Print the ROC scores for the inference datasets
+    let mut infer_labels = Vec::new();
 
     // Read the inference datasets
     let (infer_datasets, roots): (Vec<_>, Vec<_>) = {
-        let data = data::Data::read_paper_inference(&data_dir)
+        let data = data::Data::read_paper_inference(&data_dir)?
             .into_iter()
             .map(|(name, (infer, labels))| {
+                // Note that we do not assign metadata here, so CHAODA will not have access to the labels
+                // We push labels twice to match the number of distance metrics
+                infer_labels.push(labels.clone());
+                infer_labels.push(labels);
                 let infer = VecDataset::new(format!("{name}-manhattan"), infer, manhattan, false);
-                let infer = infer.assign_metadata(labels)?;
                 let infer_2 =
                     infer.clone_with_new_metric(euclidean, false, format!("{name}-euclidean"));
                 Ok(vec![infer, infer_2])
@@ -170,33 +220,38 @@ fn main() -> Result<(), String> {
     let predictions = infer_datasets
         .iter()
         .zip(roots.iter())
-        .map(|(d, root)| {
+        .zip(infer_labels)
+        .map(|((d, root), labels)| {
             let permutation = d
                 .permuted_indices()
                 .ok_or_else(|| "No permutation found".to_string())?;
 
-            // Reorder the labels to match the original dataset
-            let labels = d.metadata().to_vec();
-            let labels = permutation
-                .iter()
-                .map(|&i| labels[i])
-                .collect::<Vec<bool>>();
-
             // Reorder the predictions to match the original dataset
-            let predictions = model
-                .predict(d, root)
+            let predictions = model.predict(d, root);
+            assert_eq!(
+                predictions.ncols(),
+                labels.len(),
+                "Number of predictions do not match the number of labels."
+            );
+            let mut predictions = predictions
                 .columns()
                 .into_iter()
                 .map(|v| v.to_owned().to_vec())
+                .zip(permutation.iter())
                 .collect::<Vec<_>>();
-            let n_rows = predictions.len();
-            let predictions = permutation
-                .iter()
-                .flat_map(|&i| predictions[i].clone())
+            predictions.sort_unstable_by_key(|(_, &i)| i);
+            let predictions = predictions
+                .into_iter()
+                .flat_map(|(v, _)| v)
                 .collect::<Vec<_>>();
-            let predictions = Array2::from_shape_vec((n_rows, labels.len()), predictions)
-                .map_err(|_| "Invalid shape".to_string())?;
-
+            assert_eq!(
+                predictions.len(),
+                model.num_predictors() * labels.len(),
+                "Predictions do not match after inverting permutation."
+            );
+            let predictions =
+                Array2::from_shape_vec((model.num_predictors(), labels.len()), predictions)
+                    .map_err(|e| format!("Invalid shape: {e:?}"))?;
             Ok((d.name(), labels, predictions))
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -215,7 +270,7 @@ fn main() -> Result<(), String> {
                 .next()
                 .ok_or_else(|| "Invalid dataset name".to_string())?;
             let predictions = ndarray::concatenate![Axis(0), l1_pred, l2_pred];
-            let predictions = Chaoda::aggregate_predictions(&predictions);
+            let predictions = Chaoda::aggregate_predictions(&predictions).to_vec();
             let y_true = labels
                 .iter()
                 .map(|&l| if l { 1.0 } else { 0.0 })

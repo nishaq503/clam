@@ -1,13 +1,14 @@
 //! Vertex Degree Algorithm
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s with relatively few neighbors are more likely to be anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VertexDegree;
 
 impl Algorithm for VertexDegree {

@@ -1,13 +1,14 @@
 //! Cluster Cardinality algorithm.
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s with relatively few points are more likely to be anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ClusterCardinality;
 
 impl Algorithm for ClusterCardinality {

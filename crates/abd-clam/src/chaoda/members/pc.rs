@@ -1,13 +1,14 @@
 //! Relative Parent Cardinality algorithm.
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s with a smaller fraction of points from their parent `Cluster` are more anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ParentCardinality;
 
 impl Algorithm for ParentCardinality {

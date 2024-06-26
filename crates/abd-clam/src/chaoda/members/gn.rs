@@ -1,13 +1,14 @@
 //! Graph Neighborhood Algorithm
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s in an isolated neighborhood are more likely to be anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GraphNeighborhood {
     /// The fraction of graph diameter to use as the neighborhood radius.
     diameter_fraction: f32,

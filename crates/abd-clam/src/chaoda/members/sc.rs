@@ -1,13 +1,14 @@
 //! Subgraph Cardinality algorithm.
 
 use distances::Number;
+use serde::{Deserialize, Serialize};
 
 use crate::chaoda::Graph;
 
 use super::Algorithm;
 
 /// `Cluster`s in subgraphs with relatively small population are more likely to be anomalous.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SubgraphCardinality;
 
 impl Algorithm for SubgraphCardinality {

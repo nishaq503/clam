@@ -5,6 +5,8 @@ mod graph;
 mod members;
 mod meta_ml;
 
+use std::path::Path;
+
 pub use cluster::{OddBall, Ratios, Vertex};
 pub use graph::Graph;
 pub use members::Member;
@@ -13,6 +15,7 @@ pub use meta_ml::MlModel;
 use distances::Number;
 use ndarray::prelude::*;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use smartcore::metrics::roc_auc_score;
 
 use crate::{Dataset, Instance};
@@ -26,6 +29,7 @@ use crate::{Dataset, Instance};
 pub type TrainingData = Vec<Vec<(Vec<Vec<f32>>, Vec<f32>)>>;
 
 /// A CHAODA ensemble.
+#[derive(Serialize, Deserialize)]
 pub struct Chaoda {
     /// The combination of the CHAODA algorithms and the meta-ML models.
     algorithms: Vec<(Member, Vec<MlModel>)>,
@@ -52,6 +56,44 @@ impl Chaoda {
         Self { algorithms, min_depth }
     }
 
+    /// Get the number of predictors in the ensemble.
+    #[must_use]
+    pub fn num_predictors(&self) -> usize {
+        self.algorithms.iter().map(|(_, models)| models.len()).sum()
+    }
+
+    /// Save the model to a given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to save the model to.
+    ///
+    /// # Errors
+    ///
+    /// * If there is an error creating the file.
+    /// * If there is an error serializing the model.
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let file = std::fs::File::create(path).map_err(|e| format!("Error creating file: {e}"))?;
+        bincode::serialize_into(file, self).map_err(|e| format!("Error serializing: {e}"))?;
+        Ok(())
+    }
+
+    /// Load the model from a given path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to load the model from.
+    ///
+    /// # Errors
+    ///
+    /// * If there is an error opening the file.
+    /// * If there is an error deserializing the model.
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let file = std::fs::File::open(path).map_err(|e| format!("Error opening file: {e}"))?;
+        let model = bincode::deserialize_from(file).map_err(|e| format!("Error deserializing: {e}"))?;
+        Ok(model)
+    }
+
     /// Predict the anomaly scores for the given dataset and root `Cluster`.
     pub fn predict<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Array2<f32>
     where
@@ -68,9 +110,8 @@ impl Chaoda {
             .flat_map(|((member, _), m_graphs)| m_graphs.par_iter_mut().map(|g| member.evaluate_points(g)))
             .collect::<Vec<_>>();
 
-        let num_predictions = predictions.len();
         let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
-        Array2::from_shape_vec((num_predictions, data.cardinality()), predictions)
+        Array2::from_shape_vec((self.num_predictors(), data.cardinality()), predictions)
             .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
     }
 
@@ -79,12 +120,11 @@ impl Chaoda {
     /// For now, we take the mean of the anomaly scores for each point. Later,
     /// we may want to consider other aggregation methods.
     #[must_use]
-    pub fn aggregate_predictions(scores: &Array2<f32>) -> Vec<f32> {
+    pub fn aggregate_predictions(scores: &Array2<f32>) -> Array1<f32> {
         // Take the mean of the anomaly scores for each point
         scores
             .mean_axis(Axis(0))
             .unwrap_or_else(|| unreachable!("We made sure the shape was correct."))
-            .to_vec()
     }
 
     /// Train the ensemble on the given dataset.
@@ -125,24 +165,47 @@ impl Chaoda {
         };
 
         let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
-        let mut full_training_data = previous_data.unwrap_or_default();
+        let mut full_training_data = previous_data.unwrap_or_else(|| {
+            self.algorithms
+                .iter()
+                .map(|(_, models)| models.iter().map(|_| (Vec::new(), Vec::new())).collect::<Vec<_>>())
+                .collect()
+        });
 
         for e in 0..num_epochs {
-            println!("Starting Inner Epoch {}/{num_epochs}", e + 1);
+            let training_data_size = full_training_data
+                .iter()
+                .map(|m| m.iter().map(|m| m.0.len()).sum::<usize>())
+                .sum::<usize>();
+            println!(
+                "Starting Inner Epoch {}/{num_epochs} with dataset size: {training_data_size}",
+                e + 1
+            );
+
+            let roc_score = {
+                let predictions = self.predict(data, root);
+                let predictions = Self::aggregate_predictions(&predictions).to_vec();
+                roc_auc_score(&labels.clone(), &predictions).as_f32()
+            };
+            println!("Inner current ROC Score: {roc_score:.6}");
+
             let new_training_data = self.generate_training_data(&mut graphs, &labels);
 
-            full_training_data
-                .par_iter_mut()
+            full_training_data = full_training_data
+                .into_iter()
                 .zip(new_training_data)
-                .for_each(|(m_old, m_new)| {
+                .map(|(m_old, m_new)| {
                     m_old
-                        .par_iter_mut()
+                        .into_iter()
                         .zip(m_new)
-                        .for_each(|((x_old, y_old), (x_new, y_new))| {
-                            x_old.extend(x_new);
-                            y_old.extend(y_new);
-                        });
-                });
+                        .map(|((mut x_old, mut y_old), (mut x_new, mut y_new))| {
+                            x_old.append(&mut x_new);
+                            y_old.append(&mut y_new);
+                            (x_old, y_old)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
 
             self.train_inner_models(&full_training_data);
             graphs = self.create_graphs(data, root);

@@ -58,7 +58,7 @@ impl<U: Number, const N: usize> Graph<U, N> {
             clusters.push(c);
             // Remove `OddBall`s that are ancestors or descendants of the selected `OddBall`, so as not to have duplicates
             // in the `Graph`.
-            candidates.retain(|&(_, Reverse(o))| !c.is_ancestor_of(o) && !c.is_descendant_of(o));
+            candidates.retain(|&(_, Reverse(other))| !(c.is_ancestor_of(other) || c.is_descendant_of(other)));
         }
 
         Self::from_clusters(&clusters, data)
@@ -80,7 +80,7 @@ impl<U: Number, const N: usize> Graph<U, N> {
                 *acc += x;
                 Some(*acc)
             })
-            .collect();
+            .collect::<Vec<_>>();
         Self {
             components,
             populations,
@@ -153,7 +153,7 @@ impl<U: Number, const N: usize> Graph<U, N> {
 #[derive(Clone)]
 pub struct Component<U: Number, const N: usize> {
     /// The offsets and cardinalities of the `OddBall`s in the `Component`.
-    c_off_car: Vec<(usize, usize)>,
+    clusters: Vec<(usize, usize)>,
     /// The adjacency list of the `Component`. Each `usize` is the index of a `OddBall`
     /// in the `clusters` field and the distance between the two `OddBall`s.
     adjacency_list: Vec<Vec<(usize, U)>>,
@@ -201,7 +201,7 @@ impl<U: Number, const N: usize> Component<U, N> {
         let anomaly_properties = clusters.iter().map(|c| c.ratios()).collect::<Vec<_>>();
 
         Self {
-            c_off_car: cluster_indices,
+            clusters: cluster_indices,
             adjacency_list,
             population,
             eccentricities: None,
@@ -225,7 +225,7 @@ impl<U: Number, const N: usize> Component<U, N> {
     /// computed lazily, i.e. the eccentricities, diameter, and neighborhood sizes.
     fn partition(mut self) -> [Self; 2] {
         // Perform a traversal of the adjacency list to find a connected subgraph.
-        let mut visited = vec![false; self.c_off_car.len()];
+        let mut visited = vec![false; self.clusters.len()];
         let mut stack = vec![0];
         while let Some(i) = stack.pop() {
             if visited[i] {
@@ -236,27 +236,22 @@ impl<U: Number, const N: usize> Component<U, N> {
                 stack.push(j);
             }
         }
-        let (c1, c2) = visited
+        let (p1, p2) = visited
             .iter()
-            .zip(self.c_off_car.iter().copied())
-            .partition::<Vec<_>, _>(|&(&v, _)| v);
-        let (a1, a2) = visited
-            .iter()
+            .zip(self.clusters.iter().copied())
             .zip(self.adjacency_list)
-            .partition::<Vec<_>, _>(|&(&v, _)| v);
+            .partition::<Vec<_>, _>(|((&v, _), _)| v);
 
         // Build a component from the clusters that were not visited in the traversal.
-        let clusters = c2.into_iter().map(|(_, c)| c).collect::<Vec<_>>();
-        let mut adjacency_list = a2.into_iter().map(|(_, a)| a).collect::<Vec<_>>();
+        let (clusters, mut adjacency_list): (Vec<_>, Vec<_>) = p2.into_iter().map(|((_, c), a)| (c, a)).unzip();
         // Remap indices in adjacency list
-        for a in &mut adjacency_list {
-            for (j, _) in a {
-                let (old_o, _) = self.c_off_car[*j];
-                let pos = clusters
+        for neighbors in &mut adjacency_list {
+            for (j, _) in neighbors {
+                let (old_offset, _) = self.clusters[*j];
+                *j = clusters
                     .iter()
-                    .position(|&(o, _)| o == old_o)
+                    .position(|&(offset, _)| offset == old_offset)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
-                *j = pos;
             }
         }
         let population = clusters.iter().map(|&(_, c)| c).sum();
@@ -273,7 +268,7 @@ impl<U: Number, const N: usize> Component<U, N> {
             .filter_map(|(&r, &v)| if v { None } else { Some(r) })
             .collect::<Vec<_>>();
         let other = Self {
-            c_off_car: clusters,
+            clusters,
             adjacency_list,
             population,
             eccentricities: None,
@@ -284,49 +279,51 @@ impl<U: Number, const N: usize> Component<U, N> {
         };
 
         // Set the current component to the visited clusters.
-        let clusters = c1.into_iter().map(|(_, c)| c).collect::<Vec<_>>();
-        let mut adjacency_list = a1.into_iter().map(|(_, a)| a).collect::<Vec<_>>();
+        let (clusters, mut adjacency_list): (Vec<_>, Vec<_>) = p1.into_iter().map(|((_, c), a)| (c, a)).unzip();
         // Remap indices in adjacency list
-        for a in &mut adjacency_list {
-            for (j, _) in a {
-                let (old_o, _phantom) = self.c_off_car[*j];
-                let pos = clusters
+        for neighbors in &mut adjacency_list {
+            for (j, _) in neighbors {
+                let (old_offset, _) = self.clusters[*j];
+                *j = clusters
                     .iter()
-                    .position(|&(o, _)| o == old_o)
+                    .position(|&(offset, _)| offset == old_offset)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
-                *j = pos;
             }
         }
-        self.c_off_car = clusters;
-        self.adjacency_list = adjacency_list;
-        self.population = self.c_off_car.iter().map(|&(c, _)| c).sum();
-        self.eccentricities = None;
-        self.diameter = None;
-        self.neighborhood_sizes = None;
-        self.accumulated_cp_car_ratios = self
+        let population = clusters.iter().map(|&(_, c)| c).sum();
+        let accumulated_cp_car_ratios = self
             .accumulated_cp_car_ratios
             .iter()
             .zip(visited.iter())
             .filter_map(|(&r, &v)| if v { Some(r) } else { None })
             .collect();
-        self.anomaly_properties = self
+        let anomaly_properties = self
             .anomaly_properties
             .iter()
             .zip(visited.iter())
             .filter_map(|(&r, &v)| if v { Some(r) } else { None })
             .collect::<Vec<_>>();
 
+        self.clusters = clusters;
+        self.adjacency_list = adjacency_list;
+        self.population = population;
+        self.eccentricities = None;
+        self.diameter = None;
+        self.neighborhood_sizes = None;
+        self.accumulated_cp_car_ratios = accumulated_cp_car_ratios;
+        self.anomaly_properties = anomaly_properties;
+
         [self, other]
     }
 
     /// Check if the `Component` has any `OddBall`s.
     fn is_empty(&self) -> bool {
-        self.c_off_car.is_empty()
+        self.clusters.is_empty()
     }
 
     /// Iterate over the `OddBall`s in the `Component`.
     fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize)> {
-        self.c_off_car.iter()
+        self.clusters.iter()
     }
 
     /// Iterate over the lists of neighbors of the `OddBall`s in the `Component`.
@@ -341,7 +338,7 @@ impl<U: Number, const N: usize> Component<U, N> {
 
     /// Get the number of `OddBall`s in the `Component`.
     pub fn cardinality(&self) -> usize {
-        self.c_off_car.len()
+        self.clusters.len()
     }
 
     /// Get the total number of points in the `Component`.
@@ -452,6 +449,6 @@ impl<U: Number, const N: usize> Index<usize> for Component<U, N> {
     type Output = (usize, usize);
 
     fn index(&self, index: usize) -> &Self::Output {
-        &self.c_off_car[index]
+        &self.clusters[index]
     }
 }
