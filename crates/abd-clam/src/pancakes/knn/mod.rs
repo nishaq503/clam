@@ -1,5 +1,6 @@
 //! K-Nearest Neighbors search in a compressed space.
 
+mod depth_first_sieve;
 mod linear;
 
 use distances::number::UInt;
@@ -12,6 +13,8 @@ use super::CodecData;
 pub enum Algorithm {
     /// Use linear search on the dataset.
     Linear,
+    /// Search on the dataset using the Depth-First Sieve algorithm.
+    DepthFirstSieve,
 }
 
 impl Default for Algorithm {
@@ -41,6 +44,7 @@ impl Algorithm {
     {
         match self {
             Self::Linear => linear::search(query, k, data),
+            Self::DepthFirstSieve => depth_first_sieve::search(query, k, data),
         }
     }
 
@@ -49,6 +53,7 @@ impl Algorithm {
     pub const fn name(&self) -> &str {
         match self {
             Self::Linear => "Linear",
+            Self::DepthFirstSieve => "DepthFirstSieve",
         }
     }
 
@@ -70,6 +75,7 @@ impl Algorithm {
     pub fn from_name(s: &str) -> Result<Self, String> {
         match s.to_lowercase().as_str() {
             "linear" => Ok(Self::Linear),
+            "depthfirstsieve" => Ok(Self::DepthFirstSieve),
             _ => Err(format!("Unknown algorithm: {s}")),
         }
     }
