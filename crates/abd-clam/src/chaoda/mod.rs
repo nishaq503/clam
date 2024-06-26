@@ -95,6 +95,16 @@ impl Chaoda {
     }
 
     /// Predict the anomaly scores for the given dataset and root `Cluster`.
+    ///
+    /// # Arguments
+    ///
+    /// * `data`: The dataset to predict on.
+    /// * `root`: The root `Cluster` to predict from.
+    ///
+    /// # Returns
+    ///
+    /// The anomaly scores for each point in the dataset.
+    /// Each row is the predictions from a single predictor.
     pub fn predict<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Array2<f32>
     where
         I: Instance,
@@ -147,6 +157,15 @@ impl Chaoda {
     /// * `criteria`: The partition criterion to use for building the tree.
     /// * `previous_data`: The previous training data to start from, if any.
     /// * `seed`: The seed to use for random number generation, if any.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `I`: The type of the instances in the dataset.
+    /// * `U`: The type of the distance values.
+    /// * `D`: The type of the dataset.
+    /// * `C`: The type of the `OddBall` `Cluster`.
+    /// * `N`: Half the number of anomaly properties in the `Cluster`.
+    /// * `P`: The partition criteria.
     pub fn train<I, U, D, C, const N: usize, P>(
         &mut self,
         mut datasets: Vec<(D, Vec<bool>)>,
