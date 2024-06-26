@@ -413,6 +413,10 @@ impl<U: Number, const N: usize> Component<U, N> {
 
     /// Compute the stationary probability of each `OddBall` in the `Component`.
     pub fn compute_stationary_probabilities(&self, num_steps: usize) -> Vec<f32> {
+        if self.cardinality() == 1 {
+            return vec![1.0];
+        }
+
         let mut transition_matrix = vec![0_f32; self.cardinality() * self.cardinality()];
         for (i, neighbors) in self.adjacency_list.iter().enumerate() {
             for &(j, d) in neighbors {

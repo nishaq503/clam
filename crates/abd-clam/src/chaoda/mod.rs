@@ -37,8 +37,7 @@ impl Default for Chaoda {
     fn default() -> Self {
         Self {
             algorithms: Member::default_members()
-                .into_iter()
-                .inspect(|member| println!("Member: {}", member.name()))
+                .into_par_iter()
                 .map(|member| (member, MlModel::defaults()))
                 .collect(),
             min_depth: 4,
@@ -104,13 +103,8 @@ impl Chaoda {
         C: OddBall<U, N>,
     {
         let mut graphs = if previous_data.is_some() {
-            println!(
-                "Using previous data for training on {} over {num_epochs} epochs.",
-                data.name()
-            );
             self.create_graphs(data, root)
         } else {
-            println!("Training from scratch on {} over {num_epochs} epochs.", data.name());
             let cluster_scorer = |clusters: &[&C]| {
                 clusters
                     .iter()
@@ -124,18 +118,19 @@ impl Chaoda {
                     .collect::<Vec<_>>()
             };
             let graph = Graph::from_tree(root, data, cluster_scorer, 4);
-            println!("Initial graph created.");
             self.algorithms
-                .par_iter()
-                .map(|(_, models)| models.par_iter().map(|_| graph.clone()).collect::<Vec<_>>())
+                .iter()
+                .map(|(_, models)| models.iter().map(|_| graph.clone()).collect::<Vec<_>>())
                 .collect::<Vec<_>>()
         };
 
         let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
         let mut full_training_data = previous_data.unwrap_or_default();
 
-        for _ in 0..num_epochs {
+        for e in 0..num_epochs {
+            println!("Starting Inner Epoch {}/{num_epochs}", e + 1);
             let new_training_data = self.generate_training_data(&mut graphs, &labels);
+
             full_training_data
                 .par_iter_mut()
                 .zip(new_training_data)
@@ -171,8 +166,8 @@ impl Chaoda {
                     .par_iter()
                     .map(|ml_model| {
                         let cluster_scorer = |clusters: &[&C]| {
-                            let anomaly_properties = clusters
-                                .iter()
+                            let properties = clusters
+                                .par_iter()
                                 .map(|c| {
                                     let (p, p_) = c.ratios();
                                     let mut properties = p.to_vec();
@@ -180,10 +175,6 @@ impl Chaoda {
                                     properties
                                 })
                                 .collect::<Vec<_>>();
-                            let shape = (anomaly_properties.len(), anomaly_properties[0].len());
-                            let properties = anomaly_properties.into_iter().flatten().collect::<Vec<_>>();
-                            let properties = Array2::from_shape_vec(shape, properties)
-                                .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
                             ml_model
                                 .predict(&properties)
                                 .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
@@ -221,6 +212,8 @@ impl Chaoda {
                             .iter_clusters()
                             .zip(anomaly_ratings)
                             .map(|(&(start, cardinality), rating)| {
+                                // The roc-score function needs both classes represented so we add a
+                                // couple of dummy values to the end of the vectors.
                                 let mut y_true = labels[start..(start + cardinality)].to_vec();
                                 y_true.push(1.0);
                                 y_true.push(0.0);
@@ -229,7 +222,7 @@ impl Chaoda {
                                 y_pred.push(0.0);
                                 roc_auc_score(&y_true, &y_pred).as_f32()
                             })
-                            .collect::<Vec<f32>>();
+                            .collect::<Vec<_>>();
                         (train_x, train_y)
                     })
                     .collect::<Vec<_>>()
@@ -247,13 +240,8 @@ impl Chaoda {
                     .par_iter_mut()
                     .zip(m_data)
                     .for_each(|(model, (train_x, train_y))| {
-                        let shape = (train_x.len(), train_x[0].len());
-                        let train_x = train_x.iter().flatten().copied().collect::<Vec<_>>();
-                        let train_x = Array2::from_shape_vec(shape, train_x)
-                            .map_err(|e| e.to_string())
-                            .unwrap_or_else(|e| unreachable!("{e}"));
                         model
-                            .train(&train_x, train_y)
+                            .train(train_x, train_y)
                             .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
                     });
             });

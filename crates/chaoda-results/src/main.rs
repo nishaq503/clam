@@ -70,11 +70,11 @@ fn main() -> Result<(), String> {
     let mut model = Chaoda::default();
     let mut training_data = None;
     for e in 0..num_epochs {
-        println!("Starting Epoch {}/{num_epochs}", e + 1);
+        println!("Starting Outer Epoch {}/{num_epochs}", e + 1);
 
         for (d, root) in train_datasets.iter().zip(roots.iter()) {
             let labels = d.metadata();
-            training_data = Some(model.train(d, root, labels, num_epochs, training_data));
+            training_data = Some(model.train(d, root, labels, 2, training_data));
         }
     }
 
