@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use smartcore::metrics::roc_auc_score;
 
-use crate::{Dataset, Instance};
+use crate::{Dataset, Instance, PartitionCriterion};
 
 /// The training data for the ensemble.
 ///
@@ -102,12 +102,23 @@ impl Chaoda {
         D: Dataset<I, U>,
         C: OddBall<U, N>,
     {
+        let permutation = data
+            .permuted_indices()
+            .map_or_else(|| (0..data.cardinality()).collect::<Vec<_>>(), <[usize]>::to_vec);
+
         let mut graphs = self.create_graphs(data, root);
         let predictions = self
             .algorithms
             .par_iter()
             .zip(graphs.par_iter_mut())
-            .flat_map(|((member, _), m_graphs)| m_graphs.par_iter_mut().map(|g| member.evaluate_points(g)))
+            .flat_map(|((member, _), m_graphs)| {
+                m_graphs.par_iter_mut().map(|g| {
+                    let scores = member.evaluate_points(g);
+                    let mut scores = scores.into_iter().zip(permutation.iter()).collect::<Vec<_>>();
+                    scores.sort_by_key(|(_, &i)| i);
+                    scores.into_iter().map(|(s, _)| s)
+                })
+            })
             .collect::<Vec<_>>();
 
         let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
@@ -127,50 +138,38 @@ impl Chaoda {
             .unwrap_or_else(|| unreachable!("We made sure the shape was correct."))
     }
 
-    /// Train the ensemble on the given dataset.
-    pub fn train<I, U, D, C, const N: usize>(
+    /// Train the ensemble on the given datasets.
+    ///
+    /// # Arguments
+    ///
+    /// * `datasets`: The datasets and labels to train on.
+    /// * `num_epochs`: The number of epochs to train for.
+    /// * `criteria`: The partition criterion to use for building the tree.
+    /// * `previous_data`: The previous training data to start from, if any.
+    /// * `seed`: The seed to use for random number generation, if any.
+    pub fn train<I, U, D, C, const N: usize, P>(
         &mut self,
-        data: &D,
-        root: &C,
-        labels: &[bool],
+        mut datasets: Vec<(D, Vec<bool>)>,
         num_epochs: usize,
+        criteria: &P,
         previous_data: Option<TrainingData>,
-    ) -> TrainingData
-    where
+        seed: Option<u64>,
+    ) where
         I: Instance,
         U: Number,
         D: Dataset<I, U>,
         C: OddBall<U, N>,
+        P: PartitionCriterion<U>,
     {
-        let mut graphs = if previous_data.is_some() {
-            self.create_graphs(data, root)
-        } else {
-            let cluster_scorer = |clusters: &[&C]| {
-                clusters
-                    .iter()
-                    .map(|c| {
-                        if c.depth() == self.min_depth || (c.is_leaf() && c.depth() < self.min_depth) {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            };
-            let graph = Graph::from_tree(root, data, cluster_scorer, 4);
-            self.algorithms
-                .iter()
-                .map(|(_, models)| models.iter().map(|_| graph.clone()).collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-        };
+        let mut fresh_start = previous_data.is_none();
 
-        let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
         let mut full_training_data = previous_data.unwrap_or_else(|| {
             self.algorithms
                 .iter()
                 .map(|(_, models)| models.iter().map(|_| (Vec::new(), Vec::new())).collect::<Vec<_>>())
                 .collect()
         });
+        let mut graphs;
 
         for e in 0..num_epochs {
             let training_data_size = full_training_data
@@ -178,40 +177,77 @@ impl Chaoda {
                 .map(|m| m.iter().map(|m| m.0.len()).sum::<usize>())
                 .sum::<usize>();
             println!(
-                "Starting Inner Epoch {}/{num_epochs} with dataset size: {training_data_size}",
+                "Starting Epoch {}/{num_epochs} with dataset size: {training_data_size}",
                 e + 1
             );
 
-            let roc_score = {
-                let predictions = self.predict(data, root);
-                let predictions = Self::aggregate_predictions(&predictions).to_vec();
-                roc_auc_score(&labels.clone(), &predictions).as_f32()
-            };
-            println!("Inner current ROC Score: {roc_score:.6}");
+            for (data, labels) in &mut datasets {
+                // Convert the labels to 0.0 and 1.0
+                let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
 
-            let new_training_data = self.generate_training_data(&mut graphs, &labels);
+                // Build the tree
+                let root = C::new_root(data, seed).partition(data, criteria, seed);
 
-            full_training_data = full_training_data
-                .into_iter()
-                .zip(new_training_data)
-                .map(|(m_old, m_new)| {
-                    m_old
-                        .into_iter()
-                        .zip(m_new)
-                        .map(|((mut x_old, mut y_old), (mut x_new, mut y_new))| {
-                            x_old.append(&mut x_new);
-                            y_old.append(&mut y_new);
-                            (x_old, y_old)
-                        })
+                // Create the graphs
+                graphs = if fresh_start {
+                    fresh_start = false;
+                    let cluster_scorer = |clusters: &[&C]| {
+                        clusters
+                            .iter()
+                            .map(|c| {
+                                if c.depth() == self.min_depth || (c.is_leaf() && c.depth() < self.min_depth) {
+                                    1.0
+                                } else {
+                                    0.0
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let graph = Graph::from_tree(&root, data, cluster_scorer, 4);
+                    self.algorithms
+                        .iter()
+                        .map(|(_, models)| models.iter().map(|_| graph.clone()).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
+                } else {
+                    self.create_graphs(data, &root)
+                };
 
-            self.train_inner_models(&full_training_data);
-            graphs = self.create_graphs(data, root);
+                // Create the new training data
+                let new_training_data = self.generate_training_data(&mut graphs, &labels);
+
+                // Aggregate the training data
+                full_training_data = full_training_data
+                    .into_iter()
+                    .zip(new_training_data)
+                    .map(|(m_old, m_new)| {
+                        m_old
+                            .into_iter()
+                            .zip(m_new)
+                            .map(|((mut x_old, mut y_old), (mut x_new, mut y_new))| {
+                                x_old.append(&mut x_new);
+                                y_old.append(&mut y_new);
+                                (x_old, y_old)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+
+                // Train the inner models
+                self.train_inner_models(&full_training_data);
+
+                // Report the ROC score
+                let roc_score = {
+                    let predictions = self.predict(data, &root);
+                    let predictions = Self::aggregate_predictions(&predictions).to_vec();
+                    roc_auc_score(&labels, &predictions).as_f32()
+                };
+                println!(
+                    "Epoch: {}/{num_epochs} ROC Score: {roc_score:.6} on Dataset: {}",
+                    e + 1,
+                    data.name()
+                );
+            }
         }
-
-        full_training_data
     }
 
     /// Create `Graph`s for the ensemble.

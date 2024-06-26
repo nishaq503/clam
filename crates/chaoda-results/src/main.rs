@@ -6,8 +6,6 @@ use abd_clam::{
     chaoda::{Chaoda, Vertex},
     Cluster, Dataset, PartitionCriteria, VecDataset,
 };
-use distances::Number;
-use ndarray::prelude::*;
 use smartcore::metrics::roc_auc_score;
 
 mod data;
@@ -59,8 +57,8 @@ fn main() -> Result<(), String> {
     let criteria = PartitionCriteria::default();
 
     // Read the datasets and assign the metrics
-    let (train_datasets, roots): (Vec<_>, Vec<_>) = {
-        let data = data::Data::read_paper_train(&data_dir)?
+    let train_datasets = {
+        let datasets = data::Data::read_paper_train(&data_dir)?
             .into_iter()
             .map(|(name, (train, labels))| {
                 let train = VecDataset::new(format!("{name}-manhattan"), train, manhattan, false);
@@ -70,18 +68,18 @@ fn main() -> Result<(), String> {
                 Ok(vec![train, train_2])
             })
             .collect::<Result<Vec<_>, String>>()?;
-
-        data.into_iter()
-            .flatten()
-            .map(|mut d| {
-                let root = Vertex::<f32>::new_root(&d, seed).partition(&mut d, &criteria, seed);
-                (d, root)
+        let datasets = datasets.into_iter().flatten().collect::<Vec<_>>();
+        datasets
+            .into_iter()
+            .map(|d| {
+                let labels = d.metadata().to_vec();
+                (d, labels)
             })
-            .unzip()
+            .collect::<Vec<_>>()
     };
     println!("Training datasets:");
-    for (d, r) in train_datasets.iter().zip(roots.iter()) {
-        println!("{}: {}", d.name(), r.name());
+    for (d, _) in train_datasets.iter() {
+        println!("{}", d.name());
     }
 
     let model = if use_pre_trained {
@@ -90,198 +88,51 @@ fn main() -> Result<(), String> {
         Chaoda::load(&model_path)?
     } else {
         // Train the CHAODA model
-        let num_epochs_outer = 10;
-        let num_epochs_inner = 2;
+        let num_epochs = 10;
         let mut model = Chaoda::default();
-        let mut training_data = None;
-        for e in 0..num_epochs_outer {
-            println!("Starting Outer Epoch {}/{num_epochs_outer}", e + 1);
-
-            for (d, root) in train_datasets.iter().zip(roots.iter()) {
-                println!("Training on dataset: {}", d.name());
-
-                let labels = d.metadata();
-                training_data = Some(model.train(d, root, labels, num_epochs_inner, training_data));
-            }
-        }
-        println!("Training complete. Saving model to: {model_path:?}");
+        model.train::<_, _, _, Vertex<_>, 3, _>(train_datasets, num_epochs, &criteria, None, seed);
+        println!("Training complete");
         model.save(&model_path)?;
+        println!("Model saved to: {model_path:?}");
         model
     };
 
-    // Print the ROC scores for the training datasets
+    // Print the ROC scores for all datasets
+    for (name, (data, labels)) in data::Data::read_all(&data_dir)? {
+        println!("Starting evaluation for: {name}");
 
-    // Run inference on the training datasets
-    let predictions = train_datasets
-        .iter()
-        .zip(roots.iter())
-        .map(|(d, root)| {
-            let permutation = d
-                .permuted_indices()
-                .ok_or_else(|| "No permutation found".to_string())?;
+        let min_cardinality = if data.len() < 10_000 {
+            1
+        } else if data.len() < 40_000 {
+            4
+        } else if data.len() < 100_000 {
+            8
+        } else {
+            16
+        };
+        println!("Using min_cardinality: {min_cardinality}");
+        let criteria = PartitionCriteria::default().with_min_cardinality(min_cardinality);
 
-            // Reorder the labels to match the original dataset
-            let labels = d.metadata().to_vec();
-            let mut labels = permutation
-                .iter()
-                .zip(labels)
-                .map(|(&i, l)| (i, l))
-                .collect::<Vec<_>>();
-            labels.sort_unstable_by_key(|(i, _)| *i);
-            let labels = labels.into_iter().map(|(_, l)| l).collect::<Vec<_>>();
+        let mut l1_data = VecDataset::new(name.clone(), data, manhattan, false);
+        let l1_root = Vertex::new_root(&l1_data, seed).partition(&mut l1_data, &criteria, seed);
+        let l1_scores = Chaoda::aggregate_predictions(&model.predict(&l1_data, &l1_root));
 
-            // Reorder the predictions to match the original dataset
-            let predictions = model.predict(d, root);
-            assert_eq!(
-                predictions.ncols(),
-                labels.len(),
-                "Number of predictions do not match the number of labels."
-            );
-            let mut predictions = predictions
-                .columns()
-                .into_iter()
-                .map(|v| v.to_owned().to_vec())
-                .zip(permutation.iter())
-                .collect::<Vec<_>>();
-            predictions.sort_unstable_by_key(|(_, &i)| i);
-            let predictions = predictions
-                .into_iter()
-                .flat_map(|(v, _)| v)
-                .collect::<Vec<_>>();
-            assert_eq!(
-                predictions.len(),
-                model.num_predictors() * labels.len(),
-                "Predictions do not match after inverting permutation."
-            );
-            let predictions =
-                Array2::from_shape_vec((model.num_predictors(), labels.len()), predictions)
-                    .map_err(|e| format!("Invalid shape: {e:?}"))?;
-            Ok((d.name(), labels, predictions))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+        let mut l2_data =
+            l1_data.clone_with_new_metric(euclidean, false, format!("{name}-euclidean"));
+        let l2_root = Vertex::new_root(&l2_data, seed).partition(&mut l2_data, &criteria, seed);
+        let l2_scores = Chaoda::aggregate_predictions(&model.predict(&l2_data, &l2_root));
 
-    // Compute the ROC scores
-    let roc_scores = predictions
-        .chunks(2)
-        .map(|chunk| {
-            let chunk: [_; 2] = chunk
-                .to_vec()
-                .try_into()
-                .map_err(|_| "Invalid chunk size".to_string())?;
-            let [(name, labels, l1_pred), (_, _, l2_pred)] = chunk;
-            let name = name
-                .split('-')
-                .next()
-                .ok_or_else(|| "Invalid dataset name".to_string())?;
-            let predictions = ndarray::concatenate![Axis(0), l1_pred, l2_pred];
-            let predictions = Chaoda::aggregate_predictions(&predictions).to_vec();
-            let y_true = labels
-                .iter()
-                .map(|&l| if l { 1.0 } else { 0.0 })
-                .collect::<Vec<f32>>();
-            let roc_score = roc_auc_score(&y_true, &predictions).as_f32();
-            Ok((name.to_string(), roc_score))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    println!("ROC scores for Training datasets:");
-    for (name, score) in roc_scores {
-        println!("{name}: {score:.6}");
-    }
-
-    // Print the ROC scores for the inference datasets
-    let mut infer_labels = Vec::new();
-
-    // Read the inference datasets
-    let (infer_datasets, roots): (Vec<_>, Vec<_>) = {
-        let data = data::Data::read_paper_inference(&data_dir)?
+        let y_pred = l1_scores
             .into_iter()
-            .map(|(name, (infer, labels))| {
-                // Note that we do not assign metadata here, so CHAODA will not have access to the labels
-                // We push labels twice to match the number of distance metrics
-                infer_labels.push(labels.clone());
-                infer_labels.push(labels);
-                let infer = VecDataset::new(format!("{name}-manhattan"), infer, manhattan, false);
-                let infer_2 =
-                    infer.clone_with_new_metric(euclidean, false, format!("{name}-euclidean"));
-                Ok(vec![infer, infer_2])
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-
-        data.into_iter()
-            .flatten()
-            .map(|mut d| {
-                let root = Vertex::<f32>::new_root(&d, seed).partition(&mut d, &criteria, seed);
-                (d, root)
-            })
-            .unzip()
-    };
-
-    // Run inference on the inference datasets
-    let predictions = infer_datasets
-        .iter()
-        .zip(roots.iter())
-        .zip(infer_labels)
-        .map(|((d, root), labels)| {
-            let permutation = d
-                .permuted_indices()
-                .ok_or_else(|| "No permutation found".to_string())?;
-
-            // Reorder the predictions to match the original dataset
-            let predictions = model.predict(d, root);
-            assert_eq!(
-                predictions.ncols(),
-                labels.len(),
-                "Number of predictions do not match the number of labels."
-            );
-            let mut predictions = predictions
-                .columns()
-                .into_iter()
-                .map(|v| v.to_owned().to_vec())
-                .zip(permutation.iter())
-                .collect::<Vec<_>>();
-            predictions.sort_unstable_by_key(|(_, &i)| i);
-            let predictions = predictions
-                .into_iter()
-                .flat_map(|(v, _)| v)
-                .collect::<Vec<_>>();
-            assert_eq!(
-                predictions.len(),
-                model.num_predictors() * labels.len(),
-                "Predictions do not match after inverting permutation."
-            );
-            let predictions =
-                Array2::from_shape_vec((model.num_predictors(), labels.len()), predictions)
-                    .map_err(|e| format!("Invalid shape: {e:?}"))?;
-            Ok((d.name(), labels, predictions))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-
-    // Compute the ROC scores
-    let roc_scores = predictions
-        .chunks(2)
-        .map(|chunk| {
-            let chunk: [_; 2] = chunk
-                .to_vec()
-                .try_into()
-                .map_err(|_| "Invalid chunk size".to_string())?;
-            let [(name, labels, l1_pred), (_, _, l2_pred)] = chunk;
-            let name = name
-                .split('-')
-                .next()
-                .ok_or_else(|| "Invalid dataset name".to_string())?;
-            let predictions = ndarray::concatenate![Axis(0), l1_pred, l2_pred];
-            let predictions = Chaoda::aggregate_predictions(&predictions).to_vec();
-            let y_true = labels
-                .iter()
-                .map(|&l| if l { 1.0 } else { 0.0 })
-                .collect::<Vec<f32>>();
-            let roc_score = roc_auc_score(&y_true, &predictions).as_f32();
-            Ok((name.to_string(), roc_score))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    println!("ROC scores for Inference datasets:");
-    for (name, score) in roc_scores {
-        println!("{name}: {score:.6}");
+            .zip(l2_scores)
+            .map(|(l1, l2)| (l1 + l2) / 2.0)
+            .collect::<Vec<_>>();
+        let y_true = labels
+            .iter()
+            .map(|&l| if l { 1.0 } else { 0.0 })
+            .collect::<Vec<_>>();
+        let roc_auc = roc_auc_score(&y_true, &y_pred);
+        println!("{name}: Aggregate {roc_auc:.6}");
     }
 
     Ok(())
