@@ -35,6 +35,7 @@ fn main() -> Result<(), String> {
     // Parse args[0] into path object
     let data_dir = Path::new(&args[1]);
     let data_dir = std::fs::canonicalize(data_dir).map_err(|e| e.to_string())?;
+    println!("Reading datasets from: {data_dir:?}");
 
     // Read the datasets and assign the metrics
     let seed = Some(42);
@@ -59,15 +60,21 @@ fn main() -> Result<(), String> {
             })
             .unzip()
     };
+    println!("Training datasets:");
+    for (d, r) in train_datasets.iter().zip(roots.iter()) {
+        println!("{}: {}", d.name(), r.name());
+    }
 
     // Train the CHAODA model
     let num_epochs = 10;
     let mut model = Chaoda::default();
     let mut training_data = None;
     for e in 0..num_epochs {
+        println!("Starting Epoch {}/{num_epochs}", e + 1);
+
         for (d, root) in train_datasets.iter().zip(roots.iter()) {
             let labels = d.metadata();
-            training_data = Some(model.train(d, root, labels, 1 + e, training_data));
+            training_data = Some(model.train(d, root, labels, num_epochs, training_data));
         }
     }
 

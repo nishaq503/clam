@@ -13,7 +13,7 @@ pub use meta_ml::MlModel;
 use distances::Number;
 use ndarray::prelude::*;
 use rayon::prelude::*;
-use smartcore::{linalg::basic::matrix::DenseMatrix, metrics::roc_auc_score};
+use smartcore::metrics::roc_auc_score;
 
 use crate::{Dataset, Instance};
 
@@ -38,6 +38,7 @@ impl Default for Chaoda {
         Self {
             algorithms: Member::default_members()
                 .into_iter()
+                .inspect(|member| println!("Member: {}", member.name()))
                 .map(|member| (member, MlModel::defaults()))
                 .collect(),
             min_depth: 4,
@@ -103,8 +104,13 @@ impl Chaoda {
         C: OddBall<U, N>,
     {
         let mut graphs = if previous_data.is_some() {
+            println!(
+                "Using previous data for training on {} over {num_epochs} epochs.",
+                data.name()
+            );
             self.create_graphs(data, root)
         } else {
+            println!("Training from scratch on {} over {num_epochs} epochs.", data.name());
             let cluster_scorer = |clusters: &[&C]| {
                 clusters
                     .iter()
@@ -118,6 +124,7 @@ impl Chaoda {
                     .collect::<Vec<_>>()
             };
             let graph = Graph::from_tree(root, data, cluster_scorer, 4);
+            println!("Initial graph created.");
             self.algorithms
                 .par_iter()
                 .map(|(_, models)| models.par_iter().map(|_| graph.clone()).collect::<Vec<_>>())
@@ -173,11 +180,13 @@ impl Chaoda {
                                     properties
                                 })
                                 .collect::<Vec<_>>();
-                            let properties = DenseMatrix::from_2d_vec(&anomaly_properties);
+                            let shape = (anomaly_properties.len(), anomaly_properties[0].len());
+                            let properties = anomaly_properties.into_iter().flatten().collect::<Vec<_>>();
+                            let properties = Array2::from_shape_vec(shape, properties)
+                                .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
                             ml_model
                                 .predict(&properties)
                                 .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
-                                .to_vec()
                         };
                         Graph::from_tree(root, data, cluster_scorer, self.min_depth)
                     })
@@ -238,10 +247,13 @@ impl Chaoda {
                     .par_iter_mut()
                     .zip(m_data)
                     .for_each(|(model, (train_x, train_y))| {
-                        let train_x = DenseMatrix::from_2d_vec(train_x);
-                        let train_y = Array1::from_vec(train_y.clone());
+                        let shape = (train_x.len(), train_x[0].len());
+                        let train_x = train_x.iter().flatten().copied().collect::<Vec<_>>();
+                        let train_x = Array2::from_shape_vec(shape, train_x)
+                            .map_err(|e| e.to_string())
+                            .unwrap_or_else(|e| unreachable!("{e}"));
                         model
-                            .train(&train_x, &train_y)
+                            .train(&train_x, train_y)
                             .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
                     });
             });

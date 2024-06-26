@@ -6,7 +6,6 @@ use ndarray::prelude::*;
 use serde::{Deserialize, Serialize};
 use smartcore::{
     ensemble::random_forest_regressor::{RandomForestRegressor, RandomForestRegressorParameters},
-    linalg::basic::matrix::DenseMatrix,
     linear::{
         elastic_net::{ElasticNet, ElasticNetParameters},
         lasso::{Lasso, LassoParameters},
@@ -20,17 +19,17 @@ use smartcore::{
 #[derive(Serialize, Deserialize)]
 pub enum MlModel {
     /// A linear regression model.
-    LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    LinearRegression(LinearRegression<f32, f32, Array2<f32>, Vec<f32>>),
     /// An Elastic Net model.
-    ElasticNet(ElasticNet<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    ElasticNet(ElasticNet<f32, f32, Array2<f32>, Vec<f32>>),
     /// A Lasso model.
-    Lasso(Lasso<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    Lasso(Lasso<f32, f32, Array2<f32>, Vec<f32>>),
     /// A Ridge Regression model.
-    RidgeRegression(RidgeRegression<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    RidgeRegression(RidgeRegression<f32, f32, Array2<f32>, Vec<f32>>),
     /// A Decision Tree Regressor model.
-    DecisionTreeRegressor(DecisionTreeRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    DecisionTreeRegressor(DecisionTreeRegressor<f32, f32, Array2<f32>, Vec<f32>>),
     /// A Random Forest Regressor model.
-    RandomForestRegressor(RandomForestRegressor<f32, f32, DenseMatrix<f32>, Array1<f32>>),
+    RandomForestRegressor(RandomForestRegressor<f32, f32, Array2<f32>, Vec<f32>>),
 }
 
 impl MlModel {
@@ -44,8 +43,15 @@ impl MlModel {
     ///
     /// * If the model name is unknown.
     pub fn new(model: &str) -> Result<Self, String> {
-        let train_x = DenseMatrix::from_2d_vec(&vec![vec![0.0; 10], vec![1.0; 10]]);
-        let train_y = Array1::from_vec(vec![0.0, 1.0]);
+        let train_y = vec![0.0, 1.0, 0.5];
+        let train_x = (0..10).flat_map(|_| train_y.clone()).collect::<Vec<_>>();
+        let train_x = Array2::from_shape_vec((10, 3), train_x)
+            .map_err(|e| e.to_string())?
+            .t()
+            .to_owned();
+        // let train_x = DenseMatrix::new(3, 10, train_x, true).map_err(|e| e.to_string())?;
+        println!("{model}: {train_x:?}");
+
         Ok(match model {
             "lr" | "LR" | "LinearRegression" => Self::LinearRegression(
                 LinearRegression::fit(&train_x, &train_y, LinearRegressionParameters::default())
@@ -76,8 +82,8 @@ impl MlModel {
     /// Get the default models.
     #[must_use]
     pub fn defaults() -> Vec<Self> {
-        let lr = Self::new("LinearRegression").unwrap_or_else(|_| unreachable!("Wrong model name"));
-        let dt = Self::new("DecisionTreeRegressor").unwrap_or_else(|_| unreachable!("Wrong model name"));
+        let lr = Self::new("LR").unwrap_or_else(|e| unreachable!("{e}"));
+        let dt = Self::new("DT").unwrap_or_else(|e| unreachable!("{e}"));
         vec![lr, dt]
     }
 
@@ -91,7 +97,7 @@ impl MlModel {
     /// # Errors
     ///
     /// * If the number of `labels` is not equal to the cardinality of the data.
-    pub fn train(&mut self, data: &DenseMatrix<f32>, roc_scores: &Array1<f32>) -> Result<(), String> {
+    pub fn train(&mut self, data: &Array2<f32>, roc_scores: &Vec<f32>) -> Result<(), String> {
         match self {
             Self::LinearRegression(model) => {
                 *model = LinearRegression::fit(data, roc_scores, LinearRegressionParameters::default())
@@ -142,7 +148,7 @@ impl MlModel {
     ///
     /// * If the number of features in the data does not match the number of features in the model.
     /// * If the model cannot predict the data.
-    pub fn predict(&self, data: &DenseMatrix<f32>) -> Result<Array1<f32>, String> {
+    pub fn predict(&self, data: &Array2<f32>) -> Result<Vec<f32>, String> {
         match self {
             Self::LinearRegression(model) => model.predict(data),
             Self::ElasticNet(model) => model.predict(data),
@@ -165,8 +171,9 @@ impl MlModel {
     /// * If the file cannot be created.
     /// * If the model cannot be serialized.
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-        bincode::serialize_into(file, self).map_err(|e| e.to_string())
+        todo!("{path:?}")
+        // let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        // bincode::serialize_into(file, self).map_err(|e| e.to_string())
     }
 
     /// Load the model from a file.
@@ -180,7 +187,8 @@ impl MlModel {
     /// * If the file cannot be opened.
     /// * If the model cannot be deserialized.
     pub fn load(path: &Path) -> Result<Self, String> {
-        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        bincode::deserialize_from(file).map_err(|e| e.to_string())
+        todo!("{path:?}")
+        // let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        // bincode::deserialize_from(file).map_err(|e| e.to_string())
     }
 }
