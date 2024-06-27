@@ -88,9 +88,9 @@ fn main() -> Result<(), String> {
         Chaoda::load(&model_path)?
     } else {
         // Train the CHAODA model
-        let num_epochs = 10;
+        let num_epochs = 16;
         let mut model = Chaoda::default();
-        model.train::<_, _, _, Vertex<_>, 3, _>(train_datasets, num_epochs, &criteria, None, seed);
+        model.train::<_, _, _, Vertex<_>, 3, _>(&train_datasets, num_epochs, &criteria, None, seed);
         println!("Training complete");
         model.save(&model_path)?;
         println!("Model saved to: {model_path:?}");

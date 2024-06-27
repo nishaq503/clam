@@ -100,9 +100,14 @@ impl MlModel {
     /// Get the default models.
     #[must_use]
     pub fn defaults() -> Vec<Self> {
-        let lr = Self::new("LR").unwrap_or_else(|e| unreachable!("{e}"));
-        let dt = Self::new("DT").unwrap_or_else(|e| unreachable!("{e}"));
-        vec![lr, dt]
+        vec![
+            Self::new("LR").unwrap_or_else(|e| unreachable!("{e}")),
+            Self::new("EN").unwrap_or_else(|e| unreachable!("{e}")),
+            Self::new("LA").unwrap_or_else(|e| unreachable!("{e}")),
+            Self::new("RR").unwrap_or_else(|e| unreachable!("{e}")),
+            Self::new("DT").unwrap_or_else(|e| unreachable!("{e}")),
+            // Self::new("RF").unwrap_or_else(|e| unreachable!("{e}")),
+        ]
     }
 
     /// Train the model on data from a `Graph`.

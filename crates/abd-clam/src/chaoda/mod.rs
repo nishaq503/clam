@@ -121,17 +121,21 @@ impl Chaoda {
             .algorithms
             .par_iter()
             .zip(graphs.par_iter_mut())
-            .flat_map(|((member, _), m_graphs)| {
-                m_graphs.par_iter_mut().map(|g| {
-                    let scores = member.evaluate_points(g);
-                    let mut scores = scores.into_iter().zip(permutation.iter()).collect::<Vec<_>>();
-                    scores.sort_by_key(|(_, &i)| i);
-                    scores.into_iter().map(|(s, _)| s)
-                })
+            .map(|((member, _), m_graphs)| {
+                m_graphs
+                    .par_iter_mut()
+                    .map(|g| {
+                        let scores = member.evaluate_points(g);
+                        let mut scores = scores.into_iter().zip(permutation.iter()).collect::<Vec<_>>();
+                        scores.sort_by_key(|(_, &i)| i);
+                        scores.into_iter().map(|(s, _)| s).collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
 
         let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
+        let predictions = predictions.iter().flat_map(Vec::as_slice).copied().collect::<Vec<_>>();
         Array2::from_shape_vec((self.num_predictors(), data.cardinality()), predictions)
             .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
     }
@@ -168,7 +172,7 @@ impl Chaoda {
     /// * `P`: The partition criteria.
     pub fn train<I, U, D, C, const N: usize, P>(
         &mut self,
-        mut datasets: Vec<(D, Vec<bool>)>,
+        datasets: &[(D, Vec<bool>)],
         num_epochs: usize,
         criteria: &P,
         previous_data: Option<TrainingData>,
@@ -176,7 +180,7 @@ impl Chaoda {
     ) where
         I: Instance,
         U: Number,
-        D: Dataset<I, U>,
+        D: Dataset<I, U> + Clone,
         C: OddBall<U, N>,
         P: PartitionCriterion<U>,
     {
@@ -200,12 +204,10 @@ impl Chaoda {
                 e + 1
             );
 
-            for (data, labels) in &mut datasets {
-                // Convert the labels to 0.0 and 1.0
-                let labels = labels.iter().map(|&l| if l { 1.0 } else { 0.0 }).collect::<Vec<f32>>();
-
+            for (data, labels) in datasets {
                 // Build the tree
-                let root = C::new_root(data, seed).partition(data, criteria, seed);
+                let mut data = data.clone();
+                let root = C::new_root(&data, seed).partition(&mut data, criteria, seed);
 
                 // Create the graphs
                 graphs = if fresh_start {
@@ -222,17 +224,25 @@ impl Chaoda {
                             })
                             .collect::<Vec<_>>()
                     };
-                    let graph = Graph::from_tree(&root, data, cluster_scorer, 4);
+                    let graph = Graph::from_tree(&root, &data, cluster_scorer, 4);
                     self.algorithms
                         .iter()
                         .map(|(_, models)| models.iter().map(|_| graph.clone()).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 } else {
-                    self.create_graphs(data, &root)
+                    self.create_graphs(&data, &root)
                 };
 
+                // reorder labels to match permutation in data
+                let permutation = data
+                    .permuted_indices()
+                    .map_or_else(|| (0..data.cardinality()).collect::<Vec<_>>(), <[usize]>::to_vec);
+                let y_true = permutation
+                    .iter()
+                    .map(|&i| if labels[i] { 1.0 } else { 0.0 })
+                    .collect::<Vec<_>>();
                 // Create the new training data
-                let new_training_data = self.generate_training_data(&mut graphs, &labels);
+                let new_training_data = self.generate_training_data(&mut graphs, &y_true);
 
                 // Aggregate the training data
                 full_training_data = full_training_data
@@ -255,10 +265,11 @@ impl Chaoda {
                 self.train_inner_models(&full_training_data);
 
                 // Report the ROC score
+                let labels = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
                 let roc_score = {
-                    let predictions = self.predict(data, &root);
+                    let predictions = self.predict(&data, &root);
                     let predictions = Self::aggregate_predictions(&predictions).to_vec();
-                    roc_auc_score(&labels, &predictions).as_f32()
+                    roc_auc_score(&labels, &predictions)
                 };
                 println!(
                     "Epoch: {}/{num_epochs} ROC Score: {roc_score:.6} on Dataset: {}",
@@ -353,10 +364,10 @@ impl Chaoda {
         self.algorithms
             .par_iter_mut()
             .zip(training_data)
-            .for_each(|((_, ml_models), m_data)| {
+            .for_each(|((_, ml_models), member_data)| {
                 ml_models
                     .par_iter_mut()
-                    .zip(m_data)
+                    .zip(member_data)
                     .for_each(|(model, (train_x, train_y))| {
                         model
                             .train(train_x, train_y)

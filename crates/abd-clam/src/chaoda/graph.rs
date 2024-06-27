@@ -179,7 +179,7 @@ impl<U: Number, const N: usize> Component<U, N> {
             .enumerate()
             .map(|(i, c1)| {
                 clusters
-                    .iter()
+                    .par_iter()
                     .enumerate()
                     .filter(|&(j, _)| i != j)
                     .filter_map(|(j, c2)| {
@@ -372,6 +372,7 @@ impl<U: Number, const N: usize> Component<U, N> {
         if self.neighborhood_sizes.is_none() {
             self.neighborhood_sizes = Some(
                 (0..self.cardinality())
+                    .into_par_iter()
                     .map(|i| self.compute_neighborhood_sizes(i))
                     .collect(),
             );
@@ -417,7 +418,7 @@ impl<U: Number, const N: usize> Component<U, N> {
         let mut transition_matrix = vec![0_f32; self.cardinality() * self.cardinality()];
         for (i, neighbors) in self.adjacency_list.iter().enumerate() {
             for &(j, d) in neighbors {
-                transition_matrix[i * self.cardinality() + j] = 1.0 / d.as_f32();
+                transition_matrix[i * self.cardinality() + j] = d.as_f32().recip();
             }
         }
         // Convert the transition matrix to an Array2
