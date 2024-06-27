@@ -12,41 +12,123 @@ use ndarray_npy::{ReadNpyExt, ReadableElement};
 pub type DataResult = (Vec<Vec<f32>>, Vec<bool>);
 
 /// The datasets used for anomaly detection.
+///
+/// These are taken from https://odds.cs.stonybrook.edu/
 pub enum Data {
+    /// 7200 x 6, 534 outliers
     Annthyroid,
+    /// 452 x 274, 66 outliers
     Arrhythmia,
-    Backdoor,
+    /// 683 x 9, 239 outliers
     BreastW,
-    Campaign,
+    /// 1831 x 21, 176 outliers
     Cardio,
-    CelebA,
-    Census,
-    Cover,
-    Donors,
-    Fraud,
+    /// 286048 x 10, 2747 outliers
+    ForestCover,
+    /// 214 x 9, 9 outliers
     Glass,
+    /// 567479 x 3, 2211 outliers
     Http,
+    /// 351 x 33, 126 outliers
     Ionosphere,
+    /// 148 x 18, 6 outliers
     Lympho,
+    /// 11183 x 6, 260 outliers
     Mammography,
+    /// 7603 x 100, 700 outliers
     Mnist,
+    /// 3062 x 166, 97 outliers
     Musk,
+    /// 5216 x 64, 150 outliers
     OptDigits,
+    /// 6870 x 16, 156 outliers
     PenDigits,
+    /// 768 x 8, 268 outliers
     Pima,
+    /// 6435 x 36, 2036 outliers
     Satellite,
+    /// 5803 x 36, 71 outliers
     SatImage2,
+    /// 49097 x 9, 3511 outliers
     Shuttle,
+    /// 95156 x 3, 30 outliers
     Smtp,
-    Thyroid21,
+    /// 3772 x 6, 93 outliers
     Thyroid,
+    /// 240 x 6, 30 outliers
     Vertebral,
+    /// 1456 x 12, 50 outliers
     Vowels,
+    /// 278 x 30, 21 outliers
     Wbc,
+    /// 129 x 13, 10 outliers
     Wine,
 }
 
 impl Data {
+    /// Create a new dataset from the name.
+    pub fn new(name: &str) -> Result<Self, String> {
+        match name {
+            "annthyroid" => Ok(Self::Annthyroid),
+            "arrhythmia" => Ok(Self::Arrhythmia),
+            "breastw" => Ok(Self::BreastW),
+            "cardio" => Ok(Self::Cardio),
+            "cover" => Ok(Self::ForestCover),
+            "glass" => Ok(Self::Glass),
+            "http" => Ok(Self::Http),
+            "ionosphere" => Ok(Self::Ionosphere),
+            "lympho" => Ok(Self::Lympho),
+            "mammography" => Ok(Self::Mammography),
+            "mnist" => Ok(Self::Mnist),
+            "musk" => Ok(Self::Musk),
+            "optdigits" => Ok(Self::OptDigits),
+            "pendigits" => Ok(Self::PenDigits),
+            "pima" => Ok(Self::Pima),
+            "satellite" => Ok(Self::Satellite),
+            "satimage-2" => Ok(Self::SatImage2),
+            "shuttle" => Ok(Self::Shuttle),
+            "smtp" => Ok(Self::Smtp),
+            "thyroid" => Ok(Self::Thyroid),
+            "vertebral" => Ok(Self::Vertebral),
+            "vowels" => Ok(Self::Vowels),
+            "wbc" => Ok(Self::Wbc),
+            "wine" => Ok(Self::Wine),
+            _ => Err(format!("Unknown dataset: {name}")),
+        }
+    }
+
+    /// Get the name of the dataset.
+    ///
+    /// The dataset name is the name of the file without the extension.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Annthyroid => "annthyroid",
+            Self::Arrhythmia => "arrhythmia",
+            Self::BreastW => "breastw",
+            Self::Cardio => "cardio",
+            Self::ForestCover => "cover",
+            Self::Glass => "glass",
+            Self::Http => "http",
+            Self::Ionosphere => "ionosphere",
+            Self::Lympho => "lympho",
+            Self::Mammography => "mammography",
+            Self::Mnist => "mnist",
+            Self::Musk => "musk",
+            Self::OptDigits => "optdigits",
+            Self::PenDigits => "pendigits",
+            Self::Pima => "pima",
+            Self::Satellite => "satellite",
+            Self::SatImage2 => "satimage-2",
+            Self::Shuttle => "shuttle",
+            Self::Smtp => "smtp",
+            Self::Thyroid => "thyroid",
+            Self::Vertebral => "vertebral",
+            Self::Vowels => "vowels",
+            Self::Wbc => "wbc",
+            Self::Wine => "wine",
+        }
+    }
+
     /// Read the dataset.
     ///
     /// # Arguments
@@ -54,37 +136,30 @@ impl Data {
     /// * `data_dir` - The directory containing the dataset.
     pub fn read(&self, data_dir: &Path) -> Result<DataResult, String> {
         match self {
-            Self::Annthyroid => read_xy::<f64, u8>(data_dir, "annthyroid"),
-            Self::Arrhythmia => read_xy::<f64, u8>(data_dir, "arrhythmia"),
-            Self::Backdoor => read_xy::<f32, u8>(data_dir, "backdoor"),
-            Self::BreastW => read_xy::<f64, u8>(data_dir, "breastw"),
-            Self::Campaign => read_xy::<f32, u8>(data_dir, "campaign"),
-            Self::Cardio => read_xy::<f64, u8>(data_dir, "cardio"),
-            Self::CelebA => read_xy::<f32, u8>(data_dir, "celeba"),
-            Self::Census => read_xy::<f32, u8>(data_dir, "census"),
-            Self::Cover => read_xy::<f64, u8>(data_dir, "cover"),
-            Self::Donors => read_xy::<f32, u8>(data_dir, "donors"),
-            Self::Fraud => read_xy::<f32, u8>(data_dir, "fraud"),
-            Self::Glass => read_xy::<f64, u8>(data_dir, "glass"),
-            Self::Http => read_xy::<f64, u8>(data_dir, "http"),
-            Self::Ionosphere => read_xy::<f64, u8>(data_dir, "ionosphere"),
-            Self::Lympho => read_xy::<f64, u8>(data_dir, "lympho"),
-            Self::Mammography => read_xy::<f64, u8>(data_dir, "mammography"),
-            Self::Mnist => read_xy::<f64, u8>(data_dir, "mnist"),
-            Self::Musk => read_xy::<f64, u8>(data_dir, "musk"),
-            Self::OptDigits => read_xy::<f64, u8>(data_dir, "optdigits"),
-            Self::PenDigits => read_xy::<f64, u8>(data_dir, "pendigits"),
-            Self::Pima => read_xy::<f64, u8>(data_dir, "pima"),
-            Self::Satellite => read_xy::<f64, u8>(data_dir, "satellite"),
-            Self::SatImage2 => read_xy::<f64, u8>(data_dir, "satimage-2"),
-            Self::Shuttle => read_xy::<f64, u8>(data_dir, "shuttle"),
-            Self::Smtp => read_xy::<f64, u8>(data_dir, "smtp"),
-            Self::Thyroid21 => read_xy::<f32, u8>(data_dir, "thyroid-21"),
-            Self::Thyroid => read_xy::<f64, u8>(data_dir, "thyroid"),
-            Self::Vertebral => read_xy::<f64, u8>(data_dir, "vertebral"),
-            Self::Vowels => read_xy::<f64, u8>(data_dir, "vowels"),
-            Self::Wbc => read_xy::<f64, u8>(data_dir, "wbc"),
-            Self::Wine => read_xy::<f64, u8>(data_dir, "wine"),
+            Self::Annthyroid
+            | Self::Arrhythmia
+            | Self::BreastW
+            | Self::Cardio
+            | Self::ForestCover
+            | Self::Glass
+            | Self::Http
+            | Self::Ionosphere
+            | Self::Lympho
+            | Self::Mammography
+            | Self::Mnist
+            | Self::Musk
+            | Self::OptDigits
+            | Self::PenDigits
+            | Self::Pima
+            | Self::Satellite
+            | Self::SatImage2
+            | Self::Shuttle
+            | Self::Smtp
+            | Self::Thyroid
+            | Self::Vertebral
+            | Self::Vowels
+            | Self::Wbc
+            | Self::Wine => read_xy::<f64, u8>(data_dir, self.name()),
         }
     }
 
@@ -107,7 +182,7 @@ impl Data {
             ("arrhythmia".to_string(), Self::Arrhythmia.read(data_dir)?),
             ("breastw".to_string(), Self::BreastW.read(data_dir)?),
             ("cardio".to_string(), Self::Cardio.read(data_dir)?),
-            ("cover".to_string(), Self::Cover.read(data_dir)?),
+            ("cover".to_string(), Self::ForestCover.read(data_dir)?),
             ("glass".to_string(), Self::Glass.read(data_dir)?),
             ("http".to_string(), Self::Http.read(data_dir)?),
             ("ionosphere".to_string(), Self::Ionosphere.read(data_dir)?),
@@ -130,15 +205,6 @@ impl Data {
     pub fn read_all(data_dir: &Path) -> Result<Vec<(String, DataResult)>, String> {
         let mut datasets = Self::read_paper_train(data_dir)?;
         datasets.extend(Self::read_paper_inference(data_dir)?);
-        datasets.extend(vec![
-            ("backdoor".to_string(), Self::Backdoor.read(data_dir)?),
-            ("campaign".to_string(), Self::Campaign.read(data_dir)?),
-            ("celeba".to_string(), Self::CelebA.read(data_dir)?),
-            ("census".to_string(), Self::Census.read(data_dir)?),
-            ("donors".to_string(), Self::Donors.read(data_dir)?),
-            ("fraud".to_string(), Self::Fraud.read(data_dir)?),
-            ("thyroid-21".to_string(), Self::Thyroid21.read(data_dir)?),
-        ]);
         Ok(datasets)
     }
 }

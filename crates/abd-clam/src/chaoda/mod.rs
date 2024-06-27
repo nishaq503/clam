@@ -99,45 +99,61 @@ impl Chaoda {
     /// # Arguments
     ///
     /// * `data`: The dataset to predict on.
-    /// * `root`: The root `Cluster` to predict from.
+    /// * `num_trees`: The number of trees to use in the ensemble.
+    /// * `criteria`: The partition criterion to use for building the trees.
+    /// * `seed`: The seed to use for random number generation, if any.
     ///
     /// # Returns
     ///
     /// The anomaly scores for each point in the dataset.
-    /// Each row is the predictions from a single predictor.
-    pub fn predict<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Array2<f32>
+    pub fn predict<I, U, D, C, const N: usize, P>(
+        &self,
+        data: &D,
+        num_trees: usize,
+        criteria: &P,
+        seed: Option<u64>,
+    ) -> Vec<f32>
     where
         I: Instance,
         U: Number,
-        D: Dataset<I, U>,
+        D: Dataset<I, U> + Clone,
         C: OddBall<U, N>,
+        P: PartitionCriterion<U>,
     {
-        let permutation = data
-            .permuted_indices()
-            .map_or_else(|| (0..data.cardinality()).collect::<Vec<_>>(), <[usize]>::to_vec);
+        let mut scores = Vec::new();
 
-        let mut graphs = self.create_graphs(data, root);
-        let predictions = self
-            .algorithms
-            .par_iter()
-            .zip(graphs.par_iter_mut())
-            .map(|((member, _), m_graphs)| {
-                m_graphs
-                    .par_iter_mut()
-                    .map(|g| {
-                        let scores = member.evaluate_points(g);
-                        let mut scores = scores.into_iter().zip(permutation.iter()).collect::<Vec<_>>();
-                        scores.sort_by_key(|(_, &i)| i);
-                        scores.into_iter().map(|(s, _)| s).collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        for i in 0..num_trees {
+            let seed = seed.map(|s| s + (i + data.cardinality()) as u64);
+            let mut data = data.clone();
+            let root = C::new_root(&data, seed).partition(&mut data, criteria, seed);
 
-        let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
-        let predictions = predictions.iter().flat_map(Vec::as_slice).copied().collect::<Vec<_>>();
-        Array2::from_shape_vec((self.num_predictors(), data.cardinality()), predictions)
-            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
+            let permutation = data
+                .permuted_indices()
+                .map_or_else(|| (0..data.cardinality()).collect::<Vec<_>>(), <[usize]>::to_vec);
+
+            let mut graphs = self.create_graphs(&data, &root);
+            let predictions = self
+                .algorithms
+                .par_iter()
+                .zip(graphs.par_iter_mut())
+                .map(|((member, _), m_graphs)| {
+                    m_graphs
+                        .par_iter_mut()
+                        .map(|g| {
+                            let scores = member.evaluate_points(g);
+                            let mut scores = scores.into_iter().zip(permutation.iter()).collect::<Vec<_>>();
+                            scores.sort_by_key(|(_, &i)| i);
+                            scores.into_iter().map(|(s, _)| s).collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let predictions = predictions.into_iter().flatten().collect::<Vec<_>>();
+            scores.push(Self::aggregate_predictions(&predictions));
+        }
+
+        Self::aggregate_predictions(&scores)
     }
 
     /// Aggregate the predictions of the ensemble.
@@ -145,11 +161,15 @@ impl Chaoda {
     /// For now, we take the mean of the anomaly scores for each point. Later,
     /// we may want to consider other aggregation methods.
     #[must_use]
-    pub fn aggregate_predictions(scores: &Array2<f32>) -> Array1<f32> {
+    pub fn aggregate_predictions(scores: &[Vec<f32>]) -> Vec<f32> {
         // Take the mean of the anomaly scores for each point
-        scores
+        let shape = (scores.len(), scores[0].len());
+        let scores = scores.iter().flat_map(Vec::as_slice).copied().collect::<Vec<_>>();
+        Array2::from_shape_vec(shape, scores)
+            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
             .mean_axis(Axis(0))
             .unwrap_or_else(|| unreachable!("We made sure the shape was correct."))
+            .to_vec()
     }
 
     /// Train the ensemble on the given datasets.
@@ -207,6 +227,7 @@ impl Chaoda {
             for (data, labels) in datasets {
                 // Build the tree
                 let mut data = data.clone();
+                let seed = seed.map(|s| s + (e + data.cardinality()) as u64);
                 let root = C::new_root(&data, seed).partition(&mut data, criteria, seed);
 
                 // Create the graphs
@@ -267,8 +288,7 @@ impl Chaoda {
                 // Report the ROC score
                 let labels = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
                 let roc_score = {
-                    let predictions = self.predict(&data, &root);
-                    let predictions = Self::aggregate_predictions(&predictions).to_vec();
+                    let predictions = self.predict::<_, _, _, C, N, _>(&data, num_epochs, criteria, seed);
                     roc_auc_score(&labels, &predictions)
                 };
                 println!(
@@ -369,9 +389,7 @@ impl Chaoda {
                     .par_iter_mut()
                     .zip(member_data)
                     .for_each(|(model, (train_x, train_y))| {
-                        model
-                            .train(train_x, train_y)
-                            .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."));
+                        model.train(train_x, train_y).unwrap_or_else(|e| unreachable!("{e}"));
                     });
             });
     }

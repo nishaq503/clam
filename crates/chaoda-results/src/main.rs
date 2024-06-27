@@ -4,21 +4,11 @@ use std::path::Path;
 
 use abd_clam::{
     chaoda::{Chaoda, Vertex},
-    Cluster, Dataset, PartitionCriteria, VecDataset,
+    Dataset, PartitionCriteria, VecDataset,
 };
 use smartcore::metrics::roc_auc_score;
 
 mod data;
-
-#[allow(clippy::ptr_arg)]
-fn euclidean(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-    distances::vectors::euclidean(x, y)
-}
-
-#[allow(clippy::ptr_arg)]
-fn manhattan(x: &Vec<f32>, y: &Vec<f32>) -> f32 {
-    distances::vectors::manhattan(x, y)
-}
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
@@ -56,16 +46,48 @@ fn main() -> Result<(), String> {
     let seed = Some(42);
     let criteria = PartitionCriteria::default();
 
+    #[allow(clippy::type_complexity)]
+    let named_metrics: &[(&str, fn(&Vec<f32>, &Vec<f32>) -> f32)] = &[
+        ("euclidean", |x, y| distances::vectors::euclidean(x, y)),
+        ("manhattan", |x, y| distances::vectors::manhattan(x, y)),
+        // ("cosine", |x, y| distances::vectors::cosine(x, y)),
+        // ("canberra", |x, y| distances::vectors::canberra(x, y)),
+        // ("bray_curtis", |x, y| distances::vectors::bray_curtis(x, y)),
+    ];
+
     // Read the datasets and assign the metrics
+    let train_names: &[&str] = &[
+        "annthyroid",
+        "mnist",
+        "pendigits",
+        "satellite",
+        "shuttle",
+        "thyroid",
+    ];
     let train_datasets = {
-        let datasets = data::Data::read_paper_train(&data_dir)?
+        let datasets = train_names
+            .iter()
+            .map(|&name| {
+                let (train, labels) = data::Data::new(name)?.read(&data_dir)?;
+                Ok((name, (train, labels)))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let datasets = datasets
             .into_iter()
             .map(|(name, (train, labels))| {
-                let train = VecDataset::new(format!("{name}-manhattan"), train, manhattan, false);
+                let (metric_name, metric) = named_metrics[0];
+                let train = VecDataset::new(format!("{name}-{metric_name}"), train, metric, false);
                 let train = train.assign_metadata(labels)?;
-                let train_2 =
-                    train.clone_with_new_metric(euclidean, false, format!("{name}-euclidean"));
-                Ok(vec![train, train_2])
+                let mut datasets = vec![train];
+                for &(metric_name, metric) in named_metrics.iter().skip(1) {
+                    let train = datasets[0].clone_with_new_metric(
+                        metric,
+                        false,
+                        format!("{name}-{metric_name}"),
+                    );
+                    datasets.push(train);
+                }
+                Ok(datasets)
             })
             .collect::<Result<Vec<_>, String>>()?;
         let datasets = datasets.into_iter().flatten().collect::<Vec<_>>();
@@ -111,25 +133,28 @@ fn main() -> Result<(), String> {
             16
         };
         println!("Using min_cardinality: {min_cardinality}");
-        let criteria = PartitionCriteria::default().with_min_cardinality(min_cardinality);
 
-        let mut l1_data = VecDataset::new(name.clone(), data, manhattan, false);
-        let l1_root = Vertex::new_root(&l1_data, seed).partition(&mut l1_data, &criteria, seed);
-        let l1_scores = Chaoda::aggregate_predictions(&model.predict(&l1_data, &l1_root));
+        let (metric_name, metric) = named_metrics[0];
+        let dataset = VecDataset::new(format!("{name}-{metric_name}"), data, metric, false);
+        let dataset = dataset.assign_metadata(labels.clone())?;
+        let mut datasets = vec![dataset];
 
-        let mut l2_data =
-            l1_data.clone_with_new_metric(euclidean, false, format!("{name}-euclidean"));
-        let l2_root = Vertex::new_root(&l2_data, seed).partition(&mut l2_data, &criteria, seed);
-        let l2_scores = Chaoda::aggregate_predictions(&model.predict(&l2_data, &l2_root));
+        for &(metric_name, metric) in named_metrics.iter().skip(1) {
+            let dataset =
+                datasets[0].clone_with_new_metric(metric, false, format!("{name}-{metric_name}"));
+            datasets.push(dataset);
+        }
 
-        let y_pred = l1_scores
-            .into_iter()
-            .zip(l2_scores)
-            .map(|(l1, l2)| (l1 + l2) / 2.0)
-            .collect::<Vec<_>>();
-        let y_true = labels
+        let num_trees = 8;
+        let scores = datasets
             .iter()
-            .map(|&l| if l { 1.0 } else { 0.0 })
+            .map(|d| model.predict::<_, _, _, Vertex<_>, 3, _>(d, num_trees, &criteria, seed))
+            .collect::<Vec<_>>();
+        let y_pred = Chaoda::aggregate_predictions(&scores);
+
+        let y_true = labels
+            .into_iter()
+            .map(|l| if l { 1.0 } else { 0.0 })
             .collect::<Vec<_>>();
         let roc_auc = roc_auc_score(&y_true, &y_pred);
         println!("{name}: Aggregate {roc_auc:.6}");
