@@ -61,7 +61,7 @@ impl Member {
             Self::GN(gn::GraphNeighborhood::default()),
             Self::PC(pc::ParentCardinality),
             Self::SC(sc::SubgraphCardinality),
-            Self::SP(sp::StationaryProbability::default()),
+            // Self::SP(sp::StationaryProbability::default()),
             Self::VD(vd::VertexDegree),
         ]
     }
@@ -85,7 +85,7 @@ impl Member {
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    pub fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    pub fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         match self {
             Self::CC(a) => a.evaluate_clusters(g),
             Self::GN(a) => a.evaluate_clusters(g),
@@ -98,7 +98,7 @@ impl Member {
 
     /// Whether to normalize anomaly scores by cluster or by point.
     #[must_use]
-    pub fn normalize_by_cluster<U: Number, const N: usize>(&self) -> bool {
+    pub fn normalize_by_cluster<U: Number>(&self) -> bool {
         match self {
             Self::CC(a) => a.normalize_by_cluster(),
             Self::GN(a) => a.normalize_by_cluster(),
@@ -119,7 +119,7 @@ impl Member {
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    pub fn evaluate_points<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    pub fn evaluate_points<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         match self {
             Self::CC(a) => a.evaluate_points(g),
             Self::GN(a) => a.evaluate_points(g),
@@ -150,13 +150,13 @@ trait Algorithm: Default + Clone + Send + Sync + Serialize + for<'de> Deserializ
     /// The output vector must be the same length as the number of `OddBall`s in
     /// the `Graph`, and the order of the scores must correspond to the order of the
     /// `OddBall`s in the `Graph`.
-    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32>;
+    fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32>;
 
     /// Whether to normalize anomaly scores by cluster or by point.
     fn normalize_by_cluster(&self) -> bool;
 
     /// Have points inherit scores from `OddBall`s.
-    fn inherit_scores<U: Number, const N: usize>(&self, g: &Graph<U, N>, scores: &[f32]) -> Vec<f32> {
+    fn inherit_scores<U: Number>(&self, g: &Graph<U>, scores: &[f32]) -> Vec<f32> {
         let mut points_scores = vec![0.0; g.population()];
         for (&(c_start, c_car), &s) in g.iter_clusters().zip(scores.iter()) {
             for i in points_scores.iter_mut().skip(c_start).take(c_car) {
@@ -176,7 +176,7 @@ trait Algorithm: Default + Clone + Send + Sync + Serialize + for<'de> Deserializ
     /// # Returns
     ///
     /// * A vector of anomaly scores for each point in the `Graph`.
-    fn evaluate_points<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    fn evaluate_points<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         let cluster_scores = {
             let scores = self.evaluate_clusters(g);
             if self.normalize_by_cluster() {

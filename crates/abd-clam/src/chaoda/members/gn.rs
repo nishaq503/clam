@@ -34,7 +34,7 @@ impl Algorithm for GraphNeighborhood {
         format!("gn-{}", self.diameter_fraction)
     }
 
-    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         let diameter = g.diameter();
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let k = (self.diameter_fraction * diameter.as_f32()).round() as usize;

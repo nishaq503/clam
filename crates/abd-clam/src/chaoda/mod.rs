@@ -106,18 +106,12 @@ impl Chaoda {
     /// # Returns
     ///
     /// The anomaly scores for each point in the dataset.
-    pub fn predict<I, U, D, C, const N: usize, P>(
-        &self,
-        data: &D,
-        num_trees: usize,
-        criteria: &P,
-        seed: Option<u64>,
-    ) -> Vec<f32>
+    pub fn predict<I, U, D, C, P>(&self, data: &D, num_trees: usize, criteria: &P, seed: Option<u64>) -> Vec<f32>
     where
         I: Instance,
         U: Number,
         D: Dataset<I, U> + Clone,
-        C: OddBall<U, N>,
+        C: OddBall<U>,
         P: PartitionCriterion<U>,
     {
         let mut scores = Vec::new();
@@ -190,7 +184,7 @@ impl Chaoda {
     /// * `C`: The type of the `OddBall` `Cluster`.
     /// * `N`: Half the number of anomaly properties in the `Cluster`.
     /// * `P`: The partition criteria.
-    pub fn train<I, U, D, C, const N: usize, P>(
+    pub fn train<I, U, D, C, P>(
         &mut self,
         datasets: &[(D, Vec<bool>)],
         num_epochs: usize,
@@ -201,7 +195,7 @@ impl Chaoda {
         I: Instance,
         U: Number,
         D: Dataset<I, U> + Clone,
-        C: OddBall<U, N>,
+        C: OddBall<U>,
         P: PartitionCriterion<U>,
     {
         let mut fresh_start = previous_data.is_none();
@@ -288,7 +282,7 @@ impl Chaoda {
                 // Report the ROC score
                 let labels = labels.iter().map(|&b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
                 let roc_score = {
-                    let predictions = self.predict::<_, _, _, C, N, _>(&data, num_epochs, criteria, seed);
+                    let predictions = self.predict::<_, _, _, C, _>(&data, 4, criteria, seed);
                     roc_auc_score(&labels, &predictions)
                 };
                 println!(
@@ -301,12 +295,12 @@ impl Chaoda {
     }
 
     /// Create `Graph`s for the ensemble.
-    fn create_graphs<I, U, D, C, const N: usize>(&self, data: &D, root: &C) -> Vec<Vec<Graph<U, N>>>
+    fn create_graphs<I, U, D, C>(&self, data: &D, root: &C) -> Vec<Vec<Graph<U>>>
     where
         I: Instance,
         U: Number,
         D: Dataset<I, U>,
-        C: OddBall<U, N>,
+        C: OddBall<U>,
     {
         self.algorithms
             .par_iter()
@@ -315,15 +309,7 @@ impl Chaoda {
                     .par_iter()
                     .map(|ml_model| {
                         let cluster_scorer = |clusters: &[&C]| {
-                            let properties = clusters
-                                .par_iter()
-                                .map(|c| {
-                                    let (p, p_) = c.ratios();
-                                    let mut properties = p.to_vec();
-                                    properties.extend_from_slice(p_.as_ref());
-                                    properties
-                                })
-                                .collect::<Vec<_>>();
+                            let properties = clusters.iter().map(|c| c.ratios()).collect::<Vec<_>>();
                             ml_model
                                 .predict(&properties)
                                 .unwrap_or_else(|_| unreachable!("We made sure the shape was correct."))
@@ -336,11 +322,7 @@ impl Chaoda {
     }
 
     /// Generate training data from `Graph`s.
-    fn generate_training_data<U: Number, const N: usize>(
-        &self,
-        graphs: &mut [Vec<Graph<U, N>>],
-        labels: &[f32],
-    ) -> TrainingData {
+    fn generate_training_data<U: Number>(&self, graphs: &mut [Vec<Graph<U>>], labels: &[f32]) -> TrainingData {
         self.algorithms
             .par_iter()
             .zip(graphs)
@@ -348,19 +330,13 @@ impl Chaoda {
                 m_graphs
                     .par_iter_mut()
                     .map(|g| {
-                        let train_x = g
-                            .iter_anomaly_properties()
-                            .map(|(p, p_)| {
-                                let mut properties = p.to_vec();
-                                properties.extend_from_slice(p_.as_ref());
-                                properties
-                            })
-                            .collect::<Vec<_>>();
+                        let train_x = g.iter_anomaly_properties().cloned().collect::<Vec<_>>();
                         let anomaly_ratings = Member::normalize_scores(&member.evaluate_clusters(g));
                         let train_y = g
                             .iter_clusters()
                             .zip(anomaly_ratings)
                             .map(|(&(start, cardinality), rating)| {
+                                // labels[start..(start + cardinality)].iter().sum::<f32>() / cardinality.as_f32()
                                 // The roc-score function needs both classes represented so we add a
                                 // couple of dummy values to the end of the vectors.
                                 let mut y_true = labels[start..(start + cardinality)].to_vec();

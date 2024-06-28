@@ -102,9 +102,9 @@ impl MlModel {
     pub fn defaults() -> Vec<Self> {
         vec![
             Self::new("LR").unwrap_or_else(|e| unreachable!("{e}")),
-            Self::new("EN").unwrap_or_else(|e| unreachable!("{e}")),
-            Self::new("LA").unwrap_or_else(|e| unreachable!("{e}")),
-            Self::new("RR").unwrap_or_else(|e| unreachable!("{e}")),
+            // Self::new("EN").unwrap_or_else(|e| unreachable!("{e}")),
+            // Self::new("LA").unwrap_or_else(|e| unreachable!("{e}")),
+            // Self::new("RR").unwrap_or_else(|e| unreachable!("{e}")),
             Self::new("DT").unwrap_or_else(|e| unreachable!("{e}")),
             // Self::new("RF").unwrap_or_else(|e| unreachable!("{e}")),
         ]

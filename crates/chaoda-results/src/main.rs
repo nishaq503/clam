@@ -57,11 +57,11 @@ fn main() -> Result<(), String> {
 
     // Read the datasets and assign the metrics
     let train_names: &[&str] = &[
-        "annthyroid",
+        "arrhythmia",
         "mnist",
         "pendigits",
         "satellite",
-        "shuttle",
+        // "shuttle",
         "thyroid",
     ];
     let train_datasets = {
@@ -112,7 +112,7 @@ fn main() -> Result<(), String> {
         // Train the CHAODA model
         let num_epochs = 16;
         let mut model = Chaoda::default();
-        model.train::<_, _, _, Vertex<_>, 3, _>(&train_datasets, num_epochs, &criteria, None, seed);
+        model.train::<_, _, _, Vertex<_>, _>(&train_datasets, num_epochs, &criteria, None, seed);
         println!("Training complete");
         model.save(&model_path)?;
         println!("Model saved to: {model_path:?}");
@@ -122,17 +122,6 @@ fn main() -> Result<(), String> {
     // Print the ROC scores for all datasets
     for (name, (data, labels)) in data::Data::read_all(&data_dir)? {
         println!("Starting evaluation for: {name}");
-
-        let min_cardinality = if data.len() < 10_000 {
-            1
-        } else if data.len() < 40_000 {
-            4
-        } else if data.len() < 100_000 {
-            8
-        } else {
-            16
-        };
-        println!("Using min_cardinality: {min_cardinality}");
 
         let (metric_name, metric) = named_metrics[0];
         let dataset = VecDataset::new(format!("{name}-{metric_name}"), data, metric, false);
@@ -148,7 +137,7 @@ fn main() -> Result<(), String> {
         let num_trees = 8;
         let scores = datasets
             .iter()
-            .map(|d| model.predict::<_, _, _, Vertex<_>, 3, _>(d, num_trees, &criteria, seed))
+            .map(|d| model.predict::<_, _, _, Vertex<_>, _>(d, num_trees, &criteria, seed))
             .collect::<Vec<_>>();
         let y_pred = Chaoda::aggregate_predictions(&scores);
 

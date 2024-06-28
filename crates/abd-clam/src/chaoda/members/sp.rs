@@ -30,7 +30,7 @@ impl Algorithm for StationaryProbability {
         format!("sp-{}", self.num_steps)
     }
 
-    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         g.compute_stationary_probabilities(self.num_steps)
     }
 

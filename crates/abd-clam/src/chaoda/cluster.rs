@@ -17,10 +17,10 @@ use serde::{
 use crate::{core::cluster::Children, utils, Cluster, Dataset, Instance, PartitionCriterion, UniBall};
 
 /// An extension of the `Cluster` trait to allow for anomaly detection.
-pub trait OddBall<U: Number, const N: usize>: Cluster<U> {
+pub trait OddBall<U: Number>: Cluster<U> {
     /// Return a 2-tuple of the properties of the cluster used for anomaly detection,
     /// and the exponential moving averages of those properties.
-    fn ratios(&self) -> ([f32; N], [f32; N]);
+    fn ratios(&self) -> Vec<f32>;
 
     /// Return the accumulated child-parent cardinality ratio.
     fn accumulated_cp_car_ratio(&self) -> f32;
@@ -42,10 +42,9 @@ pub struct Vertex<U: Number> {
     accumulated_ratio: f32,
 }
 
-impl<U: Number> OddBall<U, 3> for Vertex<U> {
-    fn ratios(&self) -> ([f32; 3], [f32; 3]) {
-        let [c, r, l, c_, r_, l_] = self.ratios;
-        ([c, r, l], [c_, r_, l_])
+impl<U: Number> OddBall<U> for Vertex<U> {
+    fn ratios(&self) -> Vec<f32> {
+        self.ratios.to_vec()
     }
 
     fn accumulated_cp_car_ratio(&self) -> f32 {

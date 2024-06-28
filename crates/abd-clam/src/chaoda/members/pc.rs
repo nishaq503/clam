@@ -16,7 +16,7 @@ impl Algorithm for ParentCardinality {
         "pc".to_string()
     }
 
-    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         g.accumulated_cp_car_ratios()
     }
 

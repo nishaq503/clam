@@ -16,7 +16,7 @@ impl Algorithm for SubgraphCardinality {
         "sc".to_string()
     }
 
-    fn evaluate_clusters<U: Number, const N: usize>(&self, g: &mut Graph<U, N>) -> Vec<f32> {
+    fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
         g.iter_components()
             .flat_map(|sg| {
                 let p = -sg.population().as_f32();
