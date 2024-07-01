@@ -30,11 +30,11 @@ fn big_f32(c: &mut Criterion) {
 
     #[allow(clippy::type_complexity)]
     let metrics: &[(&str, fn(&[f32], &[f32]) -> f32)] = &[
-        ("L1", manhattan),
-        ("L2", euclidean),
-        ("L3", l3_norm),
-        ("L4", l4_norm),
-        ("Cosine", cosine),
+        ("L1", |x: &[f32], y: &[f32]| manhattan(x, y)),
+        ("L2", |x: &[f32], y: &[f32]| euclidean(x, y)),
+        ("L3", |x: &[f32], y: &[f32]| l3_norm(x, y)),
+        ("L4", |x: &[f32], y: &[f32]| l4_norm(x, y)),
+        ("Cosine", |x: &[f32], y: &[f32]| cosine(x, y)),
     ];
 
     for d in 2..=7 {
@@ -61,12 +61,13 @@ fn big_u32(c: &mut Criterion) {
     let mut group = c.benchmark_group("VectorsU32");
     group.plot_config(PlotConfiguration::default().summary_scale(AxisScale::Logarithmic));
 
+    let l1 = |x: &[u32], y: &[u32]| manhattan(x, y);
     #[allow(clippy::type_complexity)]
     let metrics: &[(&str, fn(&[u32], &[u32]) -> f32)] = &[
-        ("L2", euclidean),
-        ("L3", l3_norm),
-        ("L4", l4_norm),
-        ("Cosine", cosine),
+        ("L2", |x: &[u32], y: &[u32]| euclidean(x, y)),
+        ("L3", |x: &[u32], y: &[u32]| l3_norm(x, y)),
+        ("L4", |x: &[u32], y: &[u32]| l4_norm(x, y)),
+        ("Cosine", |x: &[u32], y: &[u32]| cosine(x, y)),
     ];
 
     for d in 2..=7 {
@@ -80,7 +81,7 @@ fn big_u32(c: &mut Criterion) {
         );
 
         let id = BenchmarkId::new("L1", dimensionality);
-        bench_one(&mut group, id, &data[0], &data[1], manhattan);
+        bench_one(&mut group, id, &data[0], &data[1], l1);
 
         for &(name, metric) in metrics {
             let id = BenchmarkId::new(name, dimensionality);

@@ -29,58 +29,22 @@ macro_rules! build_fn {
                 (Vector1::F64(a), Vector1::F64(b)) => {
                     Ok(Scalar::F64(simd::$name_f64(a.as_slice()?, b.as_slice()?)))
                 }
-                (Vector1::U8(_), Vector1::U8(_)) => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    Ok(Scalar::F32(simd::$name_f32(a, b)))
-                }
-                (Vector1::U16(_), Vector1::U16(_)) => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    Ok(Scalar::F32(simd::$name_f32(a, b)))
-                }
-                (Vector1::U32(_), Vector1::U32(_)) => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    Ok(Scalar::F32(simd::$name_f32(a, b)))
-                }
-                (Vector1::U64(_), Vector1::U64(_)) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Invalid type")),
-                    }?;
-                    Ok(Scalar::F64(simd::$name_f64(a, b)))
-                }
+                (Vector1::U8(_), Vector1::U8(_)) => Ok(Scalar::F32(simd::$name_f32(
+                    a.cast::<f32>().as_slice(),
+                    b.cast::<f32>().as_slice(),
+                ))),
+                (Vector1::U16(_), Vector1::U16(_)) => Ok(Scalar::F32(simd::$name_f32(
+                    a.cast::<f32>().as_slice(),
+                    b.cast::<f32>().as_slice(),
+                ))),
+                (Vector1::U32(_), Vector1::U32(_)) => Ok(Scalar::F32(simd::$name_f32(
+                    a.cast::<f32>().as_slice(),
+                    b.cast::<f32>().as_slice(),
+                ))),
+                (Vector1::U64(_), Vector1::U64(_)) => Ok(Scalar::F64(simd::$name_f64(
+                    a.cast::<f64>().as_slice(),
+                    b.cast::<f64>().as_slice(),
+                ))),
                 // The types are different
                 (Vector1::F64(a), _) => {
                     let a = a.as_array();
@@ -88,55 +52,27 @@ macro_rules! build_fn {
                         Some(a) => Ok(a),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64(simd::$name_f64(a, b)))
+                    Ok(Scalar::F64(simd::$name_f64(a, b.cast::<f64>().as_slice())))
                 }
                 (_, Vector1::F64(b)) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
                     let b = b.as_array();
                     let b = match b.as_slice() {
                         Some(b) => Ok(b),
                         None => Err(PyValueError::new_err("Non-contiguous array")),
                     }?;
-                    Ok(Scalar::F64(simd::$name_f64(a, b)))
+                    Ok(Scalar::F64(simd::$name_f64(a.cast::<f64>().as_slice(), b)))
                 }
                 (Vector1::U64(_), _)
                 | (Vector1::I64(_), _)
                 | (_, Vector1::U64(_))
-                | (_, Vector1::I64(_)) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64(simd::$name_f64(a, b)))
-                }
-                _ => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F32(simd::$name_f32(a, b)))
-                }
+                | (_, Vector1::I64(_)) => Ok(Scalar::F64(simd::$name_f64(
+                    a.cast::<f64>().as_slice(),
+                    b.cast::<f64>().as_slice(),
+                ))),
+                _ => Ok(Scalar::F32(simd::$name_f32(
+                    a.cast::<f32>().as_slice(),
+                    b.cast::<f32>().as_slice(),
+                ))),
             }
         }
     };

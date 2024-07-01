@@ -4,8 +4,6 @@ use core::cmp::Ordering;
 
 use crate::{number::Float, Number};
 
-use super::utils::abs_diff_iter;
-
 /// Euclidean distance between two vectors.
 ///
 /// Also known as the L2-norm, the Euclidean distance is defined as the square
@@ -32,8 +30,8 @@ use super::utils::abs_diff_iter;
 ///
 /// assert!((distance - (27.0_f64).sqrt()).abs() <= f64::EPSILON);
 /// ```
-pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    euclidean_sq::<T, U>(x, y).sqrt()
+pub fn euclidean<T: AsRef<[U]>, U: Number, F: Float>(x: T, y: T) -> F {
+    euclidean_sq::<T, U, F>(x, y).sqrt()
 }
 
 /// Squared Euclidean distance between two vectors.
@@ -62,8 +60,14 @@ pub fn euclidean<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - 27.0).abs() <= f64::EPSILON);
 /// ```
-pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
-    abs_diff_iter(x, y).map(U::from).map(|v| v * v).sum()
+pub fn euclidean_sq<T: AsRef<[U]>, U: Number, F: Number>(x: T, y: T) -> F {
+    x.as_ref()
+        .iter()
+        .zip(y.as_ref().iter())
+        .map(|(a, &b)| a.abs_diff(b))
+        .map(|v| v * v)
+        .map(F::from)
+        .sum()
 }
 
 /// Manhattan distance between two vectors.
@@ -91,9 +95,17 @@ pub fn euclidean_sq<T: Number, U: Number>(x: &[T], y: &[T]) -> U {
 /// let distance: f64 = manhattan(&x, &y);
 ///
 /// assert!((distance - 9.0).abs() <= f64::EPSILON);
+///
+/// let distance: f64 = manhattan(x, y);
+///
+/// assert!((distance - 9.0).abs() <= f64::EPSILON);
 /// ```
-pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
-    abs_diff_iter(x, y).sum()
+pub fn manhattan<T: AsRef<[U]>, U: Number>(x: T, y: T) -> U {
+    x.as_ref()
+        .iter()
+        .zip(y.as_ref().iter())
+        .map(|(a, &b)| a.abs_diff(b))
+        .sum()
 }
 
 /// L3-norm between two vectors.
@@ -121,11 +133,14 @@ pub fn manhattan<T: Number>(x: &[T], y: &[T]) -> T {
 ///
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= f64::EPSILON);
 /// ```
-pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    abs_diff_iter(x, y)
-        .map(U::from)
+pub fn l3_norm<T: AsRef<[U]>, U: Number, F: Float>(x: T, y: T) -> F {
+    x.as_ref()
+        .iter()
+        .zip(y.as_ref().iter())
+        .map(|(a, &b)| a.abs_diff(b))
+        .map(F::from)
         .map(|v| v * v * v)
-        .sum::<U>()
+        .sum::<F>()
         .cbrt()
 }
 
@@ -154,12 +169,15 @@ pub fn l3_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - (243.0_f64).sqrt().sqrt()).abs() <= f64::EPSILON);
 /// ```
-pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    abs_diff_iter(x, y)
-        .map(U::from)
+pub fn l4_norm<T: AsRef<[U]>, U: Number, F: Float>(x: T, y: T) -> F {
+    x.as_ref()
+        .iter()
+        .zip(y.as_ref().iter())
+        .map(|(a, &b)| a.abs_diff(b))
+        .map(F::from)
         .map(|v| v * v)
         .map(|v| v * v)
-        .sum::<U>()
+        .sum::<F>()
         .sqrt()
         .sqrt()
 }
@@ -189,10 +207,13 @@ pub fn l4_norm<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// assert!((distance - 5.0).abs() <= f64::EPSILON);
 /// ```
-pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
-    abs_diff_iter(x, y)
+pub fn chebyshev<T: AsRef<[U]>, U: Number>(x: T, y: T) -> U {
+    x.as_ref()
+        .iter()
+        .zip(y.as_ref().iter())
+        .map(|(a, &b)| a.abs_diff(b))
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Less))
-        .unwrap_or_else(T::zero)
+        .unwrap_or_else(U::zero)
 }
 
 /// General (Lp-norm)^p between two vectors.
@@ -221,8 +242,16 @@ pub fn chebyshev<T: Number>(x: &[T], y: &[T]) -> T {
 /// let distance: f64 = metric(&x, &y);
 /// assert!((distance - 81.0).abs() <= 1e-12);
 /// ```
-pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
-    move |x: &[T], y: &[T]| abs_diff_iter(x, y).map(U::from).map(|v| v.powi(p)).sum()
+pub fn minkowski_p<T: AsRef<[U]>, U: Number, F: Float>(p: i32) -> impl Fn(&T, &T) -> F {
+    move |x: &T, y: &T| {
+        x.as_ref()
+            .iter()
+            .zip(y.as_ref().iter())
+            .map(|(a, &b)| a.abs_diff(b))
+            .map(F::from)
+            .map(|v| v.powi(p))
+            .sum()
+    }
 }
 
 /// General Lp-norm between two vectors.
@@ -252,6 +281,6 @@ pub fn minkowski_p<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
 /// let distance: f64 = metric(&x, &y);
 /// assert!((distance - (81.0_f64).cbrt()).abs() <= 1e-12);
 /// ```
-pub fn minkowski<T: Number, U: Float>(p: i32) -> impl Fn(&[T], &[T]) -> U {
-    move |x: &[T], y: &[T]| minkowski_p::<T, U>(p)(x, y).powf(U::one() / U::from(p))
+pub fn minkowski<T: AsRef<[U]>, U: Number, F: Float>(p: i32) -> impl Fn(&T, &T) -> F {
+    move |x: &T, y: &T| minkowski_p::<T, U, F>(p)(x, y).powf(F::one() / F::from(p))
 }

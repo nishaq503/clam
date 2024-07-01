@@ -61,77 +61,34 @@ macro_rules! build_fn {
                     Ok(Scalar::F64($func(a.as_slice()?, b.as_slice()?)))
                 }
                 // The types are different
-                (Vector1::F64(a), _) => {
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64($func(a.as_slice()?, b)))
-                }
-                (_, Vector1::F64(b)) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64($func(a, b.as_slice()?)))
-                }
-                (Vector1::U64(_), _) | (Vector1::I64(_), _) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64($func(a, b)))
-                }
-                (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => {
-                    let a = a.cast::<f64>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    let b = b.cast::<f64>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F64($func(a, b)))
-                }
-                (Vector1::F32(a), _) => {
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F32($func(a.as_slice()?, b)))
-                }
-                (_, Vector1::F32(b)) => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F32($func(a, b.as_slice()?)))
-                }
-                _ => {
-                    let a = a.cast::<f32>();
-                    let a = match a.as_slice() {
-                        Some(a) => Ok(a),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    let b = b.cast::<f32>();
-                    let b = match b.as_slice() {
-                        Some(b) => Ok(b),
-                        None => Err(PyValueError::new_err("Non-contiguous array")),
-                    }?;
-                    Ok(Scalar::F32($func(a, b)))
-                }
+                (Vector1::F64(a), _) => Ok(Scalar::F64($func(
+                    a.as_slice()?,
+                    b.cast::<f64>().as_slice(),
+                ))),
+                (_, Vector1::F64(b)) => Ok(Scalar::F64($func(
+                    a.cast::<f64>().as_slice(),
+                    b.as_slice()?,
+                ))),
+                (Vector1::U64(_), _) | (Vector1::I64(_), _) => Ok(Scalar::F64($func(
+                    a.cast::<f64>().as_slice(),
+                    b.cast::<f64>().as_slice(),
+                ))),
+                (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => Ok(Scalar::F64($func(
+                    a.cast::<f64>().as_slice(),
+                    b.cast::<f64>().as_slice(),
+                ))),
+                (Vector1::F32(a), _) => Ok(Scalar::F32($func(
+                    a.as_slice()?,
+                    b.cast::<f32>().as_slice(),
+                ))),
+                (_, Vector1::F32(b)) => Ok(Scalar::F32($func(
+                    a.cast::<f32>().as_slice(),
+                    b.as_slice()?,
+                ))),
+                _ => Ok(Scalar::F32($func(
+                    a.cast::<f32>().as_slice(),
+                    b.cast::<f32>().as_slice(),
+                ))),
             }
         }
     };
@@ -150,117 +107,74 @@ fn minkowski(a: Vector1, b: Vector1, p: i32) -> PyResult<Scalar> {
     match (&a, &b) {
         // The types are the same
         (Vector1::F32(a), Vector1::F32(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::F64(a), Vector1::F64(b)) => Ok(Scalar::F64(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::U8(a), Vector1::U8(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::U16(a), Vector1::U16(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::U32(a), Vector1::U32(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::U64(a), Vector1::U64(b)) => Ok(Scalar::F64(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::I8(a), Vector1::I8(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::I16(a), Vector1::I16(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::I32(a), Vector1::I32(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         (Vector1::I64(a), Vector1::I64(b)) => Ok(Scalar::F64(vectors::minkowski(p)(
-            a.as_slice()?,
-            b.as_slice()?,
+            &a.as_slice()?,
+            &b.as_slice()?,
         ))),
         // The types are different
-        (Vector1::F64(a), _) => {
-            let b = b.cast::<f64>();
-            let b = match b.as_slice() {
-                Some(b) => Ok(b),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F64(vectors::minkowski(p)(a.as_slice()?, b)))
-        }
-        (_, Vector1::F64(b)) => {
-            let a = a.cast::<f64>();
-            let a = match a.as_slice() {
-                Some(a) => Ok(a),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F64(vectors::minkowski(p)(a, b.as_slice()?)))
-        }
-        (Vector1::U64(_), _) | (Vector1::I64(_), _) => {
-            let a = a.cast::<f64>();
-            let a = match a.as_slice() {
-                Some(a) => Ok(a),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            let b = b.cast::<f64>();
-            let b = match b.as_slice() {
-                Some(b) => Ok(b),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F64(vectors::minkowski(p)(a, b)))
-        }
-        (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => {
-            let a = a.cast::<f64>();
-            let a = match a.as_slice() {
-                Some(a) => Ok(a),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            let b = b.cast::<f64>();
-            let b = match b.as_slice() {
-                Some(b) => Ok(b),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F64(vectors::minkowski(p)(a, b)))
-        }
-        (Vector1::F32(a), _) => {
-            let b = b.cast::<f32>();
-            let b = match b.as_slice() {
-                Some(b) => Ok(b),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F32(vectors::minkowski(p)(a.as_slice()?, b)))
-        }
-        (_, Vector1::F32(b)) => {
-            let a = a.cast::<f32>();
-            let a = match a.as_slice() {
-                Some(a) => Ok(a),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F32(vectors::minkowski(p)(a, b.as_slice()?)))
-        }
-        _ => {
-            let a = a.cast::<f32>();
-            let a = match a.as_slice() {
-                Some(a) => Ok(a),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            let b = b.cast::<f32>();
-            let b = match b.as_slice() {
-                Some(b) => Ok(b),
-                None => Err(PyValueError::new_err("Non-contiguous array")),
-            }?;
-            Ok(Scalar::F32(vectors::minkowski(p)(a, b)))
-        }
+        (Vector1::F64(a), _) => Ok(Scalar::F64(vectors::minkowski(p)(
+            &a.as_slice()?.to_vec(),
+            &b.cast::<f64>(),
+        ))),
+        (_, Vector1::F64(b)) => Ok(Scalar::F64(vectors::minkowski(p)(
+            &a.cast::<f64>(),
+            &b.as_slice()?.to_vec(),
+        ))),
+        (Vector1::U64(_), _) | (Vector1::I64(_), _) => Ok(Scalar::F64(vectors::minkowski(p)(
+            &a.cast::<f64>(),
+            &b.cast::<f64>(),
+        ))),
+        (_, Vector1::U64(_)) | (_, Vector1::I64(_)) => Ok(Scalar::F64(vectors::minkowski(p)(
+            &a.cast::<f64>(),
+            &b.cast::<f64>(),
+        ))),
+        (Vector1::F32(a), _) => Ok(Scalar::F32(vectors::minkowski(p)(
+            &a.as_slice()?.to_vec(),
+            &b.cast::<f32>(),
+        ))),
+        (_, Vector1::F32(b)) => Ok(Scalar::F32(vectors::minkowski(p)(
+            &a.cast::<f32>(),
+            &b.as_slice()?.to_vec(),
+        ))),
+        _ => Ok(Scalar::F32(vectors::minkowski(p)(
+            &a.cast::<f32>(),
+            &b.cast::<f32>(),
+        ))),
     }
 }
 
@@ -284,14 +198,14 @@ fn cdist(
                 // The types are the same
                 (Vector2::F32(a), Vector2::F32(b)) => {
                     let metric =
-                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
                     )
                 }
                 (Vector2::F64(a), Vector2::F64(b)) => {
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -299,7 +213,7 @@ fn cdist(
                 }
                 (Vector2::U8(a), Vector2::U8(b)) => {
                     let metric =
-                        |a: &[u8], b: &[u8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u8], b: &[u8]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -307,7 +221,7 @@ fn cdist(
                 }
                 (Vector2::U16(a), Vector2::U16(b)) => {
                     let metric =
-                        |a: &[u16], b: &[u16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u16], b: &[u16]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -315,14 +229,14 @@ fn cdist(
                 }
                 (Vector2::U32(a), Vector2::U32(b)) => {
                     let metric =
-                        |a: &[u32], b: &[u32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u32], b: &[u32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
                     )
                 }
                 (Vector2::U64(a), Vector2::U64(b)) => {
-                    let metric = |a: &[u64], b: &[u64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[u64], b: &[u64]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -330,7 +244,7 @@ fn cdist(
                 }
                 (Vector2::I8(a), Vector2::I8(b)) => {
                     let metric =
-                        |a: &[i8], b: &[i8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i8], b: &[i8]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -338,7 +252,7 @@ fn cdist(
                 }
                 (Vector2::I16(a), Vector2::I16(b)) => {
                     let metric =
-                        |a: &[i16], b: &[i16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i16], b: &[i16]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -346,14 +260,14 @@ fn cdist(
                 }
                 (Vector2::I32(a), Vector2::I32(b)) => {
                     let metric =
-                        |a: &[i32], b: &[i32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i32], b: &[i32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
                     )
                 }
                 (Vector2::I64(a), Vector2::I64(b)) => {
-                    let metric = |a: &[i64], b: &[i64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[i64], b: &[i64]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.as_array(), metric))?
                             .to_owned(),
@@ -362,7 +276,7 @@ fn cdist(
                 // The types are different
                 (Vector2::F64(a), _) => {
                     let b = b.cast::<f64>();
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?
                             .to_owned(),
@@ -370,7 +284,7 @@ fn cdist(
                 }
                 (_, Vector2::F64(b)) => {
                     let a = a.cast::<f64>();
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?
                             .to_owned(),
@@ -379,18 +293,18 @@ fn cdist(
                 (Vector2::U64(_), _) | (Vector2::I64(_), _) => {
                     let a = a.cast::<f64>();
                     let b = b.cast::<f64>();
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
                 (_, Vector2::U64(_)) | (_, Vector2::I64(_)) => {
                     let a = a.cast::<f64>();
                     let b = b.cast::<f64>();
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
                 (Vector2::F32(a), _) => {
                     let b = b.cast::<f32>();
-                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.as_array(), b.view(), metric))?
                             .to_owned(),
@@ -398,7 +312,7 @@ fn cdist(
                 }
                 (_, Vector2::F32(b)) => {
                     let a = a.cast::<f32>();
-                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(&a, &b);
                     Ok(
                         PyArray2::from_vec2(py, &_cdist(a.view(), b.as_array(), metric))?
                             .to_owned(),
@@ -407,7 +321,7 @@ fn cdist(
                 _ => {
                     let a = a.cast::<f32>();
                     let b = b.cast::<f32>();
-                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f32], b: &[f32]| vectors::minkowski(p)(&a, &b);
                     Ok(PyArray2::from_vec2(py, &_cdist(a.view(), b.view(), metric))?.to_owned())
                 }
             }
@@ -540,49 +454,49 @@ fn pdist(py: Python<'_>, a: Vector2, metric: &str, p: Option<i32>) -> PyResult<P
             match a {
                 Vector2::F32(a) => {
                     let metric =
-                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[f32], b: &[f32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::F64(a) => {
-                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[f64], b: &[f64]| vectors::minkowski(p)(&a, &b);
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::U8(a) => {
                     let metric =
-                        |a: &[u8], b: &[u8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u8], b: &[u8]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::U16(a) => {
                     let metric =
-                        |a: &[u16], b: &[u16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u16], b: &[u16]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::U32(a) => {
                     let metric =
-                        |a: &[u32], b: &[u32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[u32], b: &[u32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::U64(a) => {
-                    let metric = |a: &[u64], b: &[u64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[u64], b: &[u64]| vectors::minkowski(p)(&a, &b);
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::I8(a) => {
                     let metric =
-                        |a: &[i8], b: &[i8]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i8], b: &[i8]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::I16(a) => {
                     let metric =
-                        |a: &[i16], b: &[i16]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i16], b: &[i16]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::I32(a) => {
                     let metric =
-                        |a: &[i32], b: &[i32]| vectors::minkowski::<_, f32>(p)(a, b).as_f64();
+                        |a: &[i32], b: &[i32]| vectors::minkowski::<_, _, f32>(p)(&a, &b).as_f64();
                     Ok(_pdist(py, a.as_array(), metric))
                 }
                 Vector2::I64(a) => {
-                    let metric = |a: &[i64], b: &[i64]| vectors::minkowski(p)(a, b);
+                    let metric = |a: &[i64], b: &[i64]| vectors::minkowski(p)(&a, &b);
                     Ok(_pdist(py, a.as_array(), metric))
                 }
             }

@@ -2,7 +2,7 @@
 
 use distances::{vectors, Number};
 use ndarray::parallel::prelude::*;
-use ndarray::{Array1, Array2};
+use ndarray::Array2;
 use numpy::{ndarray::Axis, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
@@ -49,18 +49,18 @@ pub enum Vector1<'py> {
 }
 
 impl<'a> Vector1<'a> {
-    pub fn cast<T: Number + numpy::Element>(&self) -> Array1<T> {
+    pub fn cast<T: Number + numpy::Element>(&self) -> Vec<T> {
         match self {
-            Vector1::F32(a) => a.as_array().mapv(T::from),
-            Vector1::F64(a) => a.as_array().mapv(T::from),
-            Vector1::U8(a) => a.as_array().mapv(T::from),
-            Vector1::U16(a) => a.as_array().mapv(T::from),
-            Vector1::U32(a) => a.as_array().mapv(T::from),
-            Vector1::U64(a) => a.as_array().mapv(T::from),
-            Vector1::I8(a) => a.as_array().mapv(T::from),
-            Vector1::I16(a) => a.as_array().mapv(T::from),
-            Vector1::I32(a) => a.as_array().mapv(T::from),
-            Vector1::I64(a) => a.as_array().mapv(T::from),
+            Vector1::F32(a) => a.as_slice().unwrap().iter().copied().map(T::from).collect(),
+            Vector1::F64(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::U8(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::U16(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::U32(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::U64(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::I8(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::I16(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::I32(a) => a.as_array().mapv(T::from).to_vec(),
+            Vector1::I64(a) => a.as_array().mapv(T::from).to_vec(),
         }
     }
 }
@@ -154,13 +154,13 @@ impl<'a> FromPyObject<'a> for Vector2<'a> {
 #[allow(clippy::type_complexity)]
 pub fn parse_metric<T: Number>(metric: &str) -> PyResult<fn(&[T], &[T]) -> f64> {
     match metric.to_lowercase().as_str() {
-        "braycurtis" => Ok(vectors::bray_curtis),
-        "canberra" => Ok(vectors::canberra),
+        "braycurtis" => Ok(|x: &[T], y: &[T]| vectors::bray_curtis(x, y)),
+        "canberra" => Ok(|x: &[T], y: &[T]| vectors::canberra(x, y)),
         "chebyshev" => Ok(_chebyshev),
-        "euclidean" => Ok(vectors::euclidean),
-        "sqeuclidean" => Ok(vectors::euclidean_sq),
+        "euclidean" => Ok(|x: &[T], y: &[T]| vectors::euclidean(x, y)),
+        "sqeuclidean" => Ok(|x: &[T], y: &[T]| vectors::euclidean_sq(x, y)),
         "manhattan" | "cityblock" => Ok(_manhattan),
-        "cosine" => Ok(vectors::cosine),
+        "cosine" => Ok(|x: &[T], y: &[T]| vectors::cosine(x, y)),
         _ => Err(PyValueError::new_err(format!("Unknown metric: {}", metric))),
     }
 }

@@ -23,7 +23,7 @@ fn simd_f32(c: &mut Criterion) {
 
         let id = BenchmarkId::new("Cosine-generic", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(cosine_generic::<_, f32>(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(cosine_generic::<_, f32, f32>(&vecs[0], &vecs[1])))
         });
 
         let id = BenchmarkId::new("Cosine-simd", dimensionality);
@@ -51,7 +51,7 @@ fn simd_f64(c: &mut Criterion) {
 
         let id = BenchmarkId::new("Cosine-generic", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
-            b.iter(|| black_box(cosine_generic::<_, f64>(&vecs[0], &vecs[1])))
+            b.iter(|| black_box(cosine_generic::<_, f64, f64>(&vecs[0], &vecs[1])))
         });
 
         let id = BenchmarkId::new("Cosine-simd", dimensionality);

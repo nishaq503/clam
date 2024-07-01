@@ -37,21 +37,22 @@ use crate::{
 /// # References
 ///
 /// * [Cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)
-pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
+pub fn cosine<T: AsRef<[U]>, U: Number, F: Float>(x: T, y: T) -> F {
     let [xx, yy, xy] = x
+        .as_ref()
         .iter()
-        .zip(y.iter())
-        .fold([T::zero(); 3], |[xx, yy, xy], (&a, &b)| {
+        .zip(y.as_ref().iter())
+        .fold([U::zero(); 3], |[xx, yy, xy], (&a, &b)| {
             [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
         });
-    let [xx, yy, xy] = [U::from(xx), U::from(yy), U::from(xy)];
+    let [xx, yy, xy] = [F::from(xx), F::from(yy), F::from(xy)];
 
-    if xx < U::epsilon() || yy < U::epsilon() || xy < U::epsilon() {
-        U::one()
+    if xx < F::epsilon() || yy < F::epsilon() || xy < F::epsilon() {
+        F::one()
     } else {
-        let d = U::one() - xy * (xx * yy).inv_sqrt();
-        if d < U::epsilon() {
-            U::zero()
+        let d = F::one() - xy * (xx * yy).inv_sqrt();
+        if d < F::epsilon() {
+            F::zero()
         } else {
             d
         }
@@ -94,8 +95,14 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Hamming distance](https://en.wikipedia.org/wiki/Hamming_distance)
-pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
-    U::from(x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count())
+pub fn hamming<P: AsRef<[T]>, T: Int, U: UInt>(x: P, y: P) -> U {
+    U::from(
+        x.as_ref()
+            .iter()
+            .zip(y.as_ref().iter())
+            .filter(|(&a, &b)| a != b)
+            .count(),
+    )
 }
 
 /// Computes the Canberra distance between two vectors.
@@ -128,10 +135,11 @@ pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Canberra distance](https://en.wikipedia.org/wiki/Canberra_distance)
-pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    x.iter()
+pub fn canberra<P: AsRef<[T]>, T: Number, U: Float>(x: P, y: P) -> U {
+    x.as_ref()
+        .iter()
         .map(|&v| U::from(v))
-        .zip(y.iter().map(|&v| U::from(v)))
+        .zip(y.as_ref().iter().map(|&v| U::from(v)))
         .map(|(a, b)| a.abs_diff(b) / (a.abs() + b.abs()))
         .fold(U::zero(), |acc, v| acc + v)
 }
@@ -159,10 +167,11 @@ pub fn canberra<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 /// # References
 ///
 /// * [Bray-Curtis Distance](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.braycurtis.html#scipy.spatial.distance.braycurtis)
-pub fn bray_curtis<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
+pub fn bray_curtis<P: AsRef<[T]>, T: Number, U: Float>(x: P, y: P) -> U {
     let [numerator, denominator] = x
+        .as_ref()
         .iter()
-        .zip(y.iter())
+        .zip(y.as_ref().iter())
         .fold([T::zero(); 2], |[n, d], (&a, &b)| {
             [n + a.abs_diff(b), d + (a + b).abs()]
         });

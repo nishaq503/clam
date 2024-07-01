@@ -8,7 +8,6 @@
 
 mod angular;
 mod lp_norms;
-pub(crate) mod utils;
 
 pub use angular::{bray_curtis, canberra, cosine, hamming};
 pub use lp_norms::{
