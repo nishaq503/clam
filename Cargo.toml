@@ -3,14 +3,14 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/SyMaGen",
-    "crates/pancakes-results",
+    "crates/results/pancakes",
     "pypi/distances",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-distances = { version = "1.7.0", path = "crates/distances" }
 abd-clam = { version = "0.30.0", path = "crates/abd-clam" }
+distances = { version = "1.7.0", path = "crates/distances" }
 symagen = { version = "0.4.0", path = "crates/SyMaGen" }
 
 rayon = "1.8"
