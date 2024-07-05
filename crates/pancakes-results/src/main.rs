@@ -86,8 +86,7 @@ fn main() -> Result<(), String> {
     if args.len() != 2 {
         return Err(format!(
             "Expected single input parameter, the directory where dataset will be saved. Got {args:?} instead",
-        )
-        );
+        ));
     }
 
     // Parse args[0] into path object
@@ -160,8 +159,7 @@ fn main() -> Result<(), String> {
         let (clumped_meta, clumped_data) = clumped_data.into_iter().unzip();
 
         let name = format!("{n}x{m}");
-        let dataset =
-            VecDataset::new(name, clumped_data, lev_metric, true).assign_metadata(clumped_meta)?;
+        let dataset = VecDataset::new(name, clumped_data, lev_metric, true).assign_metadata(clumped_meta)?;
 
         // Get a baseline for linear search
         let baseline_rnn = std::time::Instant::now();
@@ -178,10 +176,7 @@ fn main() -> Result<(), String> {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        println!(
-            "Baseline RNN: {baseline_rnn:.4}s, num_queries: {}",
-            hits_rnn.len()
-        );
+        println!("Baseline RNN: {baseline_rnn:.4}s, num_queries: {}", hits_rnn.len());
         for (qm, hits) in query_meta.iter().zip(hits_rnn.iter()) {
             // Check that the metadata matches
             assert!(hits.iter().any(|(m, _)| m == qm))
@@ -201,10 +196,7 @@ fn main() -> Result<(), String> {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        println!(
-            "Baseline KNN: {baseline_knn:.4}s, num_queries: {}",
-            hits_knn.len()
-        );
+        println!("Baseline KNN: {baseline_knn:.4}s, num_queries: {}", hits_knn.len());
 
         // Build Cakes tree
         let criteria = PartitionCriteria::default();
@@ -220,14 +212,8 @@ fn main() -> Result<(), String> {
             .map(|q| cakes.rnn_search(q, 10, abd_clam::cakes::rnn::Algorithm::Clustered))
             .collect::<Vec<_>>();
         let cakes_rnn = cakes_rnn.elapsed().as_secs_f32();
-        println!(
-            "Cakes RNN: {cakes_rnn:.4}s, num_queries: {}",
-            cakes_hits_rnn.len()
-        );
-        println!(
-            "RNN ratio: baseline / cakes = {:.4}",
-            baseline_rnn / cakes_rnn
-        );
+        println!("Cakes RNN: {cakes_rnn:.4}s, num_queries: {}", cakes_hits_rnn.len());
+        println!("RNN ratio: baseline / cakes = {:.4}", baseline_rnn / cakes_rnn);
 
         let cakes_tree = cakes.trees()[0];
         let dataset = cakes_tree.data();
@@ -237,13 +223,7 @@ fn main() -> Result<(), String> {
 
         let compression_time = std::time::Instant::now();
         let metadata = dataset.metadata().to_vec();
-        let dataset = CodecData::new(
-            root,
-            dataset,
-            encode_general::<u16>,
-            decode_general,
-            metadata,
-        )?;
+        let dataset = CodecData::new(root, dataset, encode_general::<u16>, decode_general, metadata)?;
 
         // Write the dataset to a binary file
         let bin_dir = dataset_dir.join(format!("codec-{n}-{m}"));
@@ -253,13 +233,8 @@ fn main() -> Result<(), String> {
 
         // Reload the dataset and tree, and check that they are the same
         let decompression_time = std::time::Instant::now();
-        let re_data = CodecData::<String, u16, String>::load(
-            &bin_dir,
-            lev_metric,
-            true,
-            encode_general::<u16>,
-            decode_general,
-        )?;
+        let re_data =
+            CodecData::<String, u16, String>::load(&bin_dir, lev_metric, true, encode_general::<u16>, decode_general)?;
         let decompression_time = decompression_time.elapsed().as_secs_f32();
         println!("Dataset decompressed in {decompression_time:.4}s");
 
@@ -267,12 +242,7 @@ fn main() -> Result<(), String> {
         assert_eq!(dataset.centers(), re_data.centers());
         assert_eq!(dataset.metadata(), re_data.metadata());
 
-        for (&c, &rc) in dataset
-            .root()
-            .subtree()
-            .iter()
-            .zip(re_data.root().subtree().iter())
-        {
+        for (&c, &rc) in dataset.root().subtree().iter().zip(re_data.root().subtree().iter()) {
             assert_eq!(c, rc);
             assert_eq!(c.arg_center(), rc.arg_center());
             assert_eq!(c.arg_radial(), rc.arg_radial());
@@ -298,11 +268,7 @@ fn main() -> Result<(), String> {
             })
             .collect::<Vec<_>>();
         // Check that the hits are the same
-        for ((qm, codec_hits), hits) in query_meta
-            .iter()
-            .zip(codec_hits_rnn.iter())
-            .zip(hits_rnn.iter())
-        {
+        for ((qm, codec_hits), hits) in query_meta.iter().zip(codec_hits_rnn.iter()).zip(hits_rnn.iter()) {
             // Check that the metadata matches
             assert!(codec_hits.iter().any(|(m, _)| m == qm));
 
@@ -321,14 +287,8 @@ fn main() -> Result<(), String> {
                 assert_eq!(d1, d2);
             }
         }
-        println!(
-            "Codec RNN: {codec_rnn:.4}s, num_queries: {}",
-            codec_hits_rnn.len()
-        );
-        println!(
-            "RNN ratio: baseline / codec = {:.4}",
-            baseline_rnn / codec_rnn
-        );
+        println!("Codec RNN: {codec_rnn:.4}s, num_queries: {}", codec_hits_rnn.len());
+        println!("RNN ratio: baseline / codec = {:.4}", baseline_rnn / codec_rnn);
 
         // Get the size of the binary files in the codec directory
         let bin_size = bin_dir

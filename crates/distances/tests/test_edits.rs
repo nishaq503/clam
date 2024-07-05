@@ -48,12 +48,7 @@ fn small_unaligned() {
     let y = "AACA-AC";
 
     let actual = unaligned_x_to_y(x, y);
-    let expected = vec![
-        Edit::Ins(1, 'A'),
-        Edit::Sub(3, 'A'),
-        Edit::Del(4),
-        Edit::Sub(5, 'C'),
-    ];
+    let expected = vec![Edit::Ins(1, 'A'), Edit::Sub(3, 'A'), Edit::Del(4), Edit::Sub(5, 'C')];
 
     assert_eq!(actual, expected);
 }
@@ -61,12 +56,7 @@ fn small_unaligned() {
 #[test]
 fn test_apply_edits() {
     let x = "ACBAAB";
-    let edits: Vec<Edit> = vec![
-        Edit::Ins(1, 'A'),
-        Edit::Sub(3, 'A'),
-        Edit::Del(4),
-        Edit::Sub(5, 'C'),
-    ];
+    let edits: Vec<Edit> = vec![Edit::Ins(1, 'A'), Edit::Sub(3, 'A'), Edit::Del(4), Edit::Sub(5, 'C')];
 
     let actual = apply_edits(x, &edits);
 
