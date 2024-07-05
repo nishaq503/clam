@@ -24,7 +24,7 @@ jobs:
       - uses: earthly/actions-setup@v1
         with:
           version: v0.8.4
-      - name: Test
+      - name: Fmt
         run: earthly +fmt
 
   test:

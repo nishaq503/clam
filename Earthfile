@@ -36,11 +36,11 @@ chef-prepare:
 chef-cook:
     COPY +chef-prepare/recipe.json ./
     RUN cargo chef cook --release
-    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml .
+    COPY Cargo.toml pyproject.toml requirements.lock requirements-dev.lock ruff.toml rustfmt.toml .
     # TODO: Replace with recursive globbing, blocked on https://github.com/earthly/earthly/issues/1230
-    COPY --dir pypi .
     COPY --dir crates .
-    RUN rye sync --no-lock  # TODO(Tom): This command does not respect the Earthly cache.
+    COPY --dir pypi .
+    RUN rye sync --no-lock
 
 # This target builds the project using the cached dependencies.
 build:
@@ -52,7 +52,6 @@ build:
 # This target formats the project.
 fmt:
     FROM +chef-cook
-    # TODO(Tom): This needs to use the `rustfmt.toml` file from the workspace root instead of requiring it in every crate.
     RUN cargo fmt --all -- --check && rye fmt --all --check
 
 # This target lints the project.
