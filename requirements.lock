@@ -9,24 +9,46 @@
 
 -e file:pypi/distances
 -e file:pypi/results/vis
+contourpy==1.2.1
+    # via matplotlib
+cycler==0.12.1
+    # via matplotlib
+fonttools==4.53.1
+    # via matplotlib
+importlib-resources==6.4.0
+    # via matplotlib
 joblib==1.4.2
     # via pynndescent
     # via scikit-learn
+kiwisolver==1.4.5
+    # via matplotlib
 llvmlite==0.43.0
     # via numba
     # via pynndescent
+matplotlib==3.9.1
+    # via vis
 numba==0.60.0
     # via pynndescent
     # via umap-learn
-numpy==2.0.0
+numpy==1.26.4
     # via abd-distances
+    # via contourpy
+    # via matplotlib
     # via numba
     # via scikit-learn
     # via scipy
     # via umap-learn
     # via vis
+packaging==24.1
+    # via matplotlib
+pillow==10.4.0
+    # via matplotlib
 pynndescent==0.5.13
     # via umap-learn
+pyparsing==3.1.2
+    # via matplotlib
+python-dateutil==2.9.0.post0
+    # via matplotlib
 scikit-learn==1.5.1
     # via pynndescent
     # via umap-learn
@@ -34,9 +56,13 @@ scipy==1.13.1
     # via pynndescent
     # via scikit-learn
     # via umap-learn
+six==1.16.0
+    # via python-dateutil
 threadpoolctl==3.5.0
     # via scikit-learn
 tqdm==4.66.4
     # via umap-learn
 umap-learn==0.5.6
     # via vis
+zipp==3.19.2
+    # via importlib-resources
