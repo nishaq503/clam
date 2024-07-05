@@ -19,6 +19,7 @@
 pub mod cakes;
 pub mod chaoda;
 mod core;
+pub mod dim_red;
 pub mod pancakes;
 pub mod utils;
 

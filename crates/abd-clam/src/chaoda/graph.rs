@@ -88,7 +88,7 @@ impl<U: Number> Graph<U> {
     }
 
     /// Iterate over the `OddBall`s in the `Graph`.
-    pub fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize)> {
+    pub fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize, usize)> {
         self.components.iter().flat_map(Component::iter_clusters)
     }
 
@@ -152,8 +152,8 @@ impl<U: Number> Graph<U> {
 /// computations significantly easier to think about and implement.
 #[derive(Clone)]
 pub struct Component<U: Number> {
-    /// The offsets and cardinalities of the `OddBall`s in the `Component`.
-    clusters: Vec<(usize, usize)>,
+    /// The offsets, cardinalities, and indices of centers of the `OddBall`s in the `Component`.
+    clusters: Vec<(usize, usize, usize)>,
     /// The adjacency list of the `Component`. Each `usize` is the index of a `OddBall`
     /// in the `clusters` field and the distance between the two `OddBall`s.
     adjacency_list: Vec<Vec<(usize, U)>>,
@@ -174,6 +174,7 @@ pub struct Component<U: Number> {
 impl<U: Number> Component<U> {
     /// Create a new `Component` from a collection of `OddBall`s.
     fn new<I: Instance, D: Dataset<I, U>, C: OddBall<U>>(clusters: &[&C], data: &D) -> Self {
+        // TODO: Replace this nested iteration with a more efficient algorithm using CAKES.
         let adjacency_list = clusters
             .par_iter()
             .enumerate()
@@ -196,7 +197,10 @@ impl<U: Number> Component<U> {
             .collect();
 
         let population = clusters.iter().map(|c| c.cardinality()).sum();
-        let cluster_indices = clusters.iter().map(|c| (c.offset(), c.cardinality())).collect();
+        let cluster_indices = clusters
+            .iter()
+            .map(|c| (c.offset(), c.cardinality(), c.arg_center()))
+            .collect();
         let accumulated_cp_car_ratios = clusters.iter().map(|c| c.accumulated_cp_car_ratio()).collect();
         let anomaly_properties = clusters.iter().map(|c| c.ratios()).collect::<Vec<_>>();
 
@@ -247,14 +251,14 @@ impl<U: Number> Component<U> {
         // Remap indices in adjacency list
         for neighbors in &mut adjacency_list {
             for (j, _) in neighbors {
-                let (old_offset, _) = self.clusters[*j];
+                let (old_offset, _, _) = self.clusters[*j];
                 *j = clusters
                     .iter()
-                    .position(|&(offset, _)| offset == old_offset)
+                    .position(|&(offset, _, _)| offset == old_offset)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
             }
         }
-        let population = clusters.iter().map(|&(_, c)| c).sum();
+        let population = clusters.iter().map(|&(_, c, _)| c).sum();
         let accumulated_cp_car_ratios = self
             .accumulated_cp_car_ratios
             .iter()
@@ -283,14 +287,14 @@ impl<U: Number> Component<U> {
         // Remap indices in adjacency list
         for neighbors in &mut adjacency_list {
             for (j, _) in neighbors {
-                let (old_offset, _) = self.clusters[*j];
+                let (old_offset, _, _) = self.clusters[*j];
                 *j = clusters
                     .iter()
-                    .position(|&(offset, _)| offset == old_offset)
+                    .position(|&(offset, _, _)| offset == old_offset)
                     .unwrap_or_else(|| unreachable!("OddBall not found in partitioned component"));
             }
         }
-        let population = clusters.iter().map(|&(_, c)| c).sum();
+        let population = clusters.iter().map(|&(_, c, _)| c).sum();
         let accumulated_cp_car_ratios = self
             .accumulated_cp_car_ratios
             .iter()
@@ -322,7 +326,7 @@ impl<U: Number> Component<U> {
     }
 
     /// Iterate over the `OddBall`s in the `Component`.
-    fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize)> {
+    fn iter_clusters(&self) -> impl Iterator<Item = &(usize, usize, usize)> {
         self.clusters.iter()
     }
 
@@ -448,7 +452,7 @@ impl<U: Number> Component<U> {
 }
 
 impl<U: Number> Index<usize> for Component<U> {
-    type Output = (usize, usize);
+    type Output = (usize, usize, usize);
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.clusters[index]

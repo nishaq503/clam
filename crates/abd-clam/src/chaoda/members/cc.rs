@@ -17,7 +17,7 @@ impl Algorithm for ClusterCardinality {
     }
 
     fn evaluate_clusters<U: Number>(&self, g: &mut Graph<U>) -> Vec<f32> {
-        g.iter_clusters().map(|&(_, c)| -c.as_f32()).collect()
+        g.iter_clusters().map(|&(_, c, _)| -c.as_f32()).collect()
     }
 
     fn normalize_by_cluster(&self) -> bool {

@@ -1,0 +1,9 @@
+[package]
+name = "results-vis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+distances = { workspace = true }
+abd-clam = { workspace = true }
+results-chaoda = { path = "../chaoda" }

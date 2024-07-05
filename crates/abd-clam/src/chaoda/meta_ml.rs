@@ -31,6 +31,34 @@ pub enum MlModel {
 }
 
 impl MlModel {
+    /// Get the name of the model.
+    #[must_use]
+    pub fn name(&self) -> String {
+        match self {
+            Self::LinearRegression(_) => "LinearRegression",
+            Self::ElasticNet(_) => "ElasticNet",
+            Self::Lasso(_) => "Lasso",
+            Self::RidgeRegression(_) => "RidgeRegression",
+            Self::DecisionTreeRegressor(_) => "DecisionTreeRegressor",
+            Self::RandomForestRegressor(_) => "RandomForestRegressor",
+        }
+        .to_string()
+    }
+
+    /// Get the short name of the model.
+    #[must_use]
+    pub fn short_name(&self) -> String {
+        match self {
+            Self::LinearRegression(_) => "lr",
+            Self::ElasticNet(_) => "en",
+            Self::Lasso(_) => "la",
+            Self::RidgeRegression(_) => "rr",
+            Self::DecisionTreeRegressor(_) => "dt",
+            Self::RandomForestRegressor(_) => "rf",
+        }
+        .to_string()
+    }
+
     /// Create a new `MetaMlModel`.
     ///
     /// # Arguments

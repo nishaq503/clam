@@ -9,6 +9,7 @@ use std::{
 };
 
 use distances::Number;
+use ndarray_npy::{ReadNpyExt, ReadableElement, WritableElement};
 use rayon::prelude::*;
 
 use crate::Dataset;
@@ -365,5 +366,59 @@ impl<I: Instance, U: Number, M: Instance> Dataset<I, U> for VecDataset<I, U, M> 
             permuted_indices: permutation,
             metadata,
         })
+    }
+}
+
+impl<T: Number + ReadableElement + WritableElement, U: Number> VecDataset<Vec<T>, U, usize> {
+    /// Reads a `.npy` file into a `VecDataset`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to the `.npy` file.
+    /// * `metric`: The metric for computing distances between instances.
+    /// * `is_expensive`: Whether the metric is expensive to compute.
+    ///
+    /// # Returns
+    ///
+    /// The `VecDataset` read from the `.npy` file.
+    ///
+    /// # Errors
+    ///
+    /// * If the file does not exist.
+    /// * If the file is not a valid `.npy` file.
+    /// * If the file contains data of the wrong type.
+    /// * If the file contains data of the non-tabular shape.
+    pub fn from_npy(path: &Path, metric: fn(&Vec<T>, &Vec<T>) -> U, is_expensive: bool) -> Result<Self, String> {
+        let name = path
+            .file_stem()
+            .ok_or("Invalid file name")?
+            .to_string_lossy()
+            .to_string();
+
+        let reader = File::open(path).map_err(|e| e.to_string())?;
+        let data = ndarray::Array2::<T>::read_npy(reader).map_err(|e| e.to_string())?;
+        let data = data
+            .axis_iter(ndarray::Axis(0))
+            .map(|row| row.to_vec())
+            .collect::<Vec<_>>();
+
+        Ok(Self::new(name, data, metric, is_expensive))
+    }
+
+    /// Writes the `VecDataset` to a `.npy` file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: The path to the `.npy` file.
+    ///
+    /// # Errors
+    ///
+    /// * If the file cannot be created.
+    /// * If the data cannot be written to the file.
+    pub fn to_npy(&self, path: &Path) -> Result<(), String> {
+        let data = self.data.iter().flat_map(Vec::clone).collect::<Vec<_>>();
+        let data = ndarray::Array2::from_shape_vec((self.cardinality(), self.data[0].len()), data)
+            .map_err(|e| e.to_string())?;
+        ndarray_npy::write_npy(path, &data).map_err(|e| e.to_string())
     }
 }
