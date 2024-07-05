@@ -11,7 +11,8 @@ ignore = [
   "ICN001",  # {name} should be imported as {asname}  # I like my numpy imports
   "D202",    # Black line after function docstring.
   "G004",    # Logging statement uses string formatting
-  "TCH003",  # import pathlib in type-checking block
+  "TCH003",  # import in type-checking block
+  "TCH002",  # 3rd party import in type-checking block
   "FA100",   # from __future__ import annotations
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.

@@ -79,7 +79,7 @@ def main(
                     f"dtype: {data.dtype}",
                 )
 
-                vis.scatter_plot(data, None, out_dir / f"{name}_{member}_{ml_model}.png")
+                vis.scatter_plot(data, labels, out_dir / f"{name}_{member}_{ml_model}.png")
 
 
 if __name__ == "__main__":
