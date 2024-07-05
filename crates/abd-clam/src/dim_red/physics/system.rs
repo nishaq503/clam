@@ -18,6 +18,9 @@ pub struct System<U: Number, const DIM: usize> {
     springs: HashSet<Spring<U, DIM>>,
     /// The damping factor.
     beta: f32,
+    /// The logs of the `System` for each time-step. These store the kinetic
+    /// energy, potential energy, and total energy.
+    logs: Vec<[f32; 3]>,
 }
 
 impl<U: Number, const DIM: usize> System<U, DIM> {
@@ -43,8 +46,15 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             .flat_map(|(i, neighbors)| neighbors.iter().map(move |&(j, l0)| Spring::new(i, j, k, l0)))
             .collect();
 
+        let logs = Vec::new();
+
         // Create the system
-        let system = Self { masses, springs, beta };
+        let system = Self {
+            masses,
+            springs,
+            beta,
+            logs,
+        };
 
         // Get the maximum l0 to set the initial positions of the masses
         let cube_side_len = system
@@ -206,6 +216,12 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             })
             .collect();
 
+        // Update the logs
+        let kinetic_energy = self.kinetic_energy();
+        let potential_energy = self.potential_energy();
+        let total_energy = kinetic_energy + potential_energy;
+        self.logs.push([kinetic_energy, potential_energy, total_energy]);
+
         self
     }
 
@@ -221,6 +237,17 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             self = self.update_step(dt);
         }
         self
+    }
+
+    /// Get the logs of the `System` for each time-step.
+    #[must_use]
+    pub fn logs(&self) -> &[[f32; 3]] {
+        &self.logs
+    }
+
+    /// Clear the logs of the `System`.
+    pub fn clear_logs(&mut self) {
+        self.logs.clear();
     }
 
     /// Get the dimension-reduced embedding from this `System`.
@@ -240,7 +267,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     pub fn get_reduced_embedding<I: Instance, D: Dataset<I, U>>(
         &self,
         data: &D,
-        name: String,
+        name: &str,
     ) -> VecDataset<Vec<f32>, f32, usize> {
         let masses = {
             let mut masses = self.masses.clone();
@@ -264,7 +291,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         };
 
         VecDataset::new(
-            name,
+            name.to_string(),
             positions,
             |x: &Vec<f32>, y: &Vec<f32>| distances::vectors::euclidean(x, y),
             false,

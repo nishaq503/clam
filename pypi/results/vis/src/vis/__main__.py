@@ -69,6 +69,10 @@ def main(
         reduced_data = vis.umap_reduce(data_path)
         vis.scatter_plot(reduced_data, labels, out_dir / f"{name}_umap.png")
 
+        # Create a directory for the logs
+        logs_dir = out_dir / "logs"
+        logs_dir.mkdir(exist_ok=True)
+
         for member in members:
             for ml_model in ml_models:
                 # The files should be named as `name_{member}_{ml_model}.npy`
@@ -80,6 +84,10 @@ def main(
                 )
 
                 vis.scatter_plot(data, labels, out_dir / f"{name}_{member}_{ml_model}.png")
+
+                logs_path = red_dir / f"{name}_{member}_{ml_model}_logs.npy"
+                logs_out_path = logs_dir / f"{name}_{member}_{ml_model}.png"
+                vis.plot_logs(logs_path, logs_out_path)
 
 
 if __name__ == "__main__":
