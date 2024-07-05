@@ -75,7 +75,7 @@ fn main() -> Result<(), String> {
 
             println!("Simulating {reduced_name}");
             let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
-            let mss = mss.evolve(0.01, 10_000);
+            let mss = mss.evolve(0.1, 10_000);
 
             println!("Writing {reduced_name}");
             let path = out_dir.join(format!("{reduced_name}.npy"));
