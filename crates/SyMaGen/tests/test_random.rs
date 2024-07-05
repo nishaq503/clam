@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use distances::strings::levenshtein_custom;
-use distances::strings::needleman_wunsch::{compute_table, trace_back_recursive};
-use distances::strings::{unaligned_x_to_y, Penalties};
+use distances::strings::{
+    levenshtein_custom,
+    needleman_wunsch::{compute_table, trace_back_recursive},
+    unaligned_x_to_y, Penalties,
+};
 use symagen::random_edits::{apply_random_edit, are_we_there_yet, create_batch};
 
 #[test]

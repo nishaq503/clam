@@ -18,6 +18,13 @@ rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 mt_logger = "3.0"
 libm = "0.2"
+ndarray = { version = "0.15.6", features = ["rayon"] }
+ndarray-npy = "0.8.0"
+
+# Python wrapper dependencies
+numpy = "0.20.0"
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py39"] }
+pyo3-ffi = { version = "0.20", features = ["extension-module", "abi3-py39"] }
 
 [profile.test]
 opt-level = 3
