@@ -8,5 +8,35 @@
 #   with-sources: false
 
 -e file:pypi/distances
-numpy==1.26.4
+-e file:pypi/results/vis
+joblib==1.4.2
+    # via pynndescent
+    # via scikit-learn
+llvmlite==0.43.0
+    # via numba
+    # via pynndescent
+numba==0.60.0
+    # via pynndescent
+    # via umap-learn
+numpy==2.0.0
     # via abd-distances
+    # via numba
+    # via scikit-learn
+    # via scipy
+    # via umap-learn
+    # via vis
+pynndescent==0.5.13
+    # via umap-learn
+scikit-learn==1.5.1
+    # via pynndescent
+    # via umap-learn
+scipy==1.13.1
+    # via pynndescent
+    # via scikit-learn
+    # via umap-learn
+threadpoolctl==3.5.0
+    # via scikit-learn
+tqdm==4.66.4
+    # via umap-learn
+umap-learn==0.5.6
+    # via vis

@@ -79,6 +79,20 @@ impl Member {
         }
     }
 
+    /// Get the short name of the algorithm.
+    #[must_use]
+    pub fn short_name(&self) -> String {
+        match self {
+            Self::CC(_) => "cc",
+            Self::GN(_) => "gn",
+            Self::PC(_) => "pc",
+            Self::SC(_) => "sc",
+            Self::SP(_) => "sp",
+            Self::VD(_) => "vd",
+        }
+        .to_string()
+    }
+
     /// Evaluate the algorithm on a `Graph` and return a vector of scores for each
     /// `OddBall` in the `Graph`.
     ///
@@ -158,7 +172,7 @@ trait Algorithm: Default + Clone + Send + Sync + Serialize + for<'de> Deserializ
     /// Have points inherit scores from `OddBall`s.
     fn inherit_scores<U: Number>(&self, g: &Graph<U>, scores: &[f32]) -> Vec<f32> {
         let mut points_scores = vec![0.0; g.population()];
-        for (&(c_start, c_car), &s) in g.iter_clusters().zip(scores.iter()) {
+        for (&(c_start, c_car, _), &s) in g.iter_clusters().zip(scores.iter()) {
             for i in points_scores.iter_mut().skip(c_start).take(c_car) {
                 *i = s;
             }

@@ -284,8 +284,18 @@ impl Chaoda {
         }
     }
 
+    /// Get the short names of the predictors in the ensemble.
+    #[must_use]
+    pub fn predictor_names(&self) -> Vec<(String, Vec<String>)> {
+        self.algorithms
+            .iter()
+            .map(|(member, models)| (member.short_name(), models.iter().map(MlModel::short_name).collect()))
+            .collect()
+    }
+
     /// Create `Graph`s for the ensemble.
-    fn create_graphs<I, U, D, C>(&self, data: &D, root: &C) -> Vec<Vec<Graph<U>>>
+    #[must_use]
+    pub fn create_graphs<I, U, D, C>(&self, data: &D, root: &C) -> Vec<Vec<Graph<U>>>
     where
         I: Instance,
         U: Number,
@@ -326,7 +336,7 @@ impl Chaoda {
                         let train_y = g
                             .iter_clusters()
                             .zip(anomaly_ratings)
-                            .map(|(&(start, cardinality), rating)| {
+                            .map(|(&(start, cardinality, _), rating)| {
                                 // The roc-score function needs both classes represented so we add a
                                 // couple of dummy values to the end of the vectors.
                                 let mut y_true = labels[start..(start + cardinality)].to_vec();
@@ -362,7 +372,7 @@ impl Chaoda {
                                 train_x.extend(g.iter_anomaly_properties().cloned());
                                 let anomaly_ratings = Member::normalize_scores(&member.evaluate_clusters(g));
                                 train_y.extend(g.iter_clusters().zip(anomaly_ratings).map(
-                                    |(&(start, cardinality), rating)| {
+                                    |(&(start, cardinality, _), rating)| {
                                         // The roc-score function needs both classes represented so we add a
                                         // couple of dummy values to the end of the vectors.
                                         let mut y_true = labels[start..(start + cardinality)].to_vec();
