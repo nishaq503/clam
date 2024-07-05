@@ -4,6 +4,7 @@ members = [
     "crates/distances",
     "crates/symagen",
     "crates/results/pancakes",
+    "crates/results/chaoda",
     "pypi/distances",
 ]
 resolver = "2"
@@ -20,6 +21,7 @@ mt_logger = "3.0"
 libm = "0.2"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 ndarray-npy = "0.8.0"
+ordered-float = "4.2"
 
 # Python wrapper dependencies
 numpy = "0.20.0"
