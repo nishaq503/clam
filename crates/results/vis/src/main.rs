@@ -77,10 +77,14 @@ fn main() -> Result<(), String> {
             let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
             let mss = mss.evolve(0.1, 10_000);
 
+            println!("Writing logs for {reduced_name}");
+            let logs = mss.logs().iter().map(|r| r.to_vec()).collect::<Vec<_>>();
+            let logs = VecDataset::new(reduced_name.clone(), logs, metric, false);
+            logs.to_npy(&out_dir.join(format!("{reduced_name}_logs.npy")))?;
+
             println!("Writing {reduced_name}");
-            let path = out_dir.join(format!("{reduced_name}.npy"));
-            let reduced_data = mss.get_reduced_embedding(&data, reduced_name);
-            reduced_data.to_npy(&path)?;
+            let reduced_data = mss.get_reduced_embedding(&data, &reduced_name);
+            reduced_data.to_npy(&out_dir.join(format!("{reduced_name}.npy")))?;
         }
     }
 
