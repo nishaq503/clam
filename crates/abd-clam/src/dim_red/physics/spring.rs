@@ -1,5 +1,7 @@
 //! The spring for the mass-spring system.
 
+use std::collections::HashMap;
+
 use distances::Number;
 
 use super::Mass;
@@ -18,10 +20,10 @@ use super::Mass;
 /// - `DIM`: The dimensionality of the reduced space.
 #[derive(Debug, Clone)]
 pub struct Spring<U: Number, const DIM: usize> {
-    /// The index of the first `Mass` connected by the `Spring` in the `System`.
-    i: usize,
-    /// The index of the second `Mass` connected by the `Spring` in the `System`.
-    j: usize,
+    /// The hash-key of the first `Mass` connected by the `Spring` in the `System`.
+    i: (usize, usize),
+    /// The hash-key of the second `Mass` connected by the `Spring` in the `System`.
+    j: (usize, usize),
     /// The spring constant of the `Spring`.
     k: f32,
     /// The length of the `Spring` in the original embedding space.
@@ -37,7 +39,7 @@ pub struct Spring<U: Number, const DIM: usize> {
 impl<U: Number, const DIM: usize> Spring<U, DIM> {
     /// Create a new `Spring`.
     #[allow(clippy::many_single_char_names)]
-    pub fn new(i: usize, j: usize, k: f32, l0: U) -> Self {
+    pub fn new(i: (usize, usize), j: (usize, usize), k: f32, l0: U) -> Self {
         // Order the masses
         let (i, j) = if i < j { (i, j) } else { (j, i) };
 
@@ -80,13 +82,19 @@ impl<U: Number, const DIM: usize> Spring<U, DIM> {
     }
 
     /// Get the indices of the masses connected by the `Spring`.
-    pub const fn get_arg_masses(&self) -> [usize; 2] {
-        [self.i, self.j]
+    pub const fn hash_key(&self) -> ((usize, usize), (usize, usize)) {
+        (self.i, self.j)
     }
 
     /// Set the indices of the masses connected by the `Spring`.
-    pub fn set_arg_masses(&mut self, m1: usize, m2: usize) {
-        if m1 < m2 {
+    pub fn set_arg_masses(&mut self, m1: (usize, usize), m2: (usize, usize)) {
+        if m1.0 < m2.0 {
+            self.i = m1;
+            self.j = m2;
+        } else if m1.0 > m2.0 {
+            self.i = m2;
+            self.j = m1;
+        } else if m1.1 < m2.1 {
             self.i = m1;
             self.j = m2;
         } else {
@@ -103,8 +111,8 @@ impl<U: Number, const DIM: usize> Spring<U, DIM> {
     /// Set the current length of the `Spring`.
     ///
     /// This will also update the magnitude of the force exerted by the `Spring`.
-    pub fn update_length(&mut self, masses: &[Mass<DIM>]) {
-        self.l = masses[self.i].current_distance_to(&masses[self.j]);
+    pub fn update_length(&mut self, masses: &HashMap<(usize, usize), Mass<DIM>>) {
+        self.l = masses[&self.i].current_distance_to(&masses[&self.j]);
         self.update_force();
     }
 
@@ -121,13 +129,13 @@ impl<U: Number, const DIM: usize> Spring<U, DIM> {
 
 impl<U: Number, const DIM: usize> core::hash::Hash for Spring<U, DIM> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.get_arg_masses().hash(state);
+        self.hash_key().hash(state);
     }
 }
 
 impl<U: Number, const DIM: usize> PartialEq for Spring<U, DIM> {
     fn eq(&self, other: &Self) -> bool {
-        self.get_arg_masses() == other.get_arg_masses()
+        self.hash_key() == other.hash_key()
     }
 }
 

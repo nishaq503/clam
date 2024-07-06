@@ -92,6 +92,12 @@ impl<const DIM: usize> Mass<DIM> {
         self.arg_center
     }
 
+    /// Gets the hash-key of the `Mass`.
+    #[must_use]
+    pub const fn hash_key(&self) -> (usize, usize) {
+        (self.offset, self.cardinality)
+    }
+
     /// Returns the position of the `Mass`.
     #[must_use]
     pub const fn position(&self) -> &[f32; DIM] {
@@ -179,17 +185,6 @@ impl<const DIM: usize> Mass<DIM> {
             (*v) *= beta;
             (*p) += (*v) * dt;
             *f = 0.0;
-
-            // // TODO: Check to see whether the position should be updated before
-            // // or after the velocity
-            // *p += (*v) * dt;
-
-            // // TODO: Check this math
-            // // *v += ((*f) / self.m - beta * (*v)) * dt;
-            // *v += beta.mul_add(-(*v), (*f) / self.m) * dt;
-
-            // // Reset the force
-            // *f = 0.0;
         }
     }
 
