@@ -2,6 +2,7 @@
 
 import logging
 import pathlib
+import shutil
 
 import numpy
 import typer
@@ -55,39 +56,51 @@ def main(
     logger.info(f"Reduced directory: {red_dir}")
     logger.info(f"Output directory: {out_dir}")
 
-    datasets = ["cardio"]
+    datasets = [
+        "cardio",
+        "arrhythmia",
+        "satellite",
+        "mnist",
+    ]
     members = ["cc", "gn", "pc", "sc", "vd"]
     ml_models = ["lr", "dt"]
     for name in datasets:
         # The files should be named as `name.npy` and `name_labels.npy`
-        data_path = inp_dir / f"{name}.npy"
+        final_path = inp_dir / f"{name}.npy"
         labels_path = inp_dir / f"{name}_labels.npy"
         labels: numpy.ndarray = numpy.load(labels_path)
         logger.info(f"Labels shape: {labels.shape}, dtype: {labels.dtype}")
 
-        # Create the dim-reduction for the data and save a scatter plot
-        reduced_data = vis.plot_umap.umap_reduce(data_path)
-        vis.plot_3d.scatter_plot(reduced_data, labels, out_dir / f"{name}_umap.png")
+        # Create a directory for the data
+        data_out_dir = out_dir / name
+        if data_out_dir.exists():
+            shutil.rmtree(data_out_dir)
+        data_out_dir.mkdir()
 
-        # Create a directory for the logs
-        logs_dir = out_dir / "logs"
-        logs_dir.mkdir(exist_ok=True)
+        # Create the dim-reduction for the data and save a scatter plot
+        reduced_data = vis.plot_umap.umap_reduce(final_path)
+        vis.plot_3d.scatter_plot(reduced_data, labels, data_out_dir / "umap.png")
 
         for member in members:
             for ml_model in ml_models:
-                # The files should be named as `name_{member}_{ml_model}.npy`
-                data_path = red_dir / f"{name}_{member}_{ml_model}.npy"
-                data: numpy.ndarray = numpy.load(data_path)
+                member_name = f"{name}-{member}-{ml_model}"
+                data_dir = red_dir / member_name
+                final_path = data_dir / "final.npy"
+                final_data: numpy.ndarray = numpy.load(final_path)
                 logger.info(
-                    f"Data {name}, {member}, {ml_model} shape: {data.shape}, "
-                    f"dtype: {data.dtype}",
+                    f"Final Data {name}, {member}, {ml_model} shape: {final_data.shape}, "
+                    f"dtype: {final_data.dtype}",
+                )
+                vis.plot_3d.scatter_plot(
+                    final_data,
+                    labels,
+                    data_out_dir / f"{member_name}.png",
                 )
 
-                vis.plot_3d.scatter_plot(data, labels, out_dir / f"{name}_{member}_{ml_model}.png")
-
-                logs_path = red_dir / f"{name}_{member}_{ml_model}_logs.npy"
-                logs_out_path = logs_dir / f"{name}_{member}_{ml_model}.png"
-                vis.plot_2d.plot_logs(logs_path, logs_out_path)
+                logs_path = data_dir / "logs.npy"
+                logs_dir = data_out_dir / "logs"
+                logs_dir.mkdir(exist_ok=True)
+                vis.plot_2d.plot_logs(logs_path, logs_dir / f"{member_name}.png")
 
 
 if __name__ == "__main__":

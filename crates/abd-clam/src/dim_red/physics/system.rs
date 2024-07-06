@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use distances::Number;
+use mt_logger::{mt_log, Level};
 use rand::prelude::*;
 use rayon::prelude::*;
 
@@ -138,6 +139,12 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         &self.masses
     }
 
+    /// Get the `Mass`es in the `System` as mutable.
+    #[must_use]
+    pub fn masses_mut(&mut self) -> &mut [Mass<DIM>] {
+        &mut self.masses
+    }
+
     /// Get the pairs of `Mass`es that are connected by `Spring`s.
     #[must_use]
     pub fn mass_pairs(&self) -> Vec<[&Mass<DIM>; 2]> {
@@ -188,10 +195,10 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             .map(|s| {
                 let [i, j] = s.get_arg_masses();
                 let unit_vector = self.masses[i].unit_vector_to(&self.masses[j]);
-                let f = s.f();
+                let f_mag: f32 = s.f();
                 let mut force = [0.0; DIM];
-                for d in 0..DIM {
-                    force[d] = f * unit_vector[d];
+                for (f, &uv) in force.iter_mut().zip(unit_vector.iter()) {
+                    *f = f_mag * uv;
                 }
                 (i, j, force)
             })
@@ -207,6 +214,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         self.masses.par_iter_mut().for_each(|m| m.apply_force(dt, self.beta));
 
         // Update the springs
+        // TODO: Merge this iteration with the first one
         self.springs = self
             .springs
             .into_par_iter()
@@ -270,6 +278,8 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
 
         for i in 0..steps {
             if i % save_every == 0 {
+                mt_log!(Level::Debug, "{name}: Saving step {i}/{steps}");
+
                 self.get_reduced_embedding(data, name)
                     .to_npy(&path.join(format!("{i}.npy")))?;
             }

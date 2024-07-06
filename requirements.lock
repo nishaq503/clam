@@ -13,8 +13,12 @@ contourpy==1.2.1
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
+fastgif==2.1
+    # via vis
 fonttools==4.53.1
     # via matplotlib
+imageio==2.34.2
+    # via fastgif
 importlib-resources==6.4.0
     # via matplotlib
 joblib==1.4.2
@@ -26,6 +30,7 @@ llvmlite==0.43.0
     # via numba
     # via pynndescent
 matplotlib==3.9.1
+    # via fastgif
     # via vis
 numba==0.60.0
     # via pynndescent
@@ -33,6 +38,7 @@ numba==0.60.0
 numpy==1.26.4
     # via abd-distances
     # via contourpy
+    # via imageio
     # via matplotlib
     # via numba
     # via scikit-learn
@@ -42,6 +48,7 @@ numpy==1.26.4
 packaging==24.1
     # via matplotlib
 pillow==10.4.0
+    # via imageio
     # via matplotlib
 pynndescent==0.5.13
     # via umap-learn
