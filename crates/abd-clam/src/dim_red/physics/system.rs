@@ -140,7 +140,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         self.masses.get_mut(&(offset, cardinality))
     }
 
-    /// Add a `Mass` to the `System`.
+    /// Add a `Mass` to the `System`. This does not add any `Spring`s.
     ///
     /// # Arguments
     ///
@@ -152,12 +152,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     ///
     /// * `true` if the `Mass` was added.
     /// * `false` if the `Mass` was already present.
-    pub fn add_mass<I: Instance, D: Dataset<I, U>, C: Cluster<U>>(
-        &mut self,
-        c: &C,
-        data: &D,
-        position: [f32; DIM],
-    ) -> bool {
+    pub fn add_mass<C: Cluster<U>>(&mut self, c: &C, position: [f32; DIM]) -> bool {
         // Create the `Mass`
         let m = {
             let mut m = Mass::<DIM>::from_cluster(c);
@@ -165,18 +160,12 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             m
         };
 
-        // Add the `Spring`s
-        self.springs.extend(self.masses.iter().map(|(&k, n)| {
-            let l0 = data.one_to_one(n.arg_center(), c.arg_center());
-            let s = Spring::new(k, m.hash_key(), 1.0, l0);
-            (s.hash_key(), s)
-        }));
-
         // Add the `Mass`
         self.masses.insert(m.hash_key(), m).is_none()
     }
 
-    /// Remove a `Mass` from the `System`.
+    /// Remove a `Mass` from the `System`. This will also remove any `Spring`s
+    /// connected to the `Mass`.
     ///
     /// # Arguments
     ///
