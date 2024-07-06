@@ -1,22 +1,28 @@
 //! The mass-spring system.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use distances::Number;
 use mt_logger::{mt_log, Level};
 use rand::prelude::*;
 use rayon::prelude::*;
 
-use crate::{chaoda::Graph, Dataset, Instance, VecDataset};
+use crate::{chaoda::Graph, Cluster, Dataset, Instance, VecDataset};
 
 use super::{Mass, Spring};
+
+/// A `HashMap` of `Mass`es, keyed by their `(offset, cardinality)`.
+pub type MassMap<const DIM: usize> = HashMap<(usize, usize), Mass<DIM>>;
+
+/// A `HashMap` of `Spring`s, keyed by the pairs of keys of the `Mass`es
+pub type SpringMap<U, const DIM: usize> = HashMap<((usize, usize), (usize, usize)), Spring<U, DIM>>;
 
 /// The `System` of `Mass`es and `Spring`s.
 pub struct System<U: Number, const DIM: usize> {
     /// A sorted collection of `Mass`es.
-    masses: Vec<Mass<DIM>>,
+    masses: MassMap<DIM>,
     /// A collection of `Spring`s.
-    springs: HashSet<Spring<U, DIM>>,
+    springs: SpringMap<U, DIM>,
     /// The damping factor.
     beta: f32,
     /// The logs of the `System` for each time-step. These store the kinetic
@@ -34,17 +40,34 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     /// - `beta`: The damping factor, applied to the velocity of the `Mass`es.
     #[must_use]
     pub fn from_graph(g: &Graph<U>, k: f32, beta: f32, seed: Option<u64>) -> Self {
+        // Extract the clusters and their edges
+        let clusters = g.iter_clusters().collect::<Vec<_>>();
+
         // Create the masses
         let masses = g
             .iter_clusters()
             .map(|&(offset, cardinality, arg_center)| Mass::new(offset, cardinality, arg_center))
+            .map(|m| (m.hash_key(), m))
             .collect();
 
         // Create the springs
         let springs = g
             .iter_neighbors()
             .enumerate()
-            .flat_map(|(i, neighbors)| neighbors.iter().map(move |&(j, l0)| Spring::new(i, j, k, l0)))
+            .map(|(i, neighbors)| {
+                let &(o, c, _) = clusters[i];
+                ((o, c), neighbors)
+            })
+            .flat_map(|(i, neighbors)| {
+                neighbors
+                    .iter()
+                    .map(|&(j, l0)| {
+                        let &(o, c, _) = clusters[j];
+                        ((o, c), l0)
+                    })
+                    .map(move |(j, l0)| Spring::new(i, j, k, l0))
+            })
+            .map(|s| (s.hash_key(), s))
             .collect();
 
         let logs = Vec::new();
@@ -60,7 +83,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         // Get the maximum l0 to set the initial positions of the masses
         let cube_side_len = system
             .springs
-            .iter()
+            .values()
             .map(Spring::l0_f32)
             .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less))
             .unwrap_or(1.0);
@@ -82,7 +105,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         let mut rng = seed.map_or_else(StdRng::from_entropy, StdRng::seed_from_u64);
 
         let (min_, max_) = (-cube_side_len / 2.0, cube_side_len / 2.0);
-        for m in &mut self.masses {
+        for m in self.masses.values_mut() {
             let mut position = [0.0; DIM];
             for p in &mut position {
                 *p = rng.gen_range(min_..max_);
@@ -93,56 +116,89 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         self.update_springs()
     }
 
-    /// Update the lengths of the `Spring`s and the forces exerted by them.
-    #[must_use]
-    pub fn update_springs(mut self) -> Self {
-        self.springs = self
-            .springs
-            .into_par_iter()
-            .map(|mut s| {
-                s.update_length(&self.masses);
-                s
-            })
-            .collect();
-
-        self
-    }
-
-    /// Add a `Spring` between two `Mass`es.
-    ///
-    /// # Arguments
-    ///
-    /// - `i`: The index of the first `Mass`.
-    /// - `j`: The index of the second `Mass`.
-    /// - `k`: The spring constant of the `Spring`.
-    /// - `data`: The `Dataset` containing the `Instance`s.
-    ///
-    /// # Returns
-    ///
-    /// * `true` if the `Spring` was added.
-    /// * `false` if the `Spring` was already present, in which case the spring
-    ///  constant is updated.
-    pub fn add_spring<I: Instance, D: Dataset<I, U>>(&mut self, i: usize, j: usize, k: f32, data: &D) -> bool {
-        let l0 = data.one_to_one(self.masses[i].arg_center(), self.masses[j].arg_center());
-        let mut s = Spring::new(i, j, k, l0);
-
-        let was_replaced = !self.springs.remove(&s);
-        s.update_length(&self.masses);
-        self.springs.insert(s);
-
-        was_replaced
-    }
-
     /// Get the `Mass`es in the `System`.
     #[must_use]
-    pub fn masses(&self) -> &[Mass<DIM>] {
+    pub const fn masses(&self) -> &MassMap<DIM> {
         &self.masses
     }
 
     /// Get the `Mass`es in the `System` as mutable.
     #[must_use]
-    pub fn masses_mut(&mut self) -> &mut [Mass<DIM>] {
+    pub fn masses_mut(&mut self) -> &mut MassMap<DIM> {
         &mut self.masses
+    }
+
+    /// Get a single `Mass` by its offset and cardinality.
+    #[must_use]
+    pub fn get_mass(&self, offset: usize, cardinality: usize) -> Option<&Mass<DIM>> {
+        self.masses.get(&(offset, cardinality))
+    }
+
+    /// Get a single `Mass` by its offset and cardinality as mutable.
+    #[must_use]
+    pub fn get_mass_mut(&mut self, offset: usize, cardinality: usize) -> Option<&mut Mass<DIM>> {
+        self.masses.get_mut(&(offset, cardinality))
+    }
+
+    /// Add a `Mass` to the `System`.
+    ///
+    /// # Arguments
+    ///
+    /// - `c`: The `Cluster` to add as a `Mass`.
+    /// - `data`: The `Dataset` containing the `Instance`s.
+    /// - `position`: The initial position of the `Mass`.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the `Mass` was added.
+    /// * `false` if the `Mass` was already present.
+    pub fn add_mass<I: Instance, D: Dataset<I, U>, C: Cluster<U>>(
+        &mut self,
+        c: &C,
+        data: &D,
+        position: [f32; DIM],
+    ) -> bool {
+        // Create the `Mass`
+        let m = {
+            let mut m = Mass::<DIM>::from_cluster(c);
+            m.set_position(position);
+            m
+        };
+
+        // Add the `Spring`s
+        self.springs.extend(self.masses.iter().map(|(&k, n)| {
+            let l0 = data.one_to_one(n.arg_center(), c.arg_center());
+            let s = Spring::new(k, m.hash_key(), 1.0, l0);
+            (s.hash_key(), s)
+        }));
+
+        // Add the `Mass`
+        self.masses.insert(m.hash_key(), m).is_none()
+    }
+
+    /// Remove a `Mass` from the `System`.
+    ///
+    /// # Arguments
+    ///
+    /// - `offset`: The offset of the `Mass`.
+    /// - `cardinality`: The cardinality of the `Mass`.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the `Mass` was removed.
+    /// * `false` if the `Mass` was not present.
+    pub fn remove_mass(&mut self, offset: usize, cardinality: usize) -> bool {
+        let contains_mass = self.masses.contains_key(&(offset, cardinality));
+
+        if contains_mass {
+            // Remove the `Spring`s connected to the `Mass`
+            self.springs
+                .retain(|&(i, j), _| i != (offset, cardinality) && j != (offset, cardinality));
+            // Remove the `Mass`
+            self.masses.remove(&(offset, cardinality));
+        }
+
+        contains_mass
     }
 
     /// Get the pairs of `Mass`es that are connected by `Spring`s.
@@ -150,21 +206,17 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     pub fn mass_pairs(&self) -> Vec<[&Mass<DIM>; 2]> {
         self.springs
             .iter()
-            .map(|s| {
-                let [i, j] = s.get_arg_masses();
-                [&self.masses[i], &self.masses[j]]
-            })
+            .map(|((i, j), _)| [&self.masses[i], &self.masses[j]])
             .collect()
     }
 
-    /// For a given mass (by its index), get the indices of the masses it is
+    /// For a given mass (by its key), get the keys of the masses it is
     /// connected to and the `Spring`s connecting them.
     #[must_use]
-    pub fn connected_masses(&self, i: usize) -> Vec<(usize, &Spring<U, DIM>)> {
+    pub fn connected_masses(&self, i: (usize, usize)) -> Vec<((usize, usize), &Spring<U, DIM>)> {
         self.springs
             .par_iter()
-            .filter_map(|s| {
-                let [m1, m2] = s.get_arg_masses();
+            .filter_map(|(&(m1, m2), s)| {
                 if i == m1 {
                     Some((m2, s))
                 } else if i == m2 {
@@ -174,6 +226,88 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
                 }
             })
             .collect()
+    }
+
+    /// Get the `Spring`s in the `System`.
+    #[must_use]
+    pub const fn springs(&self) -> &SpringMap<U, DIM> {
+        &self.springs
+    }
+
+    /// Get the `Spring`s in the `System` as mutable.
+    #[must_use]
+    pub fn springs_mut(&mut self) -> &mut SpringMap<U, DIM> {
+        &mut self.springs
+    }
+
+    /// Get a single `Spring` by the keys of the `Mass`es it connects.
+    #[must_use]
+    pub fn get_spring(&self, i: (usize, usize), j: (usize, usize)) -> Option<&Spring<U, DIM>> {
+        self.springs.get(&(i, j))
+    }
+
+    /// Get a single `Spring` by the keys of the `Mass`es it connects as mutable.
+    #[must_use]
+    pub fn get_spring_mut(&mut self, i: (usize, usize), j: (usize, usize)) -> Option<&mut Spring<U, DIM>> {
+        self.springs.get_mut(&(i, j))
+    }
+
+    /// Add a `Spring` between two `Mass`es.
+    ///
+    /// # Arguments
+    ///
+    /// - `i`: The key of the first `Mass`.
+    /// - `j`: The key of the second `Mass`.
+    /// - `k`: The spring constant of the `Spring`.
+    /// - `data`: The `Dataset` containing the `Instance`s.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the `Spring` was added.
+    /// * `false` if the `Spring` was already present, in which case the spring
+    ///  constant is updated.
+    pub fn add_spring<I: Instance, D: Dataset<I, U>>(
+        &mut self,
+        i: (usize, usize),
+        j: (usize, usize),
+        k: f32,
+        data: &D,
+    ) -> bool {
+        let l0 = data.one_to_one(self.masses[&i].arg_center(), self.masses[&j].arg_center());
+        let mut s = Spring::new(i, j, k, l0);
+        let k = s.hash_key();
+        s.update_length(&self.masses);
+        self.springs.insert(k, s).is_none()
+    }
+
+    /// Remove a `Spring` between two `Mass`es.
+    ///
+    /// # Arguments
+    ///
+    /// - `i`: The key of the first `Mass`.
+    /// - `j`: The key of the second `Mass`.
+    ///
+    /// # Returns
+    ///
+    /// * `true` if the `Spring` was removed.
+    /// * `false` if the `Spring` was not present.
+    pub fn remove_spring(&mut self, i: (usize, usize), j: (usize, usize)) -> bool {
+        self.springs.remove(&(i, j)).is_some()
+    }
+
+    /// Update the lengths of the `Spring`s and the forces exerted by them.
+    #[must_use]
+    pub fn update_springs(mut self) -> Self {
+        self.springs = self
+            .springs
+            .into_par_iter()
+            .map(|(k, mut s)| {
+                s.update_length(&self.masses);
+                (k, s)
+            })
+            .collect();
+
+        self
     }
 
     /// Update the `System` by one time-step.
@@ -189,12 +323,11 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     #[must_use]
     pub fn update_step(mut self, dt: f32) -> Self {
         // Calculate the forces exerted by the springs
-        let forces: Vec<(usize, usize, [f32; DIM])> = self
+        let forces = self
             .springs
             .par_iter()
-            .map(|s| {
-                let [i, j] = s.get_arg_masses();
-                let unit_vector = self.masses[i].unit_vector_to(&self.masses[j]);
+            .map(|(&(i, j), s)| {
+                let unit_vector = self.masses[&i].unit_vector_to(&self.masses[&j]);
                 let f_mag: f32 = s.f();
                 let mut force = [0.0; DIM];
                 for (f, &uv) in force.iter_mut().zip(unit_vector.iter()) {
@@ -202,25 +335,31 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
                 }
                 (i, j, force)
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         // Accumulate the forces for each mass
         for (i, j, force) in forces {
-            self.masses[i].add_force(force);
-            self.masses[j].sub_force(force);
+            if let Some(m) = self.masses.get_mut(&i) {
+                m.add_force(force);
+            }
+            if let Some(m) = self.masses.get_mut(&j) {
+                m.sub_force(force);
+            }
         }
 
         // Apply the forces to the masses
-        self.masses.par_iter_mut().for_each(|m| m.apply_force(dt, self.beta));
+        self.masses
+            .par_iter_mut()
+            .for_each(|(_, m)| m.apply_force(dt, self.beta));
 
         // Update the springs
         // TODO: Merge this iteration with the first one
         self.springs = self
             .springs
             .into_par_iter()
-            .map(|mut s| {
+            .map(|(k, mut s)| {
                 s.update_length(&self.masses);
-                s
+                (k, s)
             })
             .collect();
 
@@ -328,15 +467,15 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         name: &str,
     ) -> VecDataset<Vec<f32>, f32, usize> {
         let masses = {
-            let mut masses = self.masses.clone();
-            masses.sort_by_key(Mass::offset);
+            let mut masses = self.masses.iter().map(|(&k, m)| (k, m.clone())).collect::<Vec<_>>();
+            masses.sort_by(|(a, _), (b, _)| a.cmp(b));
             masses
         };
 
         let positions = {
             let positions = masses
                 .par_iter()
-                .flat_map(|m| (0..m.cardinality()).map(move |_| m.position()).collect::<Vec<_>>())
+                .flat_map(|((_, c), m)| (0..(*c)).map(move |_| m.position()).collect::<Vec<_>>())
                 .collect::<Vec<_>>();
 
             let permutation = data
@@ -359,13 +498,13 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     /// Get the total potential energy of the `System`.
     #[must_use]
     pub fn potential_energy(&self) -> f32 {
-        self.springs.par_iter().map(Spring::potential_energy).sum()
+        self.springs.par_iter().map(|(_, s)| s.potential_energy()).sum()
     }
 
     /// Get the total kinetic energy of the `System`.
     #[must_use]
     pub fn kinetic_energy(&self) -> f32 {
-        self.masses.par_iter().map(Mass::kinetic_energy).sum()
+        self.masses.par_iter().map(|(_, m)| m.kinetic_energy()).sum()
     }
 
     /// Get the total energy of the `System`.
