@@ -1,7 +1,7 @@
 //! A `Graph` is a collection of `OddBall`s.
 
 use core::{cmp::Reverse, ops::Index};
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
 use distances::Number;
 use ndarray::prelude::*;
@@ -23,6 +23,8 @@ pub struct Graph<U: Number> {
     components: Vec<Component<U>>,
     /// Cumulative populations of the `Component`s in the `Graph`.
     populations: Vec<usize>,
+    /// A `HashSet` of the `OddBall`s' `offset` and `cardinality` in the `Graph`.
+    members: HashSet<(usize, usize)>,
 }
 
 // , C: OddBall<U>, const N: usize
@@ -66,6 +68,8 @@ impl<U: Number> Graph<U> {
 
     /// Create a new `Graph` from a collection of `OddBall`s.
     pub fn from_clusters<I: Instance, D: Dataset<I, U>, C: OddBall<U>>(clusters: &[&C], data: &D) -> Self {
+        let members = clusters.iter().map(|c| (c.offset(), c.cardinality())).collect();
+
         let c = Component::new(clusters, data);
         let [mut c, mut other] = c.partition();
         let mut components = vec![c];
@@ -84,7 +88,14 @@ impl<U: Number> Graph<U> {
         Self {
             components,
             populations,
+            members,
         }
+    }
+
+    /// Check whether the `Graph` contains a `OddBall` with the given `offset` and `cardinality`.
+    #[must_use]
+    pub fn contains(&self, offset: usize, cardinality: usize) -> bool {
+        self.members.contains(&(offset, cardinality))
     }
 
     /// Iterate over the `OddBall`s in the `Graph`.

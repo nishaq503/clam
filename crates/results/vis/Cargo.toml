@@ -7,3 +7,4 @@ edition = "2021"
 distances = { workspace = true }
 abd-clam = { workspace = true }
 results-chaoda = { path = "../chaoda" }
+mt_logger.workspace = true

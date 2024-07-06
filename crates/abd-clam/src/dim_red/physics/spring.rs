@@ -110,7 +110,7 @@ impl<U: Number, const DIM: usize> Spring<U, DIM> {
 
     /// Recalculate the magnitude of the force exerted by the `Spring`.
     fn update_force(&mut self) {
-        self.f = self.k * self.dx();
+        self.f = -self.k * self.dx();
     }
 
     /// Get the potential energy of the `Spring`.

@@ -2,13 +2,57 @@
 
 import logging
 import pathlib
+import typing
 
+import fastgif
 import numpy
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 logger = logging.getLogger(__name__)
+
+
+def helper_fastgif(
+    inp_dir: pathlib.Path,
+) -> typing.Callable[[int], Figure]:
+    """A helper function to make a GIF frame for the fastgif package.
+
+    Args:
+        inp_dir: Directory containing 2d data from each step in the simulation.
+
+    Returns:
+        A function that takes an integer time-step and returns a matplotlib Figure.
+    """
+
+    def _make_frame(step: int) -> Figure:
+        """Make a frame for the GIF."""
+        data: numpy.ndarray = numpy.load(inp_dir / f"{step}.npy")
+        fig: Figure = plt.figure()
+        ax: Axes = fig.add_subplot()
+        ax.scatter(data[:, 0], data[:, 1])
+        return fig
+
+    return _make_frame
+
+
+def plot_gif(
+    inp_dir: pathlib.Path,
+    out_path: pathlib.Path,
+) -> None:
+    """Plot a GIF from the input directory."""
+    make_frame = helper_fastgif(inp_dir)
+
+    # Get the number of steps in the input directory
+    num_steps = len(list(inp_dir.iterdir()))
+
+    fastgif.make_gif(
+        fig_fn=make_frame,
+        num_calls=num_steps,
+        filename=str(out_path),
+        num_processes=None,
+        show_progress=True,
+    )
 
 
 def plot_logs(

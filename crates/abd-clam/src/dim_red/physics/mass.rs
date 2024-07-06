@@ -103,6 +103,11 @@ impl<const DIM: usize> Mass<DIM> {
         self.position = position;
     }
 
+    /// Resets the `velocity` of the `Mass` to the zero vector.
+    pub fn reset_velocity(&mut self) {
+        self.velocity = [0.0; DIM];
+    }
+
     /// Returns the distance vector from this `Mass` to another `Mass`.
     pub fn distance_vector_to(&self, other: &Self) -> [f32; DIM] {
         let mut distance_vector = [0.0; DIM];
@@ -130,6 +135,7 @@ impl<const DIM: usize> Mass<DIM> {
         let mut vector = self.distance_vector_to(other);
 
         let magnitude = vector.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        // TODO: Avoid division by zero
         for d in &mut vector {
             *d /= magnitude;
         }
@@ -169,16 +175,21 @@ impl<const DIM: usize> Mass<DIM> {
             .zip(self.velocity.iter_mut())
             .zip(self.force.iter_mut())
         {
-            // TODO: Check to see whether the position should be updated before
-            // or after the velocity
-            *p += (*v) * dt;
-
-            // TODO: Check this math
-            // *v += ((*f) / self.m - beta * (*v)) * dt;
-            *v += beta.mul_add(-(*v), (*f) / self.m) * dt;
-
-            // Reset the force
+            (*v) += ((*f) / self.m) * dt;
+            (*v) *= beta;
+            (*p) += (*v) * dt;
             *f = 0.0;
+
+            // // TODO: Check to see whether the position should be updated before
+            // // or after the velocity
+            // *p += (*v) * dt;
+
+            // // TODO: Check this math
+            // // *v += ((*f) / self.m - beta * (*v)) * dt;
+            // *v += beta.mul_add(-(*v), (*f) / self.m) * dt;
+
+            // // Reset the force
+            // *f = 0.0;
         }
     }
 
