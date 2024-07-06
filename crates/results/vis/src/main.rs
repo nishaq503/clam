@@ -38,13 +38,13 @@ fn main() -> Result<(), String> {
     let model = Chaoda::load(&model_path)?;
 
     // Load the data
-    let datasets: &[&str] = &["cardio"];
+    let datasets: &[&str] = &["wine"];
 
     let metric = |x: &Vec<f32>, y: &Vec<f32>| distances::vectors::euclidean::<_, f32>(x, y);
     let seed = Some(42);
     let criteria = PartitionCriteria::default();
 
-    for name in datasets {
+    for &name in datasets {
         println!("Processing dataset: {name}");
 
         let (data, root) = {
@@ -71,20 +71,30 @@ fn main() -> Result<(), String> {
             .collect::<Vec<_>>();
 
         for (ml_model, member, graph) in named_graphs {
-            let reduced_name = format!("{name}_{member}_{ml_model}");
+            let reduced_name = format!("{name}-{member}-{ml_model}");
 
             println!("Simulating {reduced_name}");
-            let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
-            let mss = mss.evolve(0.1, 10_000);
+            let (graph_dir, steps_dir) = {
+                let graph_dir = out_dir.join(&reduced_name);
+                std::fs::create_dir_all(&graph_dir).map_err(|e| e.to_string())?;
+
+                let steps_dir = graph_dir.join("steps");
+                std::fs::create_dir_all(&steps_dir).map_err(|e| e.to_string())?;
+
+                (graph_dir, steps_dir)
+            };
+
+            let mss = MassSpringSystem::<_, 2>::from_graph(&graph, 1.0, 0.99, seed);
+            let mss = mss.evolve_with_saves(0.1, 100, 1, &data, &steps_dir, &reduced_name)?;
 
             println!("Writing logs for {reduced_name}");
             let logs = mss.logs().iter().map(|r| r.to_vec()).collect::<Vec<_>>();
             let logs = VecDataset::new(reduced_name.clone(), logs, metric, false);
-            logs.to_npy(&out_dir.join(format!("{reduced_name}_logs.npy")))?;
+            logs.to_npy(&graph_dir.join("logs.npy"))?;
 
             println!("Writing {reduced_name}");
             let reduced_data = mss.get_reduced_embedding(&data, &reduced_name);
-            reduced_data.to_npy(&out_dir.join(format!("{reduced_name}.npy")))?;
+            reduced_data.to_npy(&graph_dir.join("final.npy"))?;
         }
     }
 

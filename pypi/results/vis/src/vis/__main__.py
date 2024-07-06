@@ -66,8 +66,8 @@ def main(
         logger.info(f"Labels shape: {labels.shape}, dtype: {labels.dtype}")
 
         # Create the dim-reduction for the data and save a scatter plot
-        reduced_data = vis.umap_reduce(data_path)
-        vis.scatter_plot(reduced_data, labels, out_dir / f"{name}_umap.png")
+        reduced_data = vis.plot_umap.umap_reduce(data_path)
+        vis.plot_3d.scatter_plot(reduced_data, labels, out_dir / f"{name}_umap.png")
 
         # Create a directory for the logs
         logs_dir = out_dir / "logs"
@@ -83,11 +83,11 @@ def main(
                     f"dtype: {data.dtype}",
                 )
 
-                vis.scatter_plot(data, labels, out_dir / f"{name}_{member}_{ml_model}.png")
+                vis.plot_3d.scatter_plot(data, labels, out_dir / f"{name}_{member}_{ml_model}.png")
 
                 logs_path = red_dir / f"{name}_{member}_{ml_model}_logs.npy"
                 logs_out_path = logs_dir / f"{name}_{member}_{ml_model}.png"
-                vis.plot_logs(logs_path, logs_out_path)
+                vis.plot_2d.plot_logs(logs_path, logs_out_path)
 
 
 if __name__ == "__main__":

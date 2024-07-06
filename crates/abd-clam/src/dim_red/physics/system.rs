@@ -216,11 +216,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             })
             .collect();
 
-        // Update the logs
-        let kinetic_energy = self.kinetic_energy();
-        let potential_energy = self.potential_energy();
-        let total_energy = kinetic_energy + potential_energy;
-        self.logs.push([kinetic_energy, potential_energy, total_energy]);
+        self.update_logs();
 
         self
     }
@@ -233,10 +229,62 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     /// - `steps`: The number of time-steps to simulate.
     #[must_use]
     pub fn evolve(mut self, dt: f32, steps: usize) -> Self {
+        self.update_logs();
+
         for _ in 0..steps {
             self = self.update_step(dt);
         }
         self
+    }
+
+    /// Simulate the `System` for a given number of time-steps, and save the
+    /// intermediate states and final logs.
+    ///
+    /// # Arguments
+    ///
+    /// - `dt`: The time-step.
+    /// - `steps`: The number of time-steps to simulate.
+    /// - `save_every`: The number of time-steps between each saved state.
+    /// - `data`: The `Dataset` containing the `Instance`s.
+    /// - `path`: The path to the directory where the intermediate states will
+    /// be saved.
+    /// - `name`: The name of the `VecDataset` containing the intermediate states.
+    ///
+    /// # Returns
+    ///
+    /// The `System` in its final state.
+    ///
+    /// # Errors
+    ///
+    /// * If there is an error saving the intermediate states.
+    pub fn evolve_with_saves<I: Instance, D: Dataset<I, U>>(
+        mut self,
+        dt: f32,
+        steps: usize,
+        save_every: usize,
+        data: &D,
+        path: &std::path::Path,
+        name: &str,
+    ) -> Result<Self, String> {
+        self.update_logs();
+
+        for i in 0..steps {
+            if i % save_every == 0 {
+                self.get_reduced_embedding(data, name)
+                    .to_npy(&path.join(format!("{i}.npy")))?;
+            }
+            self = self.update_step(dt);
+        }
+
+        Ok(self)
+    }
+
+    /// Update the `logs`
+    fn update_logs(&mut self) {
+        let kinetic_energy = self.kinetic_energy();
+        let potential_energy = self.potential_energy();
+        let total_energy = kinetic_energy + potential_energy;
+        self.logs.push([kinetic_energy, potential_energy, total_energy]);
     }
 
     /// Get the logs of the `System` for each time-step.
