@@ -317,7 +317,15 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             .par_iter()
             .map(|(&(i, j), s)| {
                 let unit_vector = self.masses[&i].unit_vector_to(&self.masses[&j]);
-                let f_mag: f32 = s.f();
+                let f_mag = {
+                    // TODO: In mnist data, we somehow hit infinite forces. So, for now,
+                    // we are setting the force to 1.0 if it is infinite.
+                    if s.f().is_finite() {
+                        s.f()
+                    } else {
+                        1.0
+                    }
+                };
                 let mut force = [0.0; DIM];
                 for (f, &uv) in force.iter_mut().zip(unit_vector.iter()) {
                     *f = f_mag * uv;
@@ -367,7 +375,8 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     pub fn evolve(mut self, dt: f32, steps: usize) -> Self {
         self.update_logs();
 
-        for _ in 0..steps {
+        for i in 0..steps {
+            mt_log!(Level::Debug, "Step {i}/{steps}");
             self = self.update_step(dt);
         }
         self

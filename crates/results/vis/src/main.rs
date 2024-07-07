@@ -41,7 +41,12 @@ fn main() -> Result<(), String> {
     let model = Chaoda::load(&model_path)?;
 
     // Load the data
-    let datasets: &[&str] = &["cardio", "arrhythmia", "satellite", "mnist"];
+    let datasets: &[&str] = &[
+        "cardio",
+        "arrhythmia",
+        "satellite",
+        "mnist", // Sometimes produces infinte forces from springs.
+    ];
 
     let metric = |x: &Vec<f32>, y: &Vec<f32>| distances::vectors::euclidean::<_, f32>(x, y);
     let seed = Some(42);
@@ -73,6 +78,8 @@ fn main() -> Result<(), String> {
             })
             .collect::<Vec<_>>();
 
+        let save_intermediates = false;
+
         for (ml_model, member, graph) in named_graphs {
             let reduced_name = format!("{name}-{member}-{ml_model}");
 
@@ -91,8 +98,15 @@ fn main() -> Result<(), String> {
                 (graph_dir, steps_dir)
             };
 
-            let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
-            let mss = mss.evolve_with_saves(0.1, 1_000, 1, &data, &steps_dir, &reduced_name)?;
+            let mss = {
+                let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
+
+                if save_intermediates {
+                    mss.evolve_with_saves(0.1, 1_000, 1, &data, &steps_dir, &reduced_name)?
+                } else {
+                    mss.evolve(0.1, 1_000)
+                }
+            };
 
             mt_log!(Level::Info, "Writing logs for {reduced_name}");
             let logs = mss.logs().iter().map(|r| r.to_vec()).collect::<Vec<_>>();
