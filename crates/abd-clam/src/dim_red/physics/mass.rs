@@ -1,6 +1,7 @@
 //! Masses in the mass-spring system.
 
 use distances::Number;
+use rand::Rng;
 
 use crate::Cluster;
 
@@ -106,6 +107,10 @@ impl<const DIM: usize> Mass<DIM> {
 
     /// Sets the position of the `Mass`.
     pub fn set_position(&mut self, position: [f32; DIM]) {
+        // Check that there are no NaNs in the position
+        assert!(!position.iter().any(|&x| x.is_nan()));
+        assert!(position.iter().all(|&x| x.is_finite()));
+
         self.position = position;
     }
 
@@ -141,11 +146,15 @@ impl<const DIM: usize> Mass<DIM> {
         let mut vector = self.distance_vector_to(other);
 
         let magnitude = vector.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-        // TODO: Avoid division by zero
-        for d in &mut vector {
-            *d /= magnitude;
+        if magnitude > (f32::EPSILON * DIM.as_f32()) {
+            for d in &mut vector {
+                *d /= magnitude;
+            }
+        } else {
+            // Choose a random axis to move along
+            vector = [0.0; DIM];
+            vector[rand::thread_rng().gen_range(0..DIM)] = 1.0;
         }
-
         vector
     }
 
