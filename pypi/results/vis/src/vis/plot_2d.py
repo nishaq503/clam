@@ -73,12 +73,13 @@ def plot_logs(
 
     # The columns are kinetic, potential, and total energy
     x = numpy.arange(logs.shape[0])
-    ax.scatter(x, logs[:, 0], label="Kinetic Energy")
-    ax.scatter(x, logs[:, 1], label="Potential Energy")
-    ax.scatter(x, logs[:, 2], label="Total Energy")
+    ax.scatter(x, logs[:, 0], label="Kinetic Energy", s=0.25)
+    ax.scatter(x, logs[:, 1], label="Potential Energy", s=0.25)
+    ax.scatter(x, logs[:, 2], label="Total Energy", s=0.25)
 
     ax.set_xlabel("Time-step")
     ax.set_ylabel("Energy")
+    ax.set_title(out_path.stem)
     ax.legend()
 
     plt.savefig(out_path)

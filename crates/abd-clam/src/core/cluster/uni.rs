@@ -93,7 +93,7 @@ impl<U: Number> UniBall<U> {
 
         let start = Instant::now();
         mt_log!(
-            Level::Debug,
+            Level::Trace,
             "Creating a UniBall with depth {depth} and cardinality {cardinality} ..."
         );
 
@@ -118,7 +118,7 @@ impl<U: Number> UniBall<U> {
 
         let end = start.elapsed().as_secs_f32();
         mt_log!(
-            Level::Debug,
+            Level::Trace,
             "Finished creating a UniBall with depth {depth}, offset {offset} and cardinality {cardinality} in {end:.2e} seconds."
         );
 
@@ -285,9 +285,9 @@ impl<U: Number> Cluster<U> for UniBall<U> {
         let mut indices = (0..self.cardinality).collect::<Vec<_>>();
         (self, indices) = self._partition(data, criteria, indices, seed);
 
-        mt_log!(Level::Debug, "Finished building tree. Starting data permutation.");
+        mt_log!(Level::Trace, "Finished building tree. Starting data permutation.");
         data.permute_instances(&indices).unwrap_or_else(|e| unreachable!("{e}"));
-        mt_log!(Level::Debug, "Finished data permutation.");
+        mt_log!(Level::Trace, "Finished data permutation.");
 
         self
     }

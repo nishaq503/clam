@@ -365,6 +365,28 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         self
     }
 
+    /// Simulate the `System` until it reaches a stable state.
+    ///
+    /// # Arguments
+    ///
+    /// - `dt`: The time-step.
+    /// - `patience`: The number of time-steps to consider for stability.
+    #[must_use]
+    pub fn evolve_to_stability(mut self, dt: f32, patience: usize) -> Self {
+        self.update_logs();
+
+        let mut i = 0;
+        let mut stability = self.stability(patience);
+        while stability < 0.99 {
+            mt_log!(Level::Debug, "Step {i}, Stability: {stability:.2}");
+            self = self.update_step(dt);
+            i += 1;
+            stability = self.stability(patience);
+        }
+
+        self
+    }
+
     /// Simulate the `System` for a given number of time-steps.
     ///
     /// # Arguments
@@ -509,5 +531,46 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     #[must_use]
     pub fn total_energy(&self) -> f32 {
         self.potential_energy() + self.kinetic_energy()
+    }
+
+    /// Get the stability of the `System` over the last `n` time-steps.
+    ///
+    /// The stability is calculated as the mean of the `1 - (std-dev / mean_val)`
+    /// of the kinetic and potential energies.
+    ///
+    /// # Arguments
+    ///
+    /// - `n`: The number of time-steps to consider.
+    ///
+    /// # Returns
+    ///
+    /// The stability of the `System` in a [0, 1] range, with 1 being stable.
+    #[must_use]
+    #[allow(clippy::similar_names)]
+    pub fn stability(&self, n: usize) -> f32 {
+        if self.logs.len() < n {
+            0.0
+        } else {
+            let last_n = &self.logs[(self.logs.len() - n)..];
+
+            let (last_ke, last_pe) = last_n
+                .iter()
+                .map(|&[ke, pe, _]| (ke, pe))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+
+            let stability_ke = {
+                let mean = crate::utils::mean::<_, f32>(&last_ke);
+                let variance = crate::utils::variance(&last_ke, mean);
+                1.0 - (variance.sqrt() / mean)
+            };
+
+            let stability_pe = {
+                let mean = crate::utils::mean::<_, f32>(&last_pe);
+                let variance = crate::utils::variance(&last_pe, mean);
+                1.0 - (variance.sqrt() / mean)
+            };
+
+            (stability_ke + stability_pe) / 2.0
+        }
     }
 }

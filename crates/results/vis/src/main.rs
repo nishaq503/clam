@@ -102,9 +102,9 @@ fn main() -> Result<(), String> {
                 let mss = MassSpringSystem::<_, 3>::from_graph(&graph, 1.0, 0.99, seed);
 
                 if save_intermediates {
-                    mss.evolve_with_saves(0.1, 1_000, 1, &data, &steps_dir, &reduced_name)?
+                    mss.evolve_with_saves(0.01, 1_000, 1, &data, &steps_dir, &reduced_name)?
                 } else {
-                    mss.evolve(0.1, 1_000)
+                    mss.evolve_to_stability(0.01, 50)
                 }
             };
 

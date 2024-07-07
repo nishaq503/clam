@@ -48,6 +48,7 @@ def scatter_plot(
     ax.set_xlabel("x-axis")
     ax.set_ylabel("y-axis")
     ax.set_zlabel("z-axis")
+    ax.set_title(path.stem)
 
     plt.savefig(path)
     plt.close("all")
