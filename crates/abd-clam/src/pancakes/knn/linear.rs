@@ -1,9 +1,8 @@
 //! Linear K-NN search in a compressed space.
 
-use crate::{pancakes::CodecData, Cluster, Instance};
 use distances::number::UInt;
 
-use crate::cakes::knn::Hits;
+use crate::{cakes::knn::Hits, pancakes::CodecData, Cluster, Instance};
 
 /// Perform a linear search in a compressed space.
 pub fn search<I, U, M>(query: &I, k: usize, data: &CodecData<I, U, M>) -> Vec<(usize, U)>

@@ -1,8 +1,10 @@
 //! K-NN search with Breadth-First Sieve with separate centers.
 
-use crate::{pancakes::CodecData, pancakes::SquishyBall, Cluster, Instance};
 use core::cmp::{min, Ordering};
+
 use distances::number::UInt;
+
+use crate::{pancakes::CodecData, pancakes::SquishyBall, Cluster, Instance};
 
 /// A Grain is an element of the sieve. It is either a hit or a `SquishyBall`.
 #[derive(Clone, Debug)]
