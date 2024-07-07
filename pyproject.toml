@@ -25,4 +25,4 @@ dev-dependencies = [
 ]
 
 [tool.rye.workspace]
-members = ["pypi/*"]
+members = ["pypi/*", "crates/SyMaGen"]

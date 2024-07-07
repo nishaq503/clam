@@ -1,6 +1,7 @@
 //! K-Nearest Neighbors search in a compressed space.
 
 mod breadth_first_sieve;
+mod breadth_first_sieve_sep_center;
 mod depth_first_sieve;
 mod linear;
 
@@ -18,6 +19,8 @@ pub enum Algorithm {
     DepthFirstSieve,
     /// Search the dataset using the Breadth-First Sieve algorithm.
     BreadthFirstSieve,
+    /// Search the dataset using the Breadth-First Sieve with separate center algorithm
+    BreadthFirstSieveSepCenter,
 }
 
 impl Default for Algorithm {
@@ -49,6 +52,7 @@ impl Algorithm {
             Self::Linear => linear::search(query, k, data),
             Self::DepthFirstSieve => depth_first_sieve::search(query, k, data),
             Self::BreadthFirstSieve => breadth_first_sieve::search(query, k, data),
+            Self::BreadthFirstSieveSepCenter => breadth_first_sieve_sep_center::search(query, k, data),
         }
     }
 
@@ -59,6 +63,7 @@ impl Algorithm {
             Self::Linear => "Linear",
             Self::DepthFirstSieve => "DepthFirstSieve",
             Self::BreadthFirstSieve => "BreadthFirstSieve",
+            Self::BreadthFirstSieveSepCenter => "BreadthFirstSieveSepCenter",
         }
     }
 
@@ -82,6 +87,7 @@ impl Algorithm {
             "linear" => Ok(Self::Linear),
             "depthfirstsieve" => Ok(Self::DepthFirstSieve),
             "breadthfirstsieve" => Ok(Self::BreadthFirstSieve),
+            "breadthfirstsievesepcenter" => Ok(Self::BreadthFirstSieveSepCenter),
             _ => Err(format!("Unknown algorithm: {s}")),
         }
     }

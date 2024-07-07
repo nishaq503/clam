@@ -1,0 +1,318 @@
+//! K-NN search with Breadth-First Sieve with separate centers.
+
+use crate::{pancakes::CodecData, pancakes::SquishyBall, Cluster, Instance};
+use core::cmp::{min, Ordering};
+use distances::number::UInt;
+
+/// A Grain is an element of the sieve. It is either a hit or a `SquishyBall`.
+#[derive(Clone, Debug)]
+enum Grain<'a, U: UInt> {
+    /// A `Hit` is a single instance.
+    Hit {
+        /// Distance from the query to the instance.
+        d: U,
+        /// Index of the instance.
+        index: usize,
+    },
+
+    /// A `SquishyBall`.
+    SquishyBall {
+        /// The `SquishyBall`.
+        s: &'a SquishyBall<U>,
+        /// Theoretical worst case distance from the query to a point in the `SquishyBall`.
+        d_max: U,
+        /// Theoretical best case distance from the query to a point in the cluster.
+        d_min: U,
+        /// The number of instances in the `SquishyBall`.
+        multiplicity: usize,
+        /// Whether the `SquishyBall` is a compressible leaf.
+        squish: bool,
+    },
+
+    /// A `Center`.
+    Center {
+        /// Distance from the query to the center.
+        d: U,
+    },
+}
+
+impl<'a, U: UInt> Grain<'a, U> {
+    /// Creates a new `Grain` from a `SquishyBall`.
+    fn new_squishy(s: &'a SquishyBall<U>, d: U) -> Self {
+        let cluster = s.uni_ball();
+        let r = cluster.radius();
+        Self::SquishyBall {
+            s,
+            d_max: d + r,
+            d_min: if d > r { d - r } else { U::zero() },
+            multiplicity: cluster.cardinality(),
+            squish: s.squish(),
+        }
+    }
+
+    /// Creates a new `Grain` from a hit.
+    const fn new_hit(d: U, index: usize) -> Self {
+        Self::Hit { d, index }
+    }
+
+    /// Creates a new `Grain` from a cluster center.
+    const fn new_center(d: U) -> Self {
+        Self::Center { d }
+    }
+
+    /// Creates center grain and `SquishyBall` grain from a `SquishyBall`.
+    fn new_grains<I, M>(s: &'a SquishyBall<U>, data: &CodecData<I, U, M>, query: &I) -> Vec<Self>
+    where
+        I: Instance,
+        M: Instance,
+    {
+        let centers = &data.centers();
+        let s_center = &centers[&s.arg_center()];
+        if s.is_singleton() {
+            let d = data.metric()(s_center, query);
+            s.indices().map(|i| Self::new_hit(d, i)).collect()
+        } else if s.is_leaf() {
+            let points = data
+                .load_leaf_data(s)
+                .unwrap_or_else(|e| unreachable!("This should only be called on compressible leaves: {e}"));
+
+            let distances: Vec<U> = points.into_iter().map(|point| data.metric()(query, &point)).collect();
+
+            s.indices()
+                .zip(distances)
+                .map(|(index, d)| Grain::new_hit(d, index))
+                .collect::<Vec<_>>()
+        } else {
+            let d = data.metric()(s_center, query);
+            vec![Self::new_squishy(s, d), Self::new_center(d)]
+        }
+    }
+
+    /// Returns the theoretical minimum distance from the query to a point in
+    /// the grain if the grain is of the `SquishyBall` variant; returns the
+    /// distance to the instance if the grain is of the `Hit` variant.
+    const fn d_min(&self) -> U {
+        match self {
+            Grain::Hit { d, .. } | Grain::SquishyBall { d_min: d, .. } | Grain::Center { d, .. } => *d,
+        }
+    }
+
+    /// Returns the theoretical maximum distance from the query to a point in
+    /// the cluster if the `Grain` is of the `Cluster` variant; returns the
+    /// distance to the instance if the `Grain` is of the `Hit` variant.
+    const fn d_max(&self) -> U {
+        match self {
+            Grain::Hit { d, .. } | Grain::SquishyBall { d_max: d, .. } | Grain::Center { d, .. } => *d,
+        }
+    }
+
+    /// Returns whether the `Grain` has k or fewer instances or is a compressible leaf.
+    const fn is_small(&self, k: usize) -> bool {
+        match self {
+            Grain::Hit { .. } | Grain::Center { .. } => true,
+            Grain::SquishyBall {
+                multiplicity, squish, ..
+            } => *multiplicity <= k || *squish,
+        }
+    }
+
+    /// Returns whether the grain is outside the threshold.
+    fn is_outside(&self, threshold: U) -> bool {
+        self.d_min() > threshold
+    }
+
+    /// Returns the indices of the instances in the cluster if the grain is of
+    /// the `SquishyBall` variant
+    fn squishyball_to_hits<I, M>(self, data: &CodecData<I, U, M>, query: &I) -> Vec<Self>
+    where
+        I: Instance,
+        M: Instance,
+    {
+        match self {
+            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on non-hits."),
+            Grain::SquishyBall { s, .. } => {
+                let points = data
+                    .load_leaf_data(s)
+                    .unwrap_or_else(|e| unreachable!("This should only be called on compressible leaves: {e}"));
+
+                let distances: Vec<U> = points.into_iter().map(|point| data.metric()(query, &point)).collect();
+
+                s.indices()
+                    .zip(distances)
+                    .map(|(index, d)| Grain::new_hit(d, index))
+                    .collect::<Vec<_>>()
+            }
+        }
+    }
+
+    /// Returns the children of the cluster if the `Grain` is of the `Cluster`
+    fn squishyball_to_children(self) -> [&'a SquishyBall<U>; 2] {
+        match self {
+            Grain::Hit { .. } | Grain::Center { .. } => unreachable!("This is only called on non-hits."),
+            Grain::SquishyBall { s, .. } => s
+                .children()
+                .unwrap_or_else(|| unreachable!("This is only called on non-compressible clusters.")),
+        }
+    }
+
+    /// Returns the multiplicity of the `Grain`.
+    const fn multiplicity(&self) -> usize {
+        match self {
+            Grain::Hit { .. } | Grain::Center { .. } => 1,
+            Grain::SquishyBall { multiplicity, .. } => *multiplicity,
+        }
+    }
+
+    /// Wrapper function for `_partition_kth`.
+    pub fn partition(grains: &mut [Self], k: usize) -> usize {
+        Self::_partition(grains, k, 0, grains.len() - 1)
+    }
+
+    /// Finds the smallest index i such that all grains with distance closer to or
+    /// equal to the distance of the grain at index i have a multiplicity greater
+    /// than or equal to k.
+    #[allow(clippy::many_single_char_names)]
+    fn _partition(grains: &mut [Self], k: usize, l: usize, r: usize) -> usize {
+        if l >= r {
+            min(l, r)
+        } else {
+            // If mean cardinality is greater than k, we know the pivot should be the leftmost grain.
+            let mean_cardinality: usize = grains.iter().map(Grain::multiplicity).sum::<usize>() / grains.len();
+            let pivot = if mean_cardinality > k { l } else { l + (r - l) / 2 };
+            let p = Self::partition_once(grains, pivot);
+
+            // The number of guaranteed hits within the first p grains.
+            let g = grains.iter().take(p + 1).map(Grain::multiplicity).sum::<usize>();
+            match g.cmp(&k) {
+                Ordering::Equal => p,
+                Ordering::Less => Self::_partition(grains, k, p + 1, r),
+                Ordering::Greater => {
+                    if (p > 0) && (g > (k + grains[p - 1].multiplicity())) {
+                        Self::_partition(grains, k, l, p - 1)
+                    } else if (p > 0) && (g == k + grains[p - 1].multiplicity()) {
+                        p - 1
+                    } else {
+                        p
+                    }
+                }
+            }
+        }
+    }
+
+    /// Changes pivot point and swaps elements around so that all elements to left
+    /// of pivot are less than or equal to pivot and all elements to right of pivot
+    /// are greater than pivot.
+    #[allow(clippy::many_single_char_names)]
+    fn partition_once(grains: &mut [Self], pivot: usize) -> usize {
+        // If the pivot is 0, don't bother doing any additional swaps and just exchange the 0th element for the minimum.
+        if pivot == 0 {
+            let min = grains
+                .iter()
+                .map(Grain::d_max)
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Greater))
+                .unwrap_or_else(|| unreachable!("Should never be called on a slice with a NaN."))
+                .0;
+            grains.swap(pivot, min);
+            pivot
+        } else {
+            let r = grains.len() - 1;
+            grains.swap(pivot, r);
+
+            let (mut a, mut b) = (0, 0);
+            while b < r {
+                if grains[b].d_max() < grains[r].d_max() {
+                    grains.swap(a, b);
+                    a += 1;
+                }
+                b += 1;
+            }
+
+            grains.swap(a, r);
+
+            a
+        }
+    }
+
+    /// Returns the index of the instance if the `Grain` is of the `Hit` variant.
+    fn index(&self) -> usize {
+        match self {
+            Grain::Hit { index, .. } => *index,
+            Grain::SquishyBall { .. } | Grain::Center { .. } => unreachable!("This is only called on hits."),
+        }
+    }
+}
+
+/// Searches for the k nearest neighbors of `query` in `data` using the Breadth-First Sieve algorithm.
+///
+/// # Arguments
+///
+/// * `query` - The query point.
+/// * `k` - The number of nearest neighbors to find.
+/// * `data` - The data structure to search.
+///
+/// # Returns
+///
+/// A vector of pairs `(i, u)` where `i` is the index of a point in the data structure and `u` is the distance
+/// from `query` to that point.
+#[allow(clippy::many_single_char_names)]
+pub fn search<I, U, M>(query: &I, k: usize, data: &CodecData<I, U, M>) -> Vec<(usize, U)>
+where
+    I: Instance,
+    U: UInt,
+    M: Instance,
+{
+    let c = data.root();
+    let centers = &data.centers();
+    let root_center = &centers[&c.arg_center()];
+
+    let d = data.metric()(root_center, query);
+
+    let mut grains = vec![Grain::new_squishy(c, d)];
+    let [mut insiders, mut non_insiders]: [Vec<Grain<U>>; 2];
+
+    loop {
+        // The threshold is the minimum distance, so far, which guarantees that
+        // the k nearest neighbors are within the threshold.
+        let i = Grain::partition(&mut grains, k);
+        let threshold = grains[i].d_max();
+
+        // Remove grains which are outside the threshold.
+        non_insiders = grains.split_off(i + 1);
+        insiders = grains;
+        let non_insiders = non_insiders.into_iter().filter(|g| !g.is_outside(threshold));
+
+        // Separate grains into hits and clusters.
+        let (clusters, mut hits) = insiders
+            .into_iter()
+            .chain(non_insiders)
+            .filter(|g| !matches!(g, Grain::Center { .. }))
+            .partition::<Vec<_>, _>(|g| matches!(g, Grain::SquishyBall { .. }));
+
+        // Separate small (cardinality less than k or compressible leaf) clusters from the rest
+        let (small_clusters, clusters) = clusters.into_iter().partition::<Vec<_>, _>(|g| g.is_small(k));
+
+        // Convert small clusters to hits.
+        for cluster in small_clusters {
+            hits.append(&mut cluster.squishyball_to_hits(data, query));
+        }
+
+        // If there are no more cluster grains, then the search is complete.
+        if clusters.is_empty() {
+            Grain::partition(&mut hits, k);
+
+            // TODO: Fix the panic here.
+            let l = core::cmp::min(k, hits.len());
+
+            return hits[..l].iter().map(|g| (g.index(), g.d_max())).collect();
+        }
+
+        // Partition clusters into children and convert to grains.
+        grains = clusters
+            .into_iter()
+            .flat_map(Grain::squishyball_to_children)
+            .flat_map(|c| Grain::new_grains(c, data, query))
+            .chain(hits)
+            .collect();
+    }
+}

@@ -121,7 +121,7 @@ pub fn trace_back_iterative<U: UInt>(
     let (mut row_i, mut col_i) = (y.len(), x.len());
     let (mut aligned_x, mut aligned_y) = (Vec::new(), Vec::new());
 
-    while row_i > 0 && col_i > 0 {
+    while row_i > 0 || col_i > 0 {
         match table[row_i][col_i].1 {
             Direction::Diagonal => {
                 aligned_x.push(x[col_i - 1]);
@@ -398,5 +398,22 @@ mod tests {
         let (aligned_x, aligned_y) = trace_back_iterative(&guilty_table, [guilty_x, guilty_y]);
         assert_eq!(aligned_x, "NOTGUILTY");
         assert_eq!(aligned_y, "NOTGUILTY");
+
+        let emily_x = "GAAAGCCTATCGTCTGAGCG";
+        let emily_y = "AAGGGACGCGTTGGAGTTAC";
+
+        let (aligned_x, aligned_y) = trace_back_recursive(
+            &compute_table::<u16>(emily_x, emily_y, Penalties::default()),
+            [emily_x, emily_y],
+        );
+        assert_eq!(aligned_x, "GAAAGCCTATCGTCTGAG--CG");
+        assert_eq!(aligned_y, "--AAGGGACGCGTTGGAGTTAC");
+
+        let (aligned_x, aligned_y) = trace_back_iterative(
+            &compute_table::<u16>(emily_x, emily_y, Penalties::default()),
+            [emily_x, emily_y],
+        );
+        assert_eq!(aligned_x, "GAAAGCCTATCGTCTGAG--CG");
+        assert_eq!(aligned_y, "--AAGGGACGCGTTGGAGTTAC");
     }
 }

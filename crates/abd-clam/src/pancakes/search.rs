@@ -117,6 +117,7 @@ mod tests {
             knn::Algorithm::Linear,
             knn::Algorithm::DepthFirstSieve,
             knn::Algorithm::BreadthFirstSieve,
+            knn::Algorithm::BreadthFirstSieveSepCenter,
         ] {
             let result = codec_dataset.knn_search(&query, k, &algo);
 
