@@ -155,6 +155,75 @@ impl<U: Number> Graph<U> {
             .copied()
             .collect()
     }
+
+    /// Get the `Graph` as a single `Component` object.
+    ///
+    /// This will break the `Component` invariant that the `Component`s are
+    /// connected subgraphs.
+    #[must_use]
+    pub fn as_single_component(&self) -> Self {
+        if self.components.len() == 1 {
+            // TODO: Ensure that the `Component` is in sorted order.
+            return self.clone();
+        }
+
+        let (clusters, sort_indices) = {
+            let mut clusters = self.iter_clusters().copied().enumerate().collect::<Vec<_>>();
+            clusters.sort_unstable_by_key(|&(_, (o, _, _))| o);
+            let sort_indices = clusters.iter().map(|&(i, _)| i).collect::<Vec<_>>();
+            let clusters = clusters.into_iter().map(|(_, c)| c).collect();
+            (clusters, sort_indices)
+        };
+
+        let adjacency_list = {
+            let mut adjacency_list = self
+                .iter_neighbors()
+                .map(<[(usize, U)]>::to_vec)
+                .zip(sort_indices.iter())
+                .collect::<Vec<_>>();
+            adjacency_list.sort_unstable_by_key(|&(_, i)| i);
+            adjacency_list.into_iter().map(|(a, _)| a).collect()
+        };
+
+        let population = self.population();
+
+        let accumulated_cp_car_ratios = {
+            let mut accumulated_cp_car_ratios = self
+                .accumulated_cp_car_ratios()
+                .into_iter()
+                .zip(sort_indices.iter())
+                .collect::<Vec<_>>();
+            accumulated_cp_car_ratios.sort_unstable_by_key(|&(_, i)| i);
+            accumulated_cp_car_ratios.into_iter().map(|(r, _)| r).collect()
+        };
+
+        let anomaly_properties = {
+            let mut anomaly_properties = self
+                .iter_anomaly_properties()
+                .map(Vec::clone)
+                .zip(sort_indices.iter())
+                .collect::<Vec<_>>();
+            anomaly_properties.sort_unstable_by_key(|&(_, i)| i);
+            anomaly_properties.into_iter().map(|(r, _)| r).collect()
+        };
+
+        let c = Component {
+            clusters,
+            adjacency_list,
+            population,
+            eccentricities: None,
+            diameter: None,
+            neighborhood_sizes: None,
+            accumulated_cp_car_ratios,
+            anomaly_properties,
+        };
+
+        Self {
+            components: vec![c],
+            populations: vec![population],
+            members: self.members.clone(),
+        }
+    }
 }
 
 /// A `Component` is a single connected subgraph of a `Graph`.
