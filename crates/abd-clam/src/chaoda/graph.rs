@@ -62,6 +62,7 @@ impl<U: Number> Graph<U> {
             // in the `Graph`.
             candidates.retain(|&(_, Reverse(other))| !(c.is_ancestor_of(other) || c.is_descendant_of(other)));
         }
+        clusters.sort_unstable_by_key(|c| c.offset());
 
         Self::from_clusters(&clusters, data)
     }
@@ -223,6 +224,26 @@ impl<U: Number> Graph<U> {
             populations: vec![population],
             members: self.members.clone(),
         }
+    }
+
+    /// Merge two `Graph`s from the save tree into a single `Graph`.
+    ///
+    /// `Cluster`s with larger depths are preferentially selected for the merged
+    /// `Graph`. If two `Cluster`s in the merged `Graph` had an ancestor in
+    /// either of the two input `Graph`s, then those two `Cluster`s will have an
+    /// edge added between them.
+    ///
+    /// # Arguments
+    ///
+    /// * `other`: The other `Graph` to merge with.
+    /// * `data`: The `Dataset` that the `Graph`s were created from.
+    #[must_use]
+    #[allow(unused_variables)]
+    pub fn merge<I: Instance, D: Dataset<I, U>>(&self, other: &Self, data: &D) -> Self {
+        let g1 = self.as_single_component();
+        let g2 = other.as_single_component();
+
+        todo!()
     }
 }
 

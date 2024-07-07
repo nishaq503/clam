@@ -106,11 +106,10 @@ impl<const DIM: usize> Mass<DIM> {
     }
 
     /// Sets the position of the `Mass`.
+    ///
+    /// It is the user's responsibility to ensure that the `position` has no
+    /// `NaN` or `Infinite` values.
     pub fn set_position(&mut self, position: [f32; DIM]) {
-        // Check that there are no NaNs in the position
-        assert!(!position.iter().any(|&x| x.is_nan()));
-        assert!(position.iter().all(|&x| x.is_finite()));
-
         self.position = position;
     }
 
@@ -153,7 +152,9 @@ impl<const DIM: usize> Mass<DIM> {
         } else {
             // Choose a random axis to move along
             vector = [0.0; DIM];
-            vector[rand::thread_rng().gen_range(0..DIM)] = 1.0;
+            let dim = rand::thread_rng().gen_range(0..DIM);
+            let sign = if rand::thread_rng().gen_bool(0.5) { 1.0 } else { -1.0 };
+            vector[dim] = sign;
         }
         vector
     }

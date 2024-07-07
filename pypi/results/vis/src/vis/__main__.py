@@ -60,7 +60,7 @@ def main(
         "cardio",
         "arrhythmia",
         "satellite",
-        "mnist",
+        "mnist",  # Sometimes produces infinite forces
     ]
     members = ["cc", "gn", "pc", "sc", "vd"]
     ml_models = ["lr", "dt"]
