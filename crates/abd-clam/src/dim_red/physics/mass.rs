@@ -191,8 +191,8 @@ impl<const DIM: usize> Mass<DIM> {
             .zip(self.velocity.iter_mut())
             .zip(self.force.iter_mut())
         {
+            *f -= (*v) * beta;
             (*v) += ((*f) / self.m) * dt;
-            (*v) *= beta;
             (*p) += (*v) * dt;
             *f = 0.0;
         }

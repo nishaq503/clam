@@ -377,8 +377,8 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
 
         let mut i = 0;
         let mut stability = self.stability(patience);
-        while stability < 0.99 {
-            mt_log!(Level::Debug, "Step {i}, Stability: {stability:.2}");
+        while stability < 0.995 {
+            mt_log!(Level::Debug, "Step {i}, Stability: {stability:.6}");
             self = self.update_step(dt);
             i += 1;
             stability = self.stability(patience);

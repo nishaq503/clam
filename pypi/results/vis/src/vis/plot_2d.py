@@ -77,6 +77,8 @@ def plot_logs(
     ax.scatter(x, logs[:, 1], label="Potential Energy", s=0.25)
     ax.scatter(x, logs[:, 2], label="Total Energy", s=0.25)
 
+    ax.set_yscale("log")
+
     ax.set_xlabel("Time-step")
     ax.set_ylabel("Energy")
     ax.set_title(out_path.stem)
