@@ -3,7 +3,7 @@
 use distances::Number;
 use rand::Rng;
 
-use crate::Cluster;
+use crate::{Cluster, Dataset, Instance};
 
 /// A `Mass` in the mass-spring system for dimensionality reduction.
 ///
@@ -43,6 +43,14 @@ pub struct Mass<const DIM: usize> {
     /// The mass of the `Mass`.
     m: f32,
 }
+
+impl<const DIM: usize> PartialEq for Mass<DIM> {
+    fn eq(&self, other: &Self) -> bool {
+        self.offset == other.offset && self.cardinality == other.cardinality
+    }
+}
+
+impl<const DIM: usize> Eq for Mass<DIM> {}
 
 impl<const DIM: usize> Mass<DIM> {
     /// Constructs a `Mass` to represent a `Cluster`.
@@ -157,6 +165,12 @@ impl<const DIM: usize> Mass<DIM> {
             vector[dim] = sign;
         }
         vector
+    }
+
+    /// Distance from the `center` of this `Cluster` to the center of the
+    /// `other` `Cluster`.
+    pub fn distance_to_other<I: Instance, U: Number, D: Dataset<I, U>>(&self, data: &D, other: &Self) -> U {
+        data.one_to_one(self.arg_center(), other.arg_center())
     }
 
     /// Adds the given force to the force being applied to the `Mass`.

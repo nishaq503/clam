@@ -2,8 +2,12 @@
 
 mod physics;
 
-pub use physics::System as MassSpringSystem;
+/// Helper functions for running triangle accuracy tests
+mod triangle_tests;
 
+// mod utils;
+
+pub use physics::System as MassSpringSystem;
 // TODO: Add ability to replace a cluster with its children in the mass-spring system.
 // This would involve adding the child masses to the system as a triangle with the parent mass, letting the system
 // evolve for a few steps, and then removing the parent mass.

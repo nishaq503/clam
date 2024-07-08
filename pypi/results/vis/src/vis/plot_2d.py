@@ -62,27 +62,54 @@ def plot_logs(
     """Plot logs from the input path."""
     logs: numpy.ndarray = numpy.load(inp_path)
     logger.info(f"Logs shape: {logs.shape}, dtype: {logs.dtype}")
-
+    log_len = 5
     # There should be three columns in the logs
-    if logs.shape[1] != 3:
-        msg = f"Unexpected number of columns in the logs: {logs.shape[1]}. Expected 3."
+    if logs.shape[1] != log_len:
+        msg = f"Unexpected number of columns in the logs: {logs.shape[1]}. Expected {log_len}."
         raise ValueError(msg)
 
-    fig: Figure = plt.figure()
-    ax: Axes = fig.add_subplot()
+    energy_fig: Figure = plt.figure()
+    energy_ax: Axes = energy_fig.add_subplot()
 
     # The columns are kinetic, potential, and total energy
     x = numpy.arange(logs.shape[0])
-    ax.scatter(x, logs[:, 0], label="Kinetic Energy", s=0.25)
-    ax.scatter(x, logs[:, 1], label="Potential Energy", s=0.25)
-    ax.scatter(x, logs[:, 2], label="Total Energy", s=0.25)
+    energy_ax.scatter(x, logs[:, 0], label="Kinetic Energy", s=0.25)
+    energy_ax.scatter(x, logs[:, 1], label="Potential Energy", s=0.25)
+    energy_ax.scatter(x, logs[:, 2], label="Total Energy", s=0.25)
 
-    ax.set_yscale("log")
+    energy_ax.set_yscale("log")
 
-    ax.set_xlabel("Time-step")
-    ax.set_ylabel("Energy")
-    ax.set_title(out_path.stem)
-    ax.legend()
+    energy_ax.set_xlabel("Time-step")
+    energy_ax.set_ylabel("Energy")
+    energy_ax.set_title(out_path.stem)
+    energy_ax.legend()
 
+    plt.savefig(out_path)
+    plt.close("all")
+
+    # Creating separate plot for triangle accuracy
+
+    triangle_fig: Figure = plt.figure()
+    triangle_ax: Axes = triangle_fig.add_subplot()
+
+    # The columns are kinetic, potential, and total energy
+    x = numpy.arange(logs.shape[0])
+    triangle_ax.scatter(x, logs[:, 3], label="Edge Equivalence", s=0.25)
+    triangle_ax.scatter(x, logs[:, 4], label="Edge Distortion", s=0.25)
+    """
+        This is a string literal because precommit apparently dislikes commented out code
+          and I want to save this for future use...
+        ax.scatter(x, logs[:, 5], label="Angle Distortion")
+        ax.scatter(x, [val * 100 for val in logs[:, 3]], label="Edge Equivalence")
+        ax.scatter(x, [((1.0 - val) * 100) for val in logs[:, 4]], label="Edge Accuracy")
+        ax.scatter(x, [((1.0 - val) * 100) for val in logs[:, 5]], label="Angle Accuracy")
+    """
+
+    triangle_ax.set_xlabel("Time-step")
+    triangle_ax.set_ylabel("Accuracy")
+    triangle_ax.legend()
+    out_path_str = str(out_path)
+    out_path_str = out_path_str[:-4] + "-triangle.png"
+    out_path = pathlib.Path(out_path_str)
     plt.savefig(out_path)
     plt.close("all")

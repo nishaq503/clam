@@ -1,21 +1,21 @@
 //! The mass-spring system.
 
-use std::collections::HashMap;
-
 use distances::Number;
 use mt_logger::{mt_log, Level};
 use rand::prelude::*;
 use rayon::prelude::*;
 
-use crate::{chaoda::Graph, Cluster, Dataset, Instance, VecDataset};
+use crate::{
+    chaoda::Graph,
+    dim_red::triangle_tests::{self, triangle_accuracy_tests},
+    Cluster, Dataset, Instance, VecDataset,
+};
 
-use super::{Mass, Spring};
+use super::{Mass, MassMap, Spring, SpringMap};
 
-/// A `HashMap` of `Mass`es, keyed by their `(offset, cardinality)`.
-pub type MassMap<const DIM: usize> = HashMap<(usize, usize), Mass<DIM>>;
-
-/// A `HashMap` of `Spring`s, keyed by the pairs of keys of the `Mass`es
-pub type SpringMap<U, const DIM: usize> = HashMap<((usize, usize), (usize, usize)), Spring<U, DIM>>;
+/// Represents the length of the log data - currently stores kinetic energy,
+///  total energy, potential energy, edge equivalence, edge distortion, - angle distortion not included currently
+pub type LogData = [f32; 5];
 
 /// The `System` of `Mass`es and `Spring`s.
 pub struct System<U: Number, const DIM: usize> {
@@ -27,7 +27,7 @@ pub struct System<U: Number, const DIM: usize> {
     beta: f32,
     /// The logs of the `System` for each time-step. These store the kinetic
     /// energy, potential energy, and total energy.
-    logs: Vec<[f32; 3]>,
+    logs: Vec<LogData>,
 }
 
 impl<U: Number, const DIM: usize> System<U, DIM> {
@@ -360,8 +360,6 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
             })
             .collect();
 
-        self.update_logs();
-
         self
     }
 
@@ -373,7 +371,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     /// - `patience`: The number of time-steps to consider for stability.
     #[must_use]
     pub fn evolve_to_stability(mut self, dt: f32, patience: usize) -> Self {
-        self.update_logs();
+        // self.update_logs();
 
         let mut i = 0;
         let mut stability = self.stability(patience);
@@ -395,7 +393,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
     /// - `steps`: The number of time-steps to simulate.
     #[must_use]
     pub fn evolve(mut self, dt: f32, steps: usize) -> Self {
-        self.update_logs();
+        // self.update_logs();
 
         for i in 0..steps {
             mt_log!(Level::Debug, "Step {i}/{steps}");
@@ -433,8 +431,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
         path: &std::path::Path,
         name: &str,
     ) -> Result<Self, String> {
-        self.update_logs();
-
+        self.update_logs(data);
         for i in 0..steps {
             if i % save_every == 0 {
                 mt_log!(Level::Debug, "{name}: Saving step {i}/{steps}");
@@ -443,22 +440,45 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
                     .to_npy(&path.join(format!("{i}.npy")))?;
             }
             self = self.update_step(dt);
+            self.update_logs(data);
         }
 
         Ok(self)
     }
 
     /// Update the `logs`
-    fn update_logs(&mut self) {
+    fn update_logs<I: Instance, D: Dataset<I, U>>(&mut self, data: &D) {
         let kinetic_energy = self.kinetic_energy();
         let potential_energy = self.potential_energy();
         let total_energy = kinetic_energy + potential_energy;
-        self.logs.push([kinetic_energy, potential_energy, total_energy]);
+        let test_callbacks = [
+            triangle_tests::are_triangles_equivalent,
+            triangle_tests::calc_edge_distortion,
+            // triangle_helpers::calc_angle_distortion,
+        ];
+
+        if let Some([triangle_equivalence, edge_accuracy]) = triangle_accuracy_tests(self.masses(), data, test_callbacks)
+        {
+            // self.logs.push(triangle_results);
+            self.logs.push([
+                kinetic_energy,
+                potential_energy,
+                total_energy,
+                triangle_equivalence,
+                edge_accuracy,
+                // angle_accuracy,
+            ]);
+        } else {
+            mt_log!(Level::Error, "Triangle results are none");
+            self.logs.push([kinetic_energy, potential_energy, total_energy, 0., 0.]);
+        }
+
+        // self.logs.push([kinetic_energy, potential_energy, total_energy]);
     }
 
     /// Get the logs of the `System` for each time-step.
     #[must_use]
-    pub fn logs(&self) -> &[[f32; 3]] {
+    pub fn logs(&self) -> &[LogData] {
         &self.logs
     }
 
@@ -555,7 +575,7 @@ impl<U: Number, const DIM: usize> System<U, DIM> {
 
             let (last_ke, last_pe) = last_n
                 .iter()
-                .map(|&[ke, pe, _]| (ke, pe))
+                .map(|&[ke, pe, _, _, _]| (ke, pe))
                 .unzip::<_, _, Vec<_>, Vec<_>>();
 
             let stability_ke = {
