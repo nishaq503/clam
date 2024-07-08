@@ -3,10 +3,14 @@
 import logging
 import pathlib
 import shutil
+import sys
 
 import numpy
 import typer
 
+sys.path.append("./")
+sys.path.append("../")
+sys.path.append("../../")
 import vis
 
 # Initialize the logger
