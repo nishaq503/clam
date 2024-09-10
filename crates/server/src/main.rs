@@ -1,10 +1,7 @@
 #[macro_use]
 extern crate rocket;
 use abd_clam::{
-    adapter::ParBallAdapter,
-    cakes::{cluster::ParSearchable, cluster::Searchable, Algorithm, CodecData, SquishyBall},
-    partition::ParPartition,
-    Ball, Cluster, FlatVec, Metric, MetricSpace,
+    cakes::{cluster::ParSearchable, Algorithm}, Metric,
 };
 use rocket::serde::json::Json;
 
@@ -24,7 +21,7 @@ fn search_rnn_clustered(
     codec_data: &rocket::State<CodecDataType>,
 ) -> Json<Vec<(usize, u16)>> {
     let alg = Algorithm::RnnClustered(radius);
-    let results: Vec<(usize, u16)> = squishy_ball.par_search(&codec_data, &query, alg);
+    let results: Vec<(usize, u16)> = squishy_ball.par_search(codec_data, &query, alg);
     Json(results)
 }
 
@@ -38,7 +35,7 @@ fn search_knn_repeated_rnn(
 ) -> Json<Vec<(usize, u16)>> {
     let r_m = max_radius_multiplier.unwrap_or(2);
     let alg = Algorithm::KnnRepeatedRnn(k, r_m);
-    let results: Vec<(usize, u16)> = squishy_ball.par_search(&codec_data, &query, alg);
+    let results: Vec<(usize, u16)> = squishy_ball.par_search(codec_data, &query, alg);
     Json(results)
 }
 
@@ -50,7 +47,7 @@ fn search_knn_breadth_first(
     codec_data: &rocket::State<CodecDataType>,
 ) -> Json<Vec<(usize, u16)>> {
     let alg = Algorithm::KnnBreadthFirst(k);
-    let results: Vec<(usize, u16)> = squishy_ball.par_search(&codec_data, &query, alg);
+    let results: Vec<(usize, u16)> = squishy_ball.par_search(codec_data, &query, alg);
     Json(results)
 }
 
@@ -62,7 +59,7 @@ fn search_knn_depth_first(
     codec_data: &rocket::State<CodecDataType>,
 ) -> Json<Vec<(usize, u16)>> {
     let alg = Algorithm::KnnDepthFirst(k);
-    let results: Vec<(usize, u16)> = squishy_ball.par_search(&codec_data, &query, alg);
+    let results: Vec<(usize, u16)> = squishy_ball.par_search(codec_data, &query, alg);
     Json(results)
 }
 
@@ -72,7 +69,10 @@ fn rocket() -> _ {
         Ok(_) => Config::from_bootstrap(),
         Err(_) => Config::from_env(),
     };
-    let (squishy_ball, codec_data) = config.load();
+    let (squishy_ball, codec_data): (SquishyBallType, CodecDataType) = config.load(Metric::new(
+        |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b),
+        true,
+    ));
     rocket::build().manage(squishy_ball).manage(codec_data).mount(
         "/",
         routes![

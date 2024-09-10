@@ -4,9 +4,8 @@ use abd_clam::{
     partition::ParPartition,
     Ball, Cluster, FlatVec, Metric, MetricSpace,
 };
-use bincode;
-use distances;
-use symagen;
+use distances::{self, Number};
+use rocket::serde::DeserializeOwned;
 
 pub type CodecDataType = CodecData<String, u16, usize>;
 pub type SquishyBallType = SquishyBall<
@@ -20,7 +19,6 @@ pub type SquishyBallType = SquishyBall<
 pub struct Config {
     squishy_ball_path: String,
     codec_data_path: String,
-    distance_fn: fn(&String, &String) -> u16,
 }
 
 impl Config {
@@ -31,7 +29,6 @@ impl Config {
         Self {
             squishy_ball_path,
             codec_data_path,
-            distance_fn: |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b),
         }
     }
     /// Create a new configuration from a self-bootstrapped dataset.
@@ -104,9 +101,10 @@ impl Config {
         let config = Config {
             squishy_ball_path: squishy_ball_path.to_str().unwrap().to_string(),
             codec_data_path: codec_path.to_str().unwrap().to_string(),
-            distance_fn,
         };
-        let (squishy_ball, codec_data) = config.load();
+
+        let (squishy_ball, codec_data): (SquishyBallType, CodecDataType) = config.load(metric);
+        //            distance_fn: |a: &String, b: &String| distances::strings::levenshtein::<u16>(a, b),
         let results = squishy_ball.search(&codec_data, &seed_string, alg);
         println!("{:?}, {:?} = {:?}", squishy_ball, seed_string, results);
 
@@ -114,12 +112,15 @@ impl Config {
     }
 
     /// Load the SquishyBall and CodecData from disk.
-    pub fn load(&self) -> (SquishyBallType, CodecDataType) {
-        let squishy_ball: SquishyBallType =
-            bincode::deserialize_from(std::fs::File::open(&self.squishy_ball_path).unwrap()).unwrap();
-        let mut codec_data: CodecDataType =
-            bincode::deserialize_from(std::fs::File::open(&self.codec_data_path).unwrap()).unwrap();
-        codec_data.set_metric(Metric::new(self.distance_fn, true));
+    pub fn load<T, U, I, N>(&self, metric: Metric<I, N>) -> (T, U)
+    where
+        T: DeserializeOwned,
+        U: DeserializeOwned + MetricSpace<I, N>,
+        N: Number,
+    {
+        let squishy_ball: T = bincode::deserialize_from(std::fs::File::open(&self.squishy_ball_path).unwrap()).unwrap();
+        let mut codec_data: U = bincode::deserialize_from(std::fs::File::open(&self.codec_data_path).unwrap()).unwrap();
+        codec_data.set_metric(metric);
         (squishy_ball, codec_data)
     }
 }
