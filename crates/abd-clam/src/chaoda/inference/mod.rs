@@ -2,6 +2,7 @@
 
 mod combination;
 mod meta_ml;
+mod py_models;
 
 use distances::Number;
 use ndarray::prelude::*;

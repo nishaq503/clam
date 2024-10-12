@@ -8,6 +8,8 @@ use smartcore::{
 
 use crate::chaoda::NUM_RATIOS;
 
+use super::py_models;
+
 /// A trained meta-ml model.
 #[derive(Serialize, Deserialize)]
 pub enum TrainedMetaMlModel {
@@ -15,6 +17,12 @@ pub enum TrainedMetaMlModel {
     LinearRegression(LinearRegression<f32, f32, DenseMatrix<f32>, Vec<f32>>),
     /// A Decision Tree model.
     DecisionTree(DecisionTreeRegressor<f32, f32, DenseMatrix<f32>, Vec<f32>>),
+    /// Pre-trained liner regression model from python we used for the CHAODA paper.
+    #[serde(skip)]
+    PyLr(fn([f32; NUM_RATIOS]) -> f32),
+    /// Pre-trained Decision Tree model from python we used for the CHAODA paper.
+    #[serde(skip)]
+    PyDt(fn([f32; NUM_RATIOS]) -> f32),
 }
 
 impl TrainedMetaMlModel {
@@ -24,6 +32,8 @@ impl TrainedMetaMlModel {
         match self {
             Self::LinearRegression(_) => "LinearRegression",
             Self::DecisionTree(_) => "DecisionTree",
+            Self::PyLr(_) => "PyLr",
+            Self::PyDt(_) => "PyDt",
         }
     }
 
@@ -33,6 +43,8 @@ impl TrainedMetaMlModel {
         match self {
             Self::LinearRegression(_) => "LR",
             Self::DecisionTree(_) => "DT",
+            Self::PyLr(_) => "PyLr",
+            Self::PyDt(_) => "PyDt",
         }
     }
 
@@ -61,16 +73,47 @@ impl TrainedMetaMlModel {
                 NUM_RATIOS
             ));
         }
-        let props = props.chunks_exact(NUM_RATIOS).map(<[f32]>::to_vec).collect::<Vec<_>>();
-        let props = DenseMatrix::from_2d_vec(&props).map_err(|e| format!("Failed to create matrix of samples: {e}"))?;
+        let props_vec = props.chunks_exact(NUM_RATIOS).map(<[f32]>::to_vec).collect::<Vec<_>>();
+        let props_matrix =
+            DenseMatrix::from_2d_vec(&props_vec).map_err(|e| format!("Failed to create matrix of samples: {e}"))?;
 
         match self {
             Self::LinearRegression(model) => model
-                .predict(&props)
+                .predict(&props_matrix)
                 .map_err(|e| format!("Failed to predict with LinearRegression model: {e}")),
             Self::DecisionTree(model) => model
-                .predict(&props)
+                .predict(&props_matrix)
                 .map_err(|e| format!("Failed to predict with DecisionTree model: {e}")),
+            Self::PyLr(model) => Ok(props
+                .chunks_exact(NUM_RATIOS)
+                .map(|p| model([p[0], p[1], p[2], p[3], p[4], p[5]]))
+                .collect()),
+            Self::PyDt(model) => Ok(props
+                .chunks_exact(NUM_RATIOS)
+                .map(|p| model([p[0], p[1], p[2], p[3], p[4], p[5]]))
+                .collect()),
+        }
+    }
+
+    /// Load a pre-trained model that was trained in python.
+    ///
+    /// # Arguments
+    ///
+    /// * `meta_name`: The name of the meta-ml model. Must be one of `["lr", "dt"]`.
+    /// * `metric_name`: The name of the distance metric used to train the model. Must be one of `["euclidean", "manhattan"]`.
+    /// * `member_name`: The name of the member of the ensemble. Must be one of `["sc", "cc", "gn", "cr", "sp", "vd"]`.
+    ///
+    /// # Errors
+    ///
+    /// * If the model cannot be loaded. This can only happen if any of the names are incorrect.
+    pub fn load_py(meta_name: &str, metric_name: &str, member_name: &str) -> Result<Self, String> {
+        let name = format!("{meta_name}_{metric_name}_{member_name}");
+        let model = py_models::get_py_model(&name)?;
+
+        match meta_name {
+            "lr" => Ok(Self::PyLr(model)),
+            "dt" => Ok(Self::PyDt(model)),
+            _ => Err(format!("Unknown meta-ml model: {meta_name}")),
         }
     }
 }
