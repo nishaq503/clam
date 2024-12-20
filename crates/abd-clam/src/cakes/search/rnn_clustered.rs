@@ -35,6 +35,45 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
         let [confirmed, straddlers] = tree_search(data, metric, root, query, self.0);
         leaf_search(data, metric, confirmed, straddlers, query, self.0)
     }
+
+    fn tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        let (root, a, b) = tree.root();
+        if data.query_to_center(metric, query, root) > root.radius() + self.0 {
+            return Vec::new();
+        }
+
+        let mut confirmed = Vec::new();
+        let mut straddlers = Vec::new();
+
+        let mut candidates = (a..b).collect::<Vec<_>>();
+        for level in tree.levels().iter().skip(1) {
+            candidates = candidates
+                .into_iter()
+                .map(|i| &level[i])
+                .filter_map(|(c, a, b)| {
+                    let d = data.query_to_center(metric, query, c);
+                    if d <= c.radius() + self.0 {
+                        let (a, b) = (*a, *b);
+                        if (d + c.radius()) <= self.0 {
+                            confirmed.push((c, d));
+                            None
+                        } else if a == b {
+                            straddlers.push((c, d));
+                            None
+                        } else {
+                            Some((a..b).collect::<Vec<_>>())
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect();
+        }
+        assert!(candidates.is_empty());
+
+        leaf_search(data, metric, confirmed, straddlers, query, self.0)
+    }
 }
 
 impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>

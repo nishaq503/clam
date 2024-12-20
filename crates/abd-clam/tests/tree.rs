@@ -1,6 +1,12 @@
 //! Tests for the `Tree` struct.
 
-use abd_clam::{cluster::Partition, metric::Euclidean, Ball, Cluster, Tree};
+use abd_clam::{
+    cakes::{self, SearchAlgorithm},
+    cluster::Partition,
+    metric::Euclidean,
+    Ball, Cluster, Tree,
+};
+use distances::Number;
 use test_case::test_case;
 
 mod common;
@@ -114,5 +120,42 @@ fn check_tree(tree: &Tree<f64, Ball<f64>>) {
                 assert!(child.is_descendant_of(c));
             }
         }
+    }
+}
+
+#[test_case(20, 2)]
+#[test_case(200, 2)]
+#[test_case(2000, 2)]
+fn search(car: usize, dim: usize) {
+    let max = 1.0;
+    let seed = 42;
+
+    let data = common::data_gen::gen_random_data(car, dim, max, seed);
+    let metric = Euclidean;
+    let criteria = |c: &Ball<_>| c.cardinality() > 1;
+    let tree = Tree::par_new(&data, &metric, &criteria, Some(seed)).unwrap();
+
+    let query = vec![0.0; dim];
+    let radius = 0.5;
+
+    let mut ball_hits = cakes::RnnLinear(radius).search(&data, &metric, tree.root().0, &query);
+    assert!(!ball_hits.is_empty());
+
+    let mut tree_hits = cakes::RnnLinear(radius).tree_search(&data, &metric, &tree, &query);
+    assert_eq!(ball_hits.len(), tree_hits.len());
+
+    ball_hits.sort_by(|(a, p), (b, q)| p.total_cmp(q).then_with(|| a.cmp(b)));
+    tree_hits.sort_by(|(a, p), (b, q)| p.total_cmp(q).then_with(|| a.cmp(b)));
+    for (&(a, p), &(b, q)) in ball_hits.iter().zip(tree_hits.iter()) {
+        assert_eq!(a, b);
+        assert_eq!(p, q);
+    }
+
+    let mut hits = cakes::RnnClustered(radius).tree_search(&data, &metric, &tree, &query);
+    assert_eq!(ball_hits.len(), hits.len());
+    hits.sort_by(|(a, p), (b, q)| p.total_cmp(q).then_with(|| a.cmp(b)));
+    for (&(a, p), &(b, q)) in ball_hits.iter().zip(hits.iter()) {
+        assert_eq!(a, b);
+        assert_eq!(p, q);
     }
 }

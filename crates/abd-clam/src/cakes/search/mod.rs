@@ -3,7 +3,7 @@
 use distances::Number;
 use rayon::prelude::*;
 
-use crate::{cluster::ParCluster, metric::ParMetric, Cluster, Metric};
+use crate::{cluster::ParCluster, metric::ParMetric, Cluster, Metric, Tree};
 
 use super::{ParSearchable, Searchable};
 
@@ -50,11 +50,22 @@ pub trait SearchAlgorithm<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searc
     /// dataset and the distance from the query to that item.
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)>;
 
+    /// Perform search using the `Tree` instead of the root.
+    fn tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, query: &I) -> Vec<(usize, T)>;
+
     /// Batched version of `Search::search`.
     fn batch_search(&self, data: &D, metric: &M, root: &C, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries
             .iter()
             .map(|query| self.search(data, metric, root, query))
+            .collect()
+    }
+
+    /// Batched version of `Search::tree_search`.
+    fn batch_tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+        queries
+            .iter()
+            .map(|query| self.tree_search(data, metric, tree, query))
             .collect()
     }
 }
@@ -99,6 +110,10 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         self.as_ref().search(data, metric, root, query)
     }
+
+    fn tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        self.as_ref().tree_search(data, metric, tree, query)
+    }
 }
 
 /// A blanket implementation of `SearchAlgorithm` for `Box<dyn ParSearchAlgorithm>`.
@@ -119,6 +134,10 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
 
     fn search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         self.as_ref().search(data, metric, root, query)
+    }
+
+    fn tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        self.as_ref().tree_search(data, metric, tree, query)
     }
 }
 

@@ -98,6 +98,11 @@ where
         assert!(hits.len() >= self.0);
         hits.into_iter().take(self.0).collect()
     }
+
+    #[allow(unused_variables)]
+    fn tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        todo!()
+    }
 }
 
 impl<I, T, C, M, D> ParSearchAlgorithm<I, T, C, M, D> for KnnHinted

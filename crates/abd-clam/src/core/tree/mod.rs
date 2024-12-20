@@ -55,7 +55,8 @@ impl<T: Number, C: Cluster<T>> From<C> for Tree<T, C> {
 }
 
 impl<T: Number, C: Cluster<T>> Tree<T, C> {
-    /// Returns the root `Cluster` of the `Tree`.
+    /// Returns the root `Cluster` of the `Tree` along with the start and end
+    /// indices of the children of the `Cluster` in the next level.
     pub fn root(&self) -> (&C, usize, usize) {
         self.levels
             .first()
