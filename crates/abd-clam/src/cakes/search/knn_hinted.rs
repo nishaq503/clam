@@ -116,4 +116,9 @@ where
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         self.search(data, metric, root, query)
     }
+
+    #[allow(unused_variables)]
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        todo!()
+    }
 }

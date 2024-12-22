@@ -55,13 +55,30 @@ impl<T: Number, C: Cluster<T>> From<C> for Tree<T, C> {
 }
 
 impl<T: Number, C: Cluster<T>> Tree<T, C> {
-    /// Returns the root `Cluster` of the `Tree` along with the start and end
-    /// indices of the children of the `Cluster` in the next level.
-    pub fn root(&self) -> (&C, usize, usize) {
+    /// Returns the number of levels in the `Tree`.
+    pub fn depth(&self) -> usize {
+        self.levels.len()
+    }
+
+    /// Returns the number of root `Cluster`s in the `Tree`.
+    pub fn n_roots(&self) -> usize {
+        self.levels.first().map(Vec::len).unwrap_or_default()
+    }
+
+    /// Returns the first level of the `Tree`.
+    pub fn first_level(&self) -> Vec<(&C, usize, usize)> {
         self.levels
             .first()
-            .and_then(|level| level.first().map(|(node, a, b)| (node, *a, *b)))
-            .unwrap_or_else(|| unreachable!("The `Tree` is empty."))
+            .map(|level| level.iter().map(|(node, a, b)| (node, *a, *b)).collect())
+            .unwrap_or_default()
+    }
+
+    /// Returns the roots of the `Tree`.
+    pub fn roots(&self) -> Vec<&C> {
+        self.levels
+            .first()
+            .map(|level| level.iter().map(|(node, _, _)| node).collect())
+            .unwrap_or_default()
     }
 
     /// Returns the `Cluster` at the given `depth` and `index`.

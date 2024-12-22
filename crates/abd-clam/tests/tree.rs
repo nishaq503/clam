@@ -92,7 +92,7 @@ fn check_ball_eq(a: &Ball<f64>, b: &Ball<f64>) {
 
 fn check_tree(tree: &Tree<f64, Ball<f64>>) {
     let subtree = tree.bft().collect::<Vec<_>>();
-    let data_car = tree.root().0.cardinality();
+    let data_car = tree.roots().iter().map(|c| c.cardinality()).sum::<usize>();
     assert_eq!(data_car + data_car - 1, subtree.len());
 
     for c in subtree {
@@ -138,7 +138,12 @@ fn search(car: usize, dim: usize) {
     let query = vec![0.0; dim];
     let radius = 0.5;
 
-    let mut ball_hits = cakes::RnnLinear(radius).search(&data, &metric, tree.root().0, &query);
+    let alg = cakes::RnnLinear(radius);
+    let mut ball_hits = tree
+        .roots()
+        .into_iter()
+        .flat_map(|c| alg.search(&data, &metric, c, &query))
+        .collect::<Vec<_>>();
     assert!(!ball_hits.is_empty());
 
     let mut tree_hits = cakes::RnnLinear(radius).tree_search(&data, &metric, &tree, &query);

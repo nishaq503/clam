@@ -42,7 +42,10 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     }
 
     fn tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
-        self.search(data, metric, tree.root().0, query)
+        tree.roots()
+            .into_iter()
+            .flat_map(|root| self.search(data, metric, root, query))
+            .collect()
     }
 }
 
@@ -67,6 +70,13 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
             )
             .par_items()
             .map(|(d, i)| (i, d))
+            .collect()
+    }
+
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        tree.roots()
+            .into_par_iter()
+            .flat_map(|root| self.par_search(data, metric, root, query))
             .collect()
     }
 }

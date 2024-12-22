@@ -85,6 +85,11 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
         }
         hits.items().map(|(d, i)| (i, d)).collect()
     }
+
+    #[allow(unused_variables)]
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        todo!()
+    }
 }
 
 /// Calculates the theoretical best case distance for a point in a cluster, i.e.,

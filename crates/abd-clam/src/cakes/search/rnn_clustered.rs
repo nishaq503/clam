@@ -37,23 +37,73 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
     }
 
     fn tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
-        let (root, a, b) = tree.root();
-        if data.query_to_center(metric, query, root) > root.radius() + self.0 {
-            return Vec::new();
-        }
-
         let mut confirmed = Vec::new();
         let mut straddlers = Vec::new();
 
-        let mut candidates = (a..b).collect::<Vec<_>>();
-        for level in tree.levels().iter().skip(1) {
+        // The indices of the clusters at the current level that are under
+        // consideration.
+        let mut candidates = (0..tree.n_roots()).collect::<Vec<_>>();
+
+        // Iterate over the levels of the tree.
+        for level in tree.levels() {
             candidates = candidates
                 .into_iter()
                 .map(|i| &level[i])
-                .filter_map(|(c, a, b)| {
-                    let d = data.query_to_center(metric, query, c);
+                .map(|(c, a, b)| (c, *a, *b, data.query_to_center(metric, query, c)))
+                .filter_map(|(c, a, b, d)| {
                     if d <= c.radius() + self.0 {
-                        let (a, b) = (*a, *b);
+                        // There is some overlap between the query ball and
+                        // this cluster.
+                        if (d + c.radius()) <= self.0 {
+                            // This cluster is fully contained within the query
+                            // ball.
+                            confirmed.push((c, d));
+                            None
+                        } else if a == b {
+                            // This cluster is a leaf.
+                            straddlers.push((c, d));
+                            None
+                        } else {
+                            // This cluster straddles the query ball.
+                            Some((a..b).collect::<Vec<_>>())
+                        }
+                    } else {
+                        // There is no overlap between the query ball and this
+                        // cluster.
+                        None
+                    }
+                })
+                .flatten()
+                .collect();
+        }
+        assert!(candidates.is_empty());
+
+        leaf_search(data, metric, confirmed, straddlers, query, self.0)
+    }
+}
+
+impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
+    ParSearchAlgorithm<I, T, C, M, D> for RnnClustered<T>
+{
+    fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
+        let [confirmed, straddlers] = par_tree_search(data, metric, root, query, self.0);
+        par_leaf_search(data, metric, confirmed, straddlers, query, self.0)
+    }
+
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &crate::Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        let mut confirmed = Vec::new();
+        let mut straddlers = Vec::new();
+
+        let mut candidates = (0..tree.n_roots()).collect::<Vec<_>>();
+        for level in tree.levels() {
+            candidates = candidates
+                .into_par_iter()
+                .map(|i| &level[i])
+                .map(|(c, a, b)| (c, *a, *b, data.par_query_to_center(metric, query, c)))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .filter_map(|(c, a, b, d)| {
+                    if d <= c.radius() + self.0 {
                         if (d + c.radius()) <= self.0 {
                             confirmed.push((c, d));
                             None
@@ -72,15 +122,6 @@ impl<I, T: Number, C: Cluster<T>, M: Metric<I, T>, D: Searchable<I, T, C, M>> Se
         }
         assert!(candidates.is_empty());
 
-        leaf_search(data, metric, confirmed, straddlers, query, self.0)
-    }
-}
-
-impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSearchable<I, T, C, M>>
-    ParSearchAlgorithm<I, T, C, M, D> for RnnClustered<T>
-{
-    fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
-        let [confirmed, straddlers] = par_tree_search(data, metric, root, query, self.0);
         par_leaf_search(data, metric, confirmed, straddlers, query, self.0)
     }
 }

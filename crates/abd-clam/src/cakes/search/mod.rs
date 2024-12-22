@@ -82,11 +82,22 @@ pub trait ParSearchAlgorithm<
     /// Parallel version of [`SearchAlgorithm::search`](crate::cakes::search::SearchAlgorithm::search).
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)>;
 
+    /// Parallel version of [`SearchAlgorithm::tree_search`](crate::cakes::search::SearchAlgorithm::tree_search).
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, query: &I) -> Vec<(usize, T)>;
+
     /// Parallel version of [`SearchAlgorithm::batch_search`](crate::cakes::search::SearchAlgorithm::batch_search).
     fn par_batch_search(&self, data: &D, metric: &M, root: &C, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries
             .par_iter()
             .map(|query| self.par_search(data, metric, root, query))
+            .collect()
+    }
+
+    /// Parallel version of [`SearchAlgorithm::batch_tree_search`](crate::cakes::search::SearchAlgorithm::batch_tree_search).
+    fn par_batch_tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+        queries
+            .iter()
+            .map(|query| self.par_tree_search(data, metric, tree, query))
             .collect()
     }
 }
@@ -147,5 +158,9 @@ impl<I: Send + Sync, T: Number, C: ParCluster<T>, M: ParMetric<I, T>, D: ParSear
 {
     fn par_search(&self, data: &D, metric: &M, root: &C, query: &I) -> Vec<(usize, T)> {
         self.as_ref().par_search(data, metric, root, query)
+    }
+
+    fn par_tree_search(&self, data: &D, metric: &M, tree: &Tree<T, C>, query: &I) -> Vec<(usize, T)> {
+        self.as_ref().par_tree_search(data, metric, tree, query)
     }
 }
