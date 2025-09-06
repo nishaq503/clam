@@ -2,9 +2,12 @@
 members = [
     "crates/abd-clam",
     "crates/distances",
+    "crates/distances-two",
     "crates/symagen",
     "crates/shell",
     "pypi/distances",
+    # "papers/cakes",
+    # "papers/musals",
 ]
 resolver = "2"
 
