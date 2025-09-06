@@ -65,3 +65,28 @@ repos:
         entry: cargo clippy --all -- -D warnings
         language: system
         pass_filenames: false
+      - id: cargo-clippy-blas
+        name: cargo clippy with blas feature
+        entry: cargo clippy --all --features blas -- -D warnings
+        language: system
+        pass_filenames: false
+      - id: cargo-clippy-simd-128
+        name: cargo clippy with simd-128 feature
+        entry: cargo +nightly clippy --all --features simd-128 -- -D warnings
+        language: system
+        pass_filenames: false
+      - id: cargo-clippy-simd-256
+        name: cargo clippy with simd-256 feature
+        entry: cargo +nightly clippy --all --features simd-256 -- -D warnings
+        language: system
+        pass_filenames: false
+      - id: cargo-clippy-simd-512
+        name: cargo clippy with simd-512 feature
+        entry: cargo +nightly clippy --all --features simd-512 -- -D warnings
+        language: system
+        pass_filenames: false
+      - id: cargo-clippy-simd-1024
+        name: cargo clippy with simd-1024 feature
+        entry: cargo +nightly clippy --all --features simd-1024 -- -D warnings
+        language: system
+        pass_filenames: false
