@@ -1,12 +1,12 @@
 //! Distance functions for vectors.
 
-use distances::{vectors, Number};
+use distances::{Number, vectors};
 use numpy::{PyArray1, PyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 use crate::utils::Scalar;
 
-use super::utils::{cdist_generic, chebyshev_generic, manhattan_generic, parse_metric, pdist_generic, Vector1, Vector2};
+use super::utils::{Vector1, Vector2, cdist_generic, chebyshev_generic, manhattan_generic, parse_metric, pdist_generic};
 
 /// Register the distance functions for vectors in the Python module.
 pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -359,13 +359,7 @@ fn cdist<'py>(
                 let metric = parse_metric(metric)?;
                 Ok(cdist_generic(py, a.view(), b.as_array(), metric))
             }
-            (Vector2::U64(_) | Vector2::I64(_), _) => {
-                let a = a.cast::<f64>();
-                let b = b.cast::<f64>();
-                let metric = parse_metric(metric)?;
-                Ok(cdist_generic(py, a.view(), b.view(), metric))
-            }
-            (_, Vector2::U64(_) | Vector2::I64(_)) => {
+            (Vector2::U64(_) | Vector2::I64(_), _) | (_, Vector2::U64(_) | Vector2::I64(_)) => {
                 let a = a.cast::<f64>();
                 let b = b.cast::<f64>();
                 let metric = parse_metric(metric)?;

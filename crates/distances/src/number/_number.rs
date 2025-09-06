@@ -128,21 +128,13 @@ pub trait Number:
     /// Returns the smaller of two numbers.
     #[must_use]
     fn min(self, other: Self) -> Self {
-        if self < other {
-            self
-        } else {
-            other
-        }
+        if self < other { self } else { other }
     }
 
     /// Returns the larger of two numbers.
     #[must_use]
     fn max(self, other: Self) -> Self {
-        if self > other {
-            self
-        } else {
-            other
-        }
+        if self > other { self } else { other }
     }
 }
 

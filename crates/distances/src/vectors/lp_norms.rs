@@ -1,6 +1,6 @@
 //! Provides functions for calculating Lp-norms between two vectors.
 
-use crate::{number::Float, Number};
+use crate::{Number, number::Float};
 
 use super::utils::abs_diff_iter;
 

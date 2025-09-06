@@ -86,11 +86,7 @@ pub fn compute_table<U: UInt>(x: &str, y: &str, penalties: Penalties<U>) -> Vec<
 
 /// Returns the minimum of two penalties, defaulting to the first input.
 fn min2<U: UInt>(a: (U, Direction), b: (U, Direction)) -> (U, Direction) {
-    if a.0 <= b.0 {
-        a
-    } else {
-        b
-    }
+    if a.0 <= b.0 { a } else { b }
 }
 
 /// Iteratively traces back through the Needleman-Wunsch table to get the alignment of two sequences.

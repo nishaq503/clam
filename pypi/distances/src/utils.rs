@@ -2,9 +2,9 @@
 
 use std::convert::Infallible;
 
-use distances::{vectors, Number};
-use ndarray::{parallel::prelude::*, Array1, Array2};
-use numpy::{ndarray::Axis, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use distances::{Number, vectors};
+use ndarray::{Array1, Array2, parallel::prelude::*};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ndarray::Axis};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,

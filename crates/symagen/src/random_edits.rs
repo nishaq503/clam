@@ -1,9 +1,9 @@
 //! Generate random strings for use in benchmarks, tests, and compression experiments.
 
 use distances::{
-    number::UInt,
-    strings::{levenshtein_custom, needleman_wunsch::apply_edits, Edit, Penalties},
     Number,
+    number::UInt,
+    strings::{Edit, Penalties, levenshtein_custom, needleman_wunsch::apply_edits},
 };
 use rayon::prelude::*;
 

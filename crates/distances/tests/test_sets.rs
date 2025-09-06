@@ -3,10 +3,10 @@
 use rand::Rng;
 
 use distances::{
+    Number,
     number::Addition,
     sets::{dice, hausdorff, jaccard, kulsinski},
     vectors::{euclidean, manhattan},
-    Number,
 };
 
 #[test]
@@ -156,14 +156,20 @@ fn hausdorff_test() {
     let distance_xy = hausdorff(&x, &y, euc_ground_dist);
     let distance_yx = hausdorff(&y, &x, euc_ground_dist);
     let diff = distance_xy.abs_diff(distance_yx);
-    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
+    assert!(
+        diff < f32::EPSILON,
+        "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"
+    ); // symmetry test
 
     // triangle inequality test for euclidean
     let distance_xz = hausdorff(&x, &z, euc_ground_dist);
     let distance_yz = hausdorff(&y, &z, euc_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"); // triangle inequality test
+    assert!(
+        longest_side <= sum_of_others,
+        "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"
+    ); // triangle inequality test
 
     // manhattan testing
     let man_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| manhattan(a, b).as_f32();
@@ -180,14 +186,20 @@ fn hausdorff_test() {
     let distance_xy = hausdorff(&x, &y, man_ground_dist);
     let distance_yx = hausdorff(&y, &x, man_ground_dist);
     let diff = distance_xy.abs_diff(distance_yx);
-    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
+    assert!(
+        diff < f32::EPSILON,
+        "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"
+    ); // symmetry test
 
     // triangle inequality test for manhattan
     let distance_xz = hausdorff(&x, &z, man_ground_dist);
     let distance_yz = hausdorff(&y, &z, man_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"); // triangle inequality test
+    assert!(
+        longest_side <= sum_of_others,
+        "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"
+    ); // triangle inequality test
 
     // jaccard testing
     let jac_ground_dist = |a: &Vec<u16>, b: &Vec<u16>| jaccard::<_, f32>(a, b);
@@ -204,13 +216,19 @@ fn hausdorff_test() {
     let distance_xy = hausdorff(&x, &y, jac_ground_dist);
     let distance_yx = hausdorff(&y, &x, jac_ground_dist);
     let diff = distance_xy.abs_diff(distance_yx);
-    assert!(diff < f32::EPSILON, "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"); // symmetry test
+    assert!(
+        diff < f32::EPSILON,
+        "Expected `distance_xy` and `distance_yx` to be equal, but got {distance_xy:.2e} and {distance_yx:.2e} with a difference of {diff:.2e}"
+    ); // symmetry test
 
     // triangle inequality test for jaccard
     let distance_xz = hausdorff(&x, &z, jac_ground_dist);
     let distance_yz = hausdorff(&y, &z, jac_ground_dist);
     let longest_side = distance_xy.max(distance_xz).max(distance_yz);
     let sum_of_others = distance_xy + distance_xz + distance_yz - longest_side;
-    assert!(longest_side <= sum_of_others, "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}");
+    assert!(
+        longest_side <= sum_of_others,
+        "Expected `longest_side` to be less than or equal to `sum_of_others`, but got {longest_side:.2e} and {sum_of_others:.2e} among `xy`: {distance_xy:.2e}, `xz`: {distance_xz:.2e}, `yz`: {distance_yz:.2e}"
+    );
     // triangle inequality test
 }

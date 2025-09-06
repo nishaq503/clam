@@ -1,0 +1,44 @@
+[package]
+name = "distances-two"
+version = "2.0.0-dev0"
+authors = [
+    "Najib Ishaq <najib_ishaq@zoho.com>",
+    "Noah Daniels <noah_daniels@uri.edu>",
+    "Tom Howard <info@tomhoward.codes>",
+]
+description = "Fast and generic distance functions."
+readme = "./README.md"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Publishing lock.
+# When you're ready to start publishing, set publish to true
+# and update the release github action.
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+num-traits.workspace = true
+rust-blas = { workspace = true, optional = true }
+
+[dev-dependencies]
+float_eq.workspace = true
+rand.workspace = true
+test-case.workspace = true
+criterion.workspace = true
+
+[features]
+blas = ["dep:rust-blas"]
+simd-128 = []
+simd-256 = []
+simd-512 = []
+simd-1024 = []
+default = []
+all = []
+
+[[bench]]
+name = "vectors"
+harness = false
