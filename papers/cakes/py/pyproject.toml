@@ -1,0 +1,28 @@
+[project]
+name = "paper-cakes"
+version = "0.1.0"
+description = "Reproducible results for the CAKES paper"
+readme = "README.md"
+authors = [
+    { name = "Najib Ishaq", email = "najib_ishaq@zoho.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "jupyterlab>=4.4.9",
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "plotly>=6.3.0",
+    "plotly-stubs>=0.0.6",
+    "pyarrow>=21.0.0",
+    "scipy-stubs>=1.16.2.3",
+    "streamlit[charts]>=1.50.0",
+    "tqdm>=4.67.1",
+    "typer>=0.19.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.24,<0.10.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+paper-cakes = "paper_cakes.__main__:app"
