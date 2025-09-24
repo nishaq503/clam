@@ -2,10 +2,13 @@
 //! CLAM.
 
 /// A wrapper struct for implementing `Ord` on a `PartialOrd` in a way that is
-/// suitable for use within CLAM. A `MaxItem<A, T>` is ordered in the same way
-/// as `T`, except that incomparable items are treated as less than any other
-/// item. The additional type parameter `A` is used to store auxiliary data
-/// alongside the item and is ignored for ordering purposes.
+/// suitable for use within CLAM.
+///
+/// A `MaxItem<A, T>` is ordered in the same way as `T`, except that
+/// incomparable items are treated as less than any other item. The additional
+/// type parameter `A` is used to store arbitrary data alongside the item and is
+/// ignored for ordering purposes.
+#[derive(Debug)]
 pub struct MaxItem<A, T: PartialOrd>(pub A, pub T);
 
 impl<A, T: PartialOrd> PartialEq for MaxItem<A, T> {
@@ -29,10 +32,13 @@ impl<A, T: PartialOrd> Ord for MaxItem<A, T> {
 }
 
 /// A wrapper struct for implementing `Ord` on a `PartialOrd` in a way that is
-/// suitable for use within CLAM. A `MinItem<A, T>` is ordered in the same way
-/// as `T`, except that incomparable items are treated as greater than any other
-/// item. The additional type parameter `A` is used to store auxiliary data
-/// alongside the item and is ignored for ordering purposes.
+/// suitable for use within CLAM.
+///
+/// A `MinItem<A, T>` is ordered in the same way as `T`, except that
+/// incomparable items are treated as greater than any other item. The
+/// additional type parameter `A` is used to store arbitrary data alongside the
+/// item and is ignored for ordering purposes.
+#[derive(Debug)]
 pub struct MinItem<A, T: PartialOrd>(pub A, pub T);
 
 impl<A, T: PartialOrd> PartialEq for MinItem<A, T> {

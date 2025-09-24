@@ -1,0 +1,646 @@
+//! The most basic representation of a `Cluster` is a metric-`Ball`.
+
+use core::fmt::Debug;
+
+use rayon::prelude::*;
+
+use crate::{utils, DistanceValue};
+
+/// A `Ball` is a collection of items in a dataset that are within a `radius` from a `center` item.
+///
+/// # Type Parameters
+///
+/// * `I`: The type of items in the tree.
+/// * `T`: The type of distance values between items.
+#[must_use]
+pub struct Ball<I, T: DistanceValue> {
+    /// The center item of the ball.
+    center: I,
+    /// The radius of the ball.
+    radius: T,
+    /// The Local Fractal Dimension (LFD) of the ball.
+    lfd: f64,
+    /// The number of items in the ball, including the center.
+    cardinality: usize,
+    /// The `Contents` of the ball.
+    contents: Contents<I, T>,
+}
+
+/// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
+enum Contents<I, T: DistanceValue> {
+    /// The ball is a leaf and contains items directly.
+    Leaf(Vec<I>),
+    /// The ball is a parent and contains child balls.
+    Children([Box<Ball<I, T>>; 2]),
+}
+
+impl<I: Debug, T: DistanceValue + Debug> Debug for Ball<I, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Ball")
+            .field("center", &self.center)
+            .field("radius", &self.radius)
+            .field("lfd", &self.lfd)
+            .field("cardinality", &self.cardinality)
+            .field("contents", &self.contents)
+            .finish()
+    }
+}
+
+impl<I, T: DistanceValue + Debug> Debug for Contents<I, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Leaf(items) => f.debug_tuple("Leaf").field(&items.len()).finish(),
+            Self::Children(_) => f.debug_tuple("Children").finish(),
+        }
+    }
+}
+
+impl<I, T: DistanceValue> Ball<I, T> {
+    /// A reference to the center item of the ball.
+    pub const fn center(&self) -> &I {
+        &self.center
+    }
+
+    /// The radius of the ball.
+    pub const fn radius(&self) -> T {
+        self.radius
+    }
+
+    /// The Local Fractal Dimension (LFD) of the ball.
+    pub const fn lfd(&self) -> f64 {
+        self.lfd
+    }
+
+    /// The number of items in the ball, including the center.
+    pub const fn cardinality(&self) -> usize {
+        self.cardinality
+    }
+
+    /// A vector of references to all clusters in the tree in pre-order (i.e., parent before children).
+    pub fn subtree(&self) -> Vec<&Self> {
+        match &self.contents {
+            Contents::Leaf(_) => vec![self],
+            Contents::Children([left, right]) => core::iter::once(self)
+                .chain(left.subtree())
+                .chain(right.subtree())
+                .collect(),
+        }
+    }
+
+    /// A vector of references to all items in the subtree rooted at this ball,
+    /// excluding the center of this ball.
+    pub fn subtree_items(&self) -> Vec<&I> {
+        match &self.contents {
+            Contents::Leaf(items) => items.iter().collect(),
+            Contents::Children([left, right]) => left.all_items().into_iter().chain(right.all_items()).collect(),
+        }
+    }
+
+    /// A vector of references to all items in the ball, including the center, which is placed first.
+    pub fn all_items(&self) -> Vec<&I> {
+        match &self.contents {
+            Contents::Leaf(items) => core::iter::once(&self.center).chain(items.iter()).collect(),
+            Contents::Children([left, right]) => core::iter::once(&self.center)
+                .chain(left.all_items())
+                .chain(right.all_items())
+                .collect(),
+        }
+    }
+
+    /// A vector of references to the child balls of this ball. Returns `None` if the ball is a leaf.
+    pub fn children(&self) -> Option<[&Self; 2]> {
+        match &self.contents {
+            Contents::Leaf(_) => None,
+            Contents::Children([left, right]) => Some([left, right]),
+        }
+    }
+
+    /// Checks if the ball is a leaf.
+    pub const fn is_leaf(&self) -> bool {
+        matches!(self.contents, Contents::Leaf(_))
+    }
+
+    /// Checks if the ball is a singleton (i.e., contains only one distinct item).
+    pub fn is_singleton(&self) -> bool {
+        self.cardinality == 1 || self.radius.is_zero()
+    }
+
+    /// Creates a new tree of `Ball`s.
+    ///
+    /// # Parameters
+    ///
+    /// * `items`: The items to be clustered into a tree of balls.
+    /// * `metric`: A function that computes the distance between two items.
+    /// * `criteria`: A function that determines whether a ball should be partitioned into child balls. As a default, the user can use `&|_| true`.
+    ///
+    /// # Errors
+    ///
+    /// - If `items` is empty.
+    pub fn new_tree<M: Fn(&I, &I) -> T>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &impl Fn(&Self) -> bool,
+    ) -> Result<Self, String> {
+        if items.is_empty() {
+            return Err("Cannot create a Ball tree with no items".to_string());
+        }
+        let criteria = |b: &Self| !b.is_singleton() && criteria(b);
+        Ok(Self::new(items, metric).partition(metric, &criteria))
+    }
+
+    /// Traverses the tree in pre-order and trims the subtree of any ball on which the provided predicate returns `true`.
+    pub fn trim<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
+        if predicate(self) {
+            // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its descendants.
+            self.contents = Contents::Leaf(self.take_subtree_items());
+        } else if let Contents::Children([left, right]) = &mut self.contents {
+            // The predicate is not satisfied, so we continue checking children.
+            left.trim(predicate);
+            right.trim(predicate);
+        }
+    }
+
+    /// Private constructor for `Ball`.
+    ///
+    /// WARNING: This function does not compute the `radius` or `LFD` of the ball. This is left for the `partition` method because the item that provides the
+    /// `radius` will be needed as one of the poles about which the cluster will be partitioned. This way of doing things avoids having to store an `arg_radial`
+    /// to keep track of which item provided the `radius`, which is wasteful and hard to keep correct when coming back up the recursion stack of `partition`
+    /// because the items are reordered. The alternative is to compute the `radius` twice: once in `new` and once in `partition`, which can be very expensive
+    /// for large collections of items and/or expensive metrics.
+    fn new<M: Fn(&I, &I) -> T>(mut items: Vec<I>, metric: &M) -> Self {
+        if items.len() == 1 {
+            // A singleton ball: `center` is the only item, `radius` is 0, `LFD` is 1
+            let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
+            Self {
+                center,
+                radius: T::zero(),
+                lfd: 1.0, // LFD of a singleton is _defined_ as 1
+                cardinality: 1,
+                contents: Contents::Leaf(Vec::new()),
+            }
+        } else {
+            // Find and remove the `center`.
+            let center = {
+                // Use a subset of items to compute the geometric median for efficiency.
+                let gm_sample = if items.len() < 100 {
+                    &items[..]
+                } else {
+                    let num_samples = utils::num_samples(items.len(), 100, 10_000);
+                    &items[..num_samples]
+                };
+                // Remove and return the `center`.
+                let gm_index = geometric_median(gm_sample, metric);
+                items.swap_remove(gm_index)
+            };
+
+            Self {
+                center,
+                radius: T::max_value(),       // Placeholder; to be computed in `partition`
+                lfd: f64::MAX,                // Placeholder; to be computed in `partition`
+                cardinality: items.len() + 1, // +1 for the `center`
+                contents: Contents::Leaf(items),
+            }
+        }
+    }
+
+    /// Partitions the ball into two child balls based on the provided `metric` and `criteria`, then recursively partitions the children until the criteria are
+    /// no longer satisfied.
+    ///
+    /// # Parameters
+    ///
+    /// * `metric`: A function that computes the distance between two items.
+    /// * `criteria`: A function that determines whether a ball should be partitioned into child balls. As a default, the user can use `&|_| true`.
+    pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, criteria: &impl Fn(&Self) -> bool) -> Self {
+        match self.contents {
+            Contents::Leaf(items) => {
+                if items.is_empty() {
+                    // A singleton ball: nothing to partition.
+                    self.radius = T::zero();
+                    self.lfd = 1.0; // LFD of a singleton is _defined_ as 1
+                    self.contents = Contents::Leaf(Vec::new());
+                    return self;
+                }
+                if items.len() == 1 {
+                    // A ball with one center and one item: nothing to partition.
+                    self.radius = metric(&self.center, &items[0]);
+                    self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
+                    self.contents = Contents::Leaf(items);
+                    return self;
+                }
+
+                // At this point, we have at least 2 items so radius computation is meaningful, and we can always remove two poles to partition with.
+                // We have to first compute the radius and LFD because `new` does not compute them.
+
+                // Compute the radius and LFD of the ball.
+                let radial_distances = items.iter().map(|item| metric(&self.center, item)).collect::<Vec<_>>();
+                let arg_radius = radial_distances
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|&(i, &d)| utils::MaxItem(i, d))
+                    .map_or(0, |(i, _)| i);
+                self.radius = radial_distances[arg_radius];
+                self.lfd = lfd_estimate(&radial_distances, self.radius);
+
+                // Replace contents so that we can check the partition criteria without running into borrow issues.
+                self.contents = Contents::Leaf(items);
+
+                if !criteria(&self) {
+                    // Criteria not satisfied; do not partition.
+                    return self;
+                }
+
+                // Criteria are satisfied, so we partition the ball.
+
+                // Take ownership of the items for partitioning.
+                let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                    Contents::Leaf(items) => items,
+                    Contents::Children(_) => unreachable!("We just replaced contents with a leaf"),
+                };
+
+                // The left pole is the farthest item from the center. Remove it from the items list.
+                let left_pole = items.swap_remove(arg_radius);
+
+                // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
+                let mut left_distances = items
+                    .into_iter()
+                    .map(|item| (metric(&left_pole, &item), item))
+                    .collect::<Vec<_>>();
+
+                // The right pole is the farthest item from the left pole
+                let arg_right = left_distances
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|&(i, &(d, _))| utils::MaxItem(i, d))
+                    .map_or(0, |(i, _)| i);
+                // Remove it from the items list.
+                let right_pole = left_distances.swap_remove(arg_right).1;
+
+                // At this point, we have two poles, and an item list which does not contain the poles.
+
+                // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
+                let (left_assigned, right_assigned) = left_distances
+                    .into_iter()
+                    .map(|(l, item)| (l, metric(&right_pole, &item), item))
+                    .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
+
+                // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
+                let left_items = core::iter::once(left_pole)
+                    .chain(left_assigned.into_iter().map(|(_, _, item)| item))
+                    .collect::<Vec<_>>();
+                let right_items = core::iter::once(right_pole)
+                    .chain(right_assigned.into_iter().map(|(_, _, item)| item))
+                    .collect::<Vec<_>>();
+
+                // Recursively create children and set the contents to the new children.
+                self.contents = Contents::Children([
+                    Box::new(Self::new(left_items, metric).partition(metric, criteria)),
+                    Box::new(Self::new(right_items, metric).partition(metric, criteria)),
+                ]);
+            }
+            Contents::Children(children) => {
+                // Replace contents so that we can check the partition criteria without running into borrow issues.
+                self.contents = Contents::Children(children);
+
+                if !criteria(&self) {
+                    // Criteria not satisfied; convert back to a leaf by collecting all items from subtree.
+                    self.contents = Contents::Leaf(self.take_subtree_items());
+                }
+
+                // Criteria are satisfied, so we continue checking children.
+                // This is necessary because the user may have provided different criteria when the tree was last partitioned.
+
+                // Take ownership of the children for partitioning.
+                let [left, right] = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                    Contents::Children(children) => children,
+                    Contents::Leaf(_) => unreachable!("We just replaced contents with children"),
+                };
+
+                // Recursively partition children and set the contents to the new children.
+                self.contents = Contents::Children([
+                    Box::new(left.partition(metric, criteria)),
+                    Box::new(right.partition(metric, criteria)),
+                ]);
+            }
+        }
+
+        // Return the (possibly) partitioned ball.
+        self
+    }
+
+    /// Removes and returns all items from the ball and its descendants, excluding the center of this ball; the children are dropped in the process and this
+    /// ball becomes a leaf with no items other than its center.
+    pub fn take_subtree_items(&mut self) -> Vec<I> {
+        // Take ownership of the contents so we can recurse and drop children.
+        let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
+        match contents {
+            Contents::Leaf(items) => items,
+            Contents::Children([mut left, mut right]) => {
+                let mut items = Vec::with_capacity(self.cardinality - 1);
+                items.extend(left.take_subtree_items());
+                items.push(left.center);
+
+                items.extend(right.take_subtree_items());
+                items.push(right.center);
+
+                items
+            }
+        }
+    }
+}
+
+impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
+    /// Parallel version of [`new_tree`](Self::new_tree).
+    ///
+    /// # Errors
+    ///
+    /// - If `items` is empty.
+    pub fn par_new_tree<M: Fn(&I, &I) -> T + Send + Sync>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+    ) -> Result<Self, String> {
+        if items.is_empty() {
+            return Err("Cannot create a Ball tree with no items".to_string());
+        }
+        let criteria = |b: &Self| !b.is_singleton() && criteria(b);
+        Ok(Self::par_new(items, metric).par_partition(metric, &criteria))
+    }
+
+    /// Parallel version of [`trim`](Self::trim).
+    pub fn par_trim<P: (Fn(&Self) -> bool) + Send + Sync>(&mut self, predicate: &P) {
+        if predicate(self) {
+            // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its subtree.
+            self.contents = Contents::Leaf(self.take_subtree_items());
+        } else if let Contents::Children([left, right]) = &mut self.contents {
+            // The predicate is not satisfied, so we continue checking children.
+            rayon::join(|| left.par_trim(predicate), || right.par_trim(predicate));
+        }
+    }
+
+    /// Parallel version of [`new`](Self::new).
+    fn par_new<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<I>, metric: &M) -> Self {
+        if items.len() == 1 {
+            // A singleton ball: center is the only item, radius is 0, LFD is 1
+            let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
+            Self {
+                center,
+                radius: T::zero(),
+                lfd: 1.0, // LFD of a singleton is _defined_ as 1
+                cardinality: 1,
+                contents: Contents::Leaf(Vec::new()),
+            }
+        } else {
+            // Find and remove the center item.
+            let center = {
+                // Use a subset of items to compute the geometric median for efficiency.
+                let gm_sample = if items.len() < 100 {
+                    &items[..]
+                } else {
+                    let num_samples = utils::num_samples(items.len(), 100, 10_000);
+                    &items[..num_samples]
+                };
+                let gm_index = par_geometric_median(gm_sample, metric);
+                // Remove and return the center item.
+                items.swap_remove(gm_index)
+            };
+
+            Self {
+                center,
+                radius: T::max_value(),       // Placeholder; to be computed in partition
+                lfd: f64::MAX,                // Placeholder; to be computed in partition
+                cardinality: items.len() + 1, // +1 for the center
+                contents: Contents::Leaf(items),
+            }
+        }
+    }
+
+    /// Parallel version of [`partition`](Self::partition).
+    pub fn par_partition<M: Fn(&I, &I) -> T + Send + Sync>(
+        mut self,
+        metric: &M,
+        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+    ) -> Self {
+        match self.contents {
+            Contents::Leaf(items) => {
+                if items.is_empty() {
+                    // A singleton ball: nothing to partition.
+                    self.radius = T::zero();
+                    self.lfd = 1.0; // LFD of a singleton is _defined_ as 1
+                    self.contents = Contents::Leaf(Vec::new());
+                    return self;
+                }
+                if items.len() == 1 {
+                    // A ball with one center and one item: nothing to partition.
+                    self.radius = metric(&self.center, &items[0]);
+                    self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
+                    self.contents = Contents::Leaf(items);
+                    return self;
+                }
+
+                // At this point, we have at least 2 items so radius computation is meaningful, and we can always remove two poles to partition with.
+                // We have to first compute the radius and LFD because `new` does not compute them.
+
+                // Compute the radius and LFD of the ball.
+                let radial_distances = items
+                    .par_iter()
+                    .map(|item| metric(&self.center, item))
+                    .collect::<Vec<_>>();
+                let arg_radius = radial_distances
+                    .par_iter()
+                    .enumerate()
+                    .max_by_key(|&(i, &d)| utils::MaxItem(i, d))
+                    .map_or(0, |(i, _)| i);
+                self.radius = radial_distances[arg_radius];
+                self.lfd = lfd_estimate(&radial_distances, self.radius);
+
+                // Replace contents so that we can check the partition criteria without running into borrow issues.
+                self.contents = Contents::Leaf(items);
+
+                if !criteria(&self) {
+                    // Criteria not satisfied; do not partition.
+                    return self;
+                }
+
+                // Criteria are satisfied, so we partition the ball.
+
+                // Take ownership of the items for partitioning.
+                let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                    Contents::Leaf(items) => items,
+                    Contents::Children(_) => unreachable!("We just replaced contents with a leaf"),
+                };
+
+                // The left pole is the farthest item from the center. Remove it from the items list.
+                let left_pole = items.swap_remove(arg_radius);
+
+                // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
+                let mut left_distances = items
+                    .into_par_iter()
+                    .map(|item| (metric(&left_pole, &item), item))
+                    .collect::<Vec<_>>();
+
+                // The right pole is the farthest item from the left pole
+                let arg_right = left_distances
+                    .par_iter()
+                    .enumerate()
+                    .max_by_key(|&(i, &(d, _))| utils::MaxItem(i, d))
+                    .map_or(0, |(i, _)| i);
+                // Remove it from the items list.
+                let right_pole = left_distances.swap_remove(arg_right).1;
+
+                // At this point, we have two poles, and an item list which does not contain the poles.
+
+                // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
+                let (left_assigned, right_assigned): (Vec<_>, Vec<_>) = left_distances
+                    .into_par_iter()
+                    .map(|(l, item)| (l, metric(&right_pole, &item), item))
+                    .partition(|&(l, r, _)| l <= r);
+
+                // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
+                let left_items = core::iter::once(left_pole)
+                    .chain(left_assigned.into_iter().map(|(_, _, item)| item))
+                    .collect::<Vec<_>>();
+                let right_items = core::iter::once(right_pole)
+                    .chain(right_assigned.into_iter().map(|(_, _, item)| item))
+                    .collect::<Vec<_>>();
+
+                // Recursively create children and set the contents to the new children.
+                let (left, right) = rayon::join(
+                    || Self::par_new(left_items, metric).par_partition(metric, criteria),
+                    || Self::par_new(right_items, metric).par_partition(metric, criteria),
+                );
+                self.contents = Contents::Children([Box::new(left), Box::new(right)]);
+            }
+            Contents::Children(children) => {
+                // Replace contents so that we can check the partition criteria without running into borrow issues.
+                self.contents = Contents::Children(children);
+
+                if !criteria(&self) {
+                    // Criteria not satisfied; convert back to a leaf by collecting all items from subtree.
+                    self.contents = Contents::Leaf(self.take_subtree_items());
+                }
+
+                // Criteria are satisfied, so we continue checking children.
+                // This is necessary because the user may have provided different criteria when the tree was last partitioned.
+
+                // Take ownership of the children for partitioning.
+                let [left, right] = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                    Contents::Children(children) => children,
+                    Contents::Leaf(_) => unreachable!("We just replaced contents with children"),
+                };
+
+                // Recursively partition children and set the contents to the new children.
+                let (left, right) = rayon::join(
+                    || left.par_partition(metric, criteria),
+                    || right.par_partition(metric, criteria),
+                );
+                self.contents = Contents::Children([Box::new(left), Box::new(right)]);
+            }
+        }
+
+        // Return the (possibly) partitioned ball.
+        self
+    }
+}
+
+/// Estimates the Local Fractal Dimension (LFD) of a ball given the distances
+/// of its items from the center and the radius of the ball.
+///
+/// This uses the formula `log2(N / n)`, where `N` is the total number of items
+/// in the ball, and `n` is the number of items within half the radius.
+///
+/// If the radius is zero or if there are no items within half the radius,
+/// the LFD is defined to be 1.0.
+#[expect(clippy::cast_precision_loss)]
+pub fn lfd_estimate<T: DistanceValue>(distances: &[T], radius: T) -> f64 {
+    let half_radius = radius.to_f64().unwrap_or(0.0) / 2.0;
+    if distances.is_empty() || distances.len() == 1 || half_radius <= f64::EPSILON {
+        // In all three of the following cases, we define LFD to be 1.0:
+        //   - No non-center items (singleton ball)
+        //   - One non-center item (ball with two items)
+        //   - Radius is zero or too small to be meaningful
+        1.0
+    } else {
+        // The ball has at least 2 non-center items, so LFD computation is
+        // meaningful.
+
+        // Count how many items are within half the radius.
+        // We use f64::MAX as a sentinel to exclude items whose distance
+        // could not be converted to f64.
+        let count = distances
+            .iter()
+            .map(|d| d.to_f64().unwrap_or(f64::MAX))
+            .filter(|&d| d <= half_radius)
+            .count()
+            + 1; // +1 to include the center
+
+        // Compute and return the LFD. This is well-defined because
+        // `distances.len() >= 2` and `count >= 1`, so the argument to log2
+        // is always >= 1.0
+        ((distances.len() as f64) / (count as f64)).log2()
+    }
+}
+
+/// Returns the index of the geometric median of the given items.
+///
+/// The geometric median is the item that minimizes the sum of distances to
+/// all other items in the slice.
+///
+/// The user must ensure that the items slice is not empty.
+fn geometric_median<I, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[I], metric: &M) -> usize {
+    // Compute the full distance matrix for the items.
+    let distance_matrix = {
+        let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
+        for (r, i) in items.iter().enumerate() {
+            for (c, j) in items.iter().enumerate().take(r) {
+                let d = metric(i, j);
+                matrix[r][c] = d;
+                matrix[c][r] = d;
+            }
+        }
+        matrix
+    };
+
+    // Find the index of the item with the minimum total distance to all other items.
+    distance_matrix
+        .into_iter()
+        .map(|row| row.into_iter().sum::<T>())
+        .enumerate()
+        .min_by_key(|&(i, v)| utils::MinItem(i, v))
+        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+}
+
+/// Parallel version of [`geometric_median`](geometric_median).
+fn par_geometric_median<I: Send + Sync, T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
+    items: &[I],
+    metric: &M,
+) -> usize {
+    // Compute the full distance matrix for the items in parallel.
+    let distance_matrix = {
+        let matrix = vec![vec![T::zero(); items.len()]; items.len()];
+        items.par_iter().enumerate().for_each(|(r, i)| {
+            items.par_iter().enumerate().take(r).for_each(|(c, j)| {
+                let d = metric(i, j);
+                // SAFETY: We have exclusive access to each cell in the matrix
+                // because every (r, c) pair is unique.
+                #[allow(unsafe_code)]
+                unsafe {
+                    let row_ptr = &mut *matrix.as_ptr().cast_mut().add(r);
+                    row_ptr[c] = d;
+
+                    let col_ptr = &mut *matrix.as_ptr().cast_mut().add(c);
+                    col_ptr[r] = d;
+                }
+            });
+        });
+        matrix
+    };
+
+    // Find the index of the item with the minimum total distance to all
+    // other items.
+    distance_matrix
+        .into_par_iter()
+        .map(|row| row.into_iter().sum::<T>())
+        .enumerate()
+        .min_by_key(|&(i, v)| utils::MinItem(i, v))
+        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+}

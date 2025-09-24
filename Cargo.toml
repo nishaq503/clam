@@ -3,7 +3,7 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "crates/shell",
+    # "crates/shell",
     "pypi/distances",
 ]
 resolver = "2"

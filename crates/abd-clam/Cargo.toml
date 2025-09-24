@@ -30,39 +30,36 @@ workspace = true
 
 [dependencies]
 num = { workspace = true }
-libm = { workspace = true }
 rayon = { workspace = true }
-rand = { workspace = true }
-ftlog = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-bitcode = { workspace = true }
-ndarray = { workspace = true }
 
 # For:
 #  - CHAODA
-smartcore = { workspace = true, features = ["serde"], optional = true }
+# smartcore = { workspace = true, features = ["serde"], optional = true }
 
 # For:
 #  - MSA
-stringzilla = { workspace = true, optional = true, features = ["cpus"] }
-bytecount = { workspace = true, optional = true }
+# stringzilla = { workspace = true, optional = true, features = ["cpus"] }
 
 # For:
 #  - The mass-spring-system in the dimension reduction
-slotmap = { workspace = true, optional = true }
+# slotmap = { workspace = true, optional = true }
 
 [dev-dependencies]
-distances = { workspace = true }
 symagen = { workspace = true }
-bitcode = { workspace = true }
-tempfile = { workspace = true }
-float-cmp = { workspace = true }
 test-case = { workspace = true }
-statistical = { workspace = true }
+criterion = { workspace = true, features = ["html_reports"] }
+rand = { workspace = true }
+ndarray = { workspace = true }
+ndarray-npy = { workspace = true }
+distances = { workspace = true }
 
 [features]
+# musals = ["dep:stringzilla"]
 # disk-io = ["dep:flate2"]
-chaoda = ["dep:smartcore"]
-mbed = ["chaoda", "dep:slotmap"]
-musals = ["dep:stringzilla", "dep:bytecount"]
-all = ["chaoda", "mbed", "musals"]
+# chaoda = ["dep:smartcore"]
+# mbed = ["chaoda", "dep:slotmap"]
+# all = ["chaoda", "mbed", "musals"]
+
+[[bench]]
+name = "cakes"
+harness = false

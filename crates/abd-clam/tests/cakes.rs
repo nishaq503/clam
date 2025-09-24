@@ -1,232 +1,197 @@
-//! Tests of the CAKES algorithms.
+//! Tests for the CAKES search algorithms.
 
 use std::fmt::Debug;
 
 use abd_clam::{
-    cakes::{KnnBreadthFirst, KnnDepthFirst, KnnRepeatedRnn, PermutedBall, RnnClustered},
-    Ball, Cluster, DistanceValue, ParCluster, ParDataset, ParPartition, Partition,
+    cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
+    utils::MaxItem,
+    Ball, DistanceValue,
 };
-use rand::prelude::*;
+use rayon::prelude::*;
+
 use test_case::test_case;
 
 mod common;
 
-#[test]
-fn line() {
-    let data = common::data_gen::line(10);
-    let metric = common::metrics::absolute_difference;
-    let query = &0;
-    let criteria = |c: &Ball<_>| c.cardinality() > 1;
-
-    let ball = Ball::new_tree(&data, &metric, &criteria);
-    let par_ball = Ball::par_new_tree(&data, &metric, &criteria);
-
-    let mut perm_data = data.clone();
-    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
-
-    for radius in 0..=4 {
-        let alg = RnnClustered(radius);
-        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg, "RnnClustered");
-        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg, "RnnClustered");
-    }
-
-    for k in [1, 4, 8] {
-        let alg = KnnDepthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnDepthFirst");
-
-        let alg = KnnBreadthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnBreadthFirst");
-
-        let alg = KnnRepeatedRnn(k, 2);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnRepeatedRnn");
-    }
-}
-
-#[test]
-fn grid() {
-    let data = common::data_gen::grid(10);
-    let metric = common::metrics::hypotenuse;
-    let query = &(0.0, 0.0);
-    let criteria = |c: &Ball<f32>| c.cardinality() > 1;
-
-    let ball = Ball::new_tree(&data, &metric, &criteria);
-    let par_ball = Ball::par_new_tree(&data, &metric, &criteria);
-
-    let mut perm_data = data.clone();
-    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
-
-    for radius in 0..=4 {
-        let radius = radius as f32;
-        let alg = RnnClustered(radius);
-        common::search::check_rnn(&ball, &data, &metric, query, radius, &alg, "RnnClustered");
-        common::search::check_rnn(&par_ball, &data, &metric, query, radius, &alg, "RnnClustered");
-    }
-
-    for k in [1, 10] {
-        let alg = KnnDepthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnDepthFirst");
-
-        let alg = KnnBreadthFirst(k);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnBreadthFirst");
-
-        let alg = KnnRepeatedRnn(k, 2.0);
-        common::search::check_knn(&ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(&par_ball, &data, &metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(&perm_ball, &perm_data, &metric, query, k, &alg, "KnnRepeatedRnn");
-    }
-}
-
-#[test_case(1_000, 10 ; "1_000x10")]
-#[test_case(10_000, 10 ; "10_000x10")]
-#[test_case(1_000, 100 ; "1_000x100")]
-#[test_case(10_000, 100 ; "10_000x100")]
-fn vectors(car: usize, dim: usize) {
-    let seed = 42;
-    let data = {
-        let max = 10.0;
-        let mut rng = StdRng::seed_from_u64(seed);
-        symagen::random_data::random_tabular(car, dim, -max, max, &mut rng)
-    };
+#[test_case(10, 2; "10 x 2")]
+#[test_case(1_000, 2; "1_000 x 2")]
+#[test_case(10_000, 10; "10_000 x 10")]
+fn vectors(car: usize, dim: usize) -> Result<(), String> {
+    let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
+    let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
-    let criteria = |c: &Ball<_>| c.cardinality() > 1;
 
-    let radii = [0.01, 0.1];
-    let ks = [1, 10];
+    let root = Ball::new_tree(data.clone(), &metric, &|_| true)?;
 
-    let metrics: Vec<Box<dyn (Fn(&Vec<f64>, &Vec<f64>) -> f64) + Send + Sync>> = vec![
-        Box::new(common::metrics::euclidean),
-        Box::new(common::metrics::manhattan),
-    ];
+    for radius in [1.0, 1.5, 2.0] {
+        let expected_hits = data
+            .iter()
+            .filter_map(|item| {
+                let dist = metric(item, &query);
+                if dist <= radius {
+                    Some((item, dist))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let expected_hits = sort_nondescending(expected_hits);
 
-    for metric in &metrics {
-        let data = data.clone();
+        let linear_alg = RnnLinear(radius);
+        let linear_hits = linear_alg.search(&root, &metric, &query);
+        let linear_hits = sort_nondescending(linear_hits);
+        check_hits(&expected_hits, &linear_hits, format!("RnnLinear({radius})"))?;
 
-        let ball = Ball::new_tree(&data, metric, &criteria);
-        let par_ball = Ball::par_new_tree(&data, metric, &criteria);
-
-        let mut perm_data = data.clone();
-        let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_data);
-
-        let radii = radii.iter().map(|&f| f * ball.radius()).collect::<Vec<_>>();
-
-        build_and_check_search(
-            (&ball, &data),
-            &par_ball,
-            (&perm_ball, &perm_data),
-            metric,
-            &query,
-            &radii,
-            &ks,
-        );
+        let clustered_alg = RnnChess(radius);
+        let clustered_hits = clustered_alg.search(&root, &metric, &query);
+        let clustered_hits = sort_nondescending(clustered_hits);
+        check_hits(&expected_hits, &clustered_hits, format!("RnnChess({radius})"))?;
     }
-}
 
-#[test_case(16, 16, 2 ; "16x16x2")]
-#[test_case(32, 16, 3 ; "32x16x3")]
-fn strings(num_clumps: usize, clump_size: usize, clump_radius: u16) -> Result<(), String> {
-    let seed_length = 30;
-    let alphabet = "ACTGN".chars().collect::<Vec<_>>();
-    let seed_string = symagen::random_edits::generate_random_string(seed_length, &alphabet);
-    let penalties = distances::strings::Penalties::default();
-    let inter_clump_distance_range = (clump_radius * 5, clump_radius * 7);
-    let len_delta = seed_length / 10;
-    let (_, sequences) = symagen::random_edits::generate_clumped_data(
-        &seed_string,
-        penalties,
-        &alphabet,
-        num_clumps,
-        clump_size,
-        clump_radius,
-        inter_clump_distance_range,
-        len_delta,
-    )
-    .into_iter()
-    .unzip::<_, _, Vec<_>, Vec<_>>();
+    for k in [1, 10, 100] {
+        let expected_hits = data.iter().map(|item| (item, metric(item, &query))).collect::<Vec<_>>();
+        let expected_hits = sort_nondescending(expected_hits)
+            .into_iter()
+            .take(k)
+            .collect::<Vec<_>>();
 
-    let query = &seed_string;
+        assert_eq!(
+            expected_hits.len(),
+            k.min(car),
+            "Not enough expected hits {} for k={}",
+            expected_hits.len(),
+            k.min(car)
+        );
 
-    let radii = [0.01, 0.1];
-    let ks = [1, 10];
+        let linear_alg = KnnLinear(k);
+        let linear_hits = linear_alg.search(&root, &metric, &query);
+        let linear_hits = sort_nondescending(linear_hits);
+        check_hits(&expected_hits, &linear_hits, format!("KnnLinear({k})"))?;
 
-    let metric = common::metrics::levenshtein;
-    let criteria = |c: &Ball<_>| c.cardinality() > 1;
+        let dfs_alg = KnnDfs(k);
+        let dfs_hits = dfs_alg.search(&root, &metric, &query);
+        let dfs_hits = sort_nondescending(dfs_hits);
+        check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
 
-    let ball = Ball::new_tree(&sequences, &metric, &criteria);
-    let par_ball = Ball::par_new_tree(&sequences, &metric, &criteria);
+        let bfs_alg = KnnBfs(k);
+        let bfs_hits = bfs_alg.search(&root, &metric, &query);
+        let bfs_hits = sort_nondescending(bfs_hits);
+        check_hits(&expected_hits, &bfs_hits, format!("KnnBfs({k})"))?;
 
-    let mut perm_sequences = sequences.clone();
-    let (perm_ball, _) = PermutedBall::par_from_cluster_tree(par_ball.clone(), &mut perm_sequences);
-
-    let radii = radii
-        .iter()
-        .map(|&f| f * (ball.radius() as f32))
-        .map(|r| r.ceil() as usize)
-        .collect::<Vec<_>>();
-
-    build_and_check_search(
-        (&ball, &sequences),
-        &par_ball,
-        (&perm_ball, &perm_sequences),
-        &metric,
-        &query,
-        &radii,
-        &ks,
-    );
+        let rrnn_alg = KnnRrnn(k);
+        let rrnn_hits = rrnn_alg.search(&root, &metric, &query);
+        let rrnn_hits = sort_nondescending(rrnn_hits);
+        check_hits(&expected_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
+    }
 
     Ok(())
 }
 
-/// Build trees and check the search results.
-fn build_and_check_search<I, T, C, M, D, Pd>(
-    ball_data: (&C, &D),
-    par_ball: &C,
-    perm_ball_data: (&PermutedBall<T, C>, &Pd),
-    metric: &M,
-    query: &I,
-    radii: &[T],
-    ks: &[usize],
-) where
-    I: Debug + Send + Sync + Clone,
-    T: DistanceValue + Send + Sync + Debug,
-    C: ParCluster<T>,
-    M: (Fn(&I, &I) -> T) + Send + Sync,
-    D: ParDataset<I> + Clone,
-    Pd: ParDataset<I> + Clone,
-{
-    let (ball, data) = ball_data;
-    let (perm_ball, perm_data) = perm_ball_data;
+#[test_case(10_000, 10; "10_000 x 10")]
+#[test_case(10_000, 100; "10_000 x 100")]
+#[test_case(100_000, 10; "100_000 x 10")]
+#[test_case(100_000, 100; "100_000 x 100")]
+fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
+    let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
+    let metric = common::metrics::euclidean::<_, _, f32>;
+    let query = vec![0.0; dim];
 
-    for &radius in radii {
-        let alg = RnnClustered(radius);
-        common::search::check_rnn(ball, data, metric, query, radius, &alg, "RnnClustered");
-        common::search::check_rnn(par_ball, data, metric, query, radius, &alg, "RnnClustered");
-        common::search::check_rnn(perm_ball, perm_data, metric, query, radius, &alg, "RnnClustered");
+    let root = Ball::par_new_tree(data.clone(), &metric, &|_| true)?;
+
+    for radius in [1.0, 1.5, 2.0] {
+        let expected_hits = data
+            .par_iter()
+            .filter_map(|item| {
+                let dist = metric(item, &query);
+                if dist <= radius {
+                    Some((item, dist))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let expected_hits = sort_nondescending(expected_hits);
+
+        let linear_alg = RnnLinear(radius);
+        let linear_hits = linear_alg.par_search(&root, &metric, &query);
+        let linear_hits = sort_nondescending(linear_hits);
+        check_hits(&expected_hits, &linear_hits, format!("RnnLinear({radius})"))?;
+
+        let clustered_alg = RnnChess(radius);
+        let clustered_hits = clustered_alg.par_search(&root, &metric, &query);
+        let clustered_hits = sort_nondescending(clustered_hits);
+        check_hits(&expected_hits, &clustered_hits, format!("RnnChess({radius})"))?;
     }
 
-    for &k in ks {
-        let alg = KnnRepeatedRnn(k, T::one() + T::one());
-        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnRepeatedRnn");
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnRepeatedRnn");
+    for k in [1, 10, 100] {
+        let expected_hits = data
+            .par_iter()
+            .map(|item| (item, metric(item, &query)))
+            .collect::<Vec<_>>();
+        let expected_hits = sort_nondescending(expected_hits)
+            .into_iter()
+            .take(k)
+            .collect::<Vec<_>>();
 
-        let alg = KnnBreadthFirst(k);
-        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnBreadthFirst");
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnBreadthFirst");
+        assert_eq!(
+            expected_hits.len(),
+            k.min(car),
+            "Not enough expected hits {} for k={}",
+            expected_hits.len(),
+            k.min(car)
+        );
 
-        let alg = KnnDepthFirst(k);
-        common::search::check_knn(ball, data, metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(par_ball, data, metric, query, k, &alg, "KnnDepthFirst");
-        common::search::check_knn(perm_ball, perm_data, metric, query, k, &alg, "KnnDepthFirst");
+        let linear_alg = KnnLinear(k);
+        let linear_hits = linear_alg.par_search(&root, &metric, &query);
+        let linear_hits = sort_nondescending(linear_hits);
+        check_hits(&expected_hits, &linear_hits, format!("KnnLinear({k})"))?;
+
+        let dfs_alg = KnnDfs(k);
+        let dfs_hits = dfs_alg.par_search(&root, &metric, &query);
+        let dfs_hits = sort_nondescending(dfs_hits);
+        check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let bfs_alg = KnnBfs(k);
+        let bfs_hits = bfs_alg.par_search(&root, &metric, &query);
+        let bfs_hits = sort_nondescending(bfs_hits);
+        check_hits(&expected_hits, &bfs_hits, format!("KnnBfs({k})"))?;
+
+        let rrnn_alg = KnnRrnn(k);
+        let rrnn_hits = rrnn_alg.par_search(&root, &metric, &query);
+        let rrnn_hits = sort_nondescending(rrnn_hits);
+        check_hits(&expected_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
     }
+
+    Ok(())
+}
+
+fn check_hits<I: Debug, T: DistanceValue + Debug>(
+    expected: &[(&I, T)],
+    actual: &[(&I, T)],
+    alg_name: String,
+) -> Result<(), String> {
+    assert_eq!(
+        expected.len(),
+        actual.len(),
+        "{alg_name}: Hit count mismatch: \nexp {:?}, \ngot {:?}",
+        expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
+        actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+    );
+
+    for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
+        assert_eq!(
+            e,
+            a,
+            "{alg_name}: Distance mismatch at index {i}: \nexp {:?}, \ngot {:?}",
+            expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
+            actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+        );
+    }
+
+    Ok(())
+}
+
+fn sort_nondescending<I, T: PartialOrd + Copy>(mut items: Vec<(&I, T)>) -> Vec<(&I, T)> {
+    items.sort_by_key(|&(_, d)| MaxItem((), d));
+    items
 }

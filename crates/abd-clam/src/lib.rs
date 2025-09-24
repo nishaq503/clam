@@ -1,25 +1,16 @@
-#![doc = include_str!("../README.md")]
+//! Redesign of CLAM
+// #![doc = include_str!("../README.md")]
 
 pub mod cakes;
 mod core;
-pub mod pancakes;
-pub mod utils;
+// mod utils;
 
-pub use core::{
-    Ball, ClamIO, Cluster, Dataset, DatasetMut, DistanceValue, FloatDistanceValue, ParClamIO, ParCluster, ParDataset,
-    ParPartition, Partition, SizedHeap, LFD,
-};
+pub use core::{Ball, DistanceValue, FloatDistanceValue};
 
-use core::{MaxItem, MinItem};
+// The utils module is for internal use only.
+pub use core::utils;
 
-#[cfg(feature = "chaoda")]
-pub mod chaoda;
-
-#[cfg(feature = "mbed")]
-pub mod mbed;
-
-#[cfg(feature = "musals")]
-pub mod musals;
+// pub use utils::sz_lev_builder;
 
 /// The current version of the crate.
 pub const VERSION: &str = "0.32.0";

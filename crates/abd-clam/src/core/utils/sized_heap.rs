@@ -4,19 +4,27 @@ use std::collections::BinaryHeap;
 
 use rayon::prelude::*;
 
-use super::MaxItem;
+use super::MinItem;
 
 /// A helper struct for maintaining a max heap of a fixed size.
 ///
-/// This is useful for maintaining the `k` nearest neighbors in a search algorithm.
-pub struct SizedHeap<T: PartialOrd> {
+/// This is useful for maintaining the `k` nearest neighbors in a search
+/// algorithm.
+///
+/// # Type Parameters
+///
+/// - `A`: The type of the associated data with each item in the heap. This is
+///   ignored when determining the ordering of the heap.
+/// - `T`: The type of the items by which the heap is ordered.
+#[derive(Debug)]
+pub struct SizedHeap<A, T: PartialOrd> {
     /// The heap of items.
-    heap: BinaryHeap<MaxItem<(), T>>,
+    heap: BinaryHeap<MinItem<A, T>>,
     /// The maximum size of the heap.
     k: usize,
 }
 
-impl<T: PartialOrd> SizedHeap<T> {
+impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Creates a new `SizedHeap` with a fixed size.
     #[must_use]
     pub fn new(k: Option<usize>) -> Self {
@@ -39,21 +47,21 @@ impl<T: PartialOrd> SizedHeap<T> {
     }
 
     /// Pushes an item onto the heap, maintaining the max size.
-    pub fn push(&mut self, item: T) {
+    pub fn push(&mut self, (a, item): (A, T)) {
         if self.heap.len() < self.k {
-            self.heap.push(MaxItem((), item));
+            self.heap.push(MinItem(a, item));
         } else if let Some(top) = self.heap.peek() {
             if item < top.1 {
                 self.heap.pop();
-                self.heap.push(MaxItem((), item));
+                self.heap.push(MinItem(a, item));
             }
         }
     }
 
     /// Pushes several items onto the heap, maintaining the max size.
-    pub fn extend<I: Iterator<Item = T>>(&mut self, items: I) {
-        for item in items {
-            self.heap.push(MaxItem((), item));
+    pub fn extend<I: IntoIterator<Item = (A, T)>>(&mut self, items: I) {
+        for (a, item) in items {
+            self.heap.push(MinItem(a, item));
         }
         while self.heap.len() > self.k {
             self.heap.pop();
@@ -62,18 +70,18 @@ impl<T: PartialOrd> SizedHeap<T> {
 
     /// Peeks at the top item in the heap.
     #[must_use]
-    pub fn peek(&self) -> Option<&T> {
-        self.heap.peek().map(|MaxItem((), x)| x)
+    pub fn peek(&self) -> Option<(&A, &T)> {
+        self.heap.peek().map(|MinItem(a, x)| (a, x))
     }
 
     /// Pops the top item from the heap.
-    pub fn pop(&mut self) -> Option<T> {
-        self.heap.pop().map(|MaxItem((), x)| x)
+    pub fn pop(&mut self) -> Option<(A, T)> {
+        self.heap.pop().map(|MinItem(a, x)| (a, x))
     }
 
     /// Consumes the `SizedHeap` and returns the items in an iterator.
-    pub fn items(self) -> impl Iterator<Item = T> {
-        self.heap.into_iter().map(|MaxItem((), x)| x)
+    pub fn items(self) -> impl Iterator<Item = (A, T)> {
+        self.heap.into_iter().map(|MinItem(a, x)| (a, x))
     }
 
     /// Returns the number of items in the heap.
@@ -101,46 +109,36 @@ impl<T: PartialOrd> SizedHeap<T> {
 
     /// Retains only the elements that satisfy the predicate.
     pub fn retain<F: Fn(&T) -> bool>(&mut self, f: F) {
-        self.heap.retain(|MaxItem((), x)| f(x));
+        self.heap.retain(|MinItem(_, x)| f(x));
     }
 }
 
-impl<T: PartialOrd + Send + Sync> SizedHeap<T> {
-    /// Pushes several items onto the heap, maintaining the max size.
-    pub fn par_extend<I: ParallelIterator<Item = T>>(&mut self, items: I) {
-        for item in items.collect::<Vec<_>>() {
-            self.heap.push(MaxItem((), item));
-        }
-        while self.heap.len() > self.k {
-            self.heap.pop();
-        }
-    }
-
+impl<A: Send + Sync, T: PartialOrd + Send + Sync> SizedHeap<A, T> {
     /// Parallel version of [`SizedHeap::items`](crate::core::dataset::SizedHeap::items).
     #[must_use]
-    pub fn par_items(self) -> impl ParallelIterator<Item = T> {
-        self.heap.into_par_iter().map(|MaxItem((), x)| x)
+    pub fn par_items(self) -> impl ParallelIterator<Item = (A, T)> {
+        self.heap.into_par_iter().map(|MinItem(a, x)| (a, x))
     }
 }
 
-impl<T: PartialOrd> FromIterator<T> for SizedHeap<T> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+impl<A, T: PartialOrd> FromIterator<(A, T)> for SizedHeap<A, T> {
+    fn from_iter<I: IntoIterator<Item = (A, T)>>(iter: I) -> Self {
         let mut heap = Self::new(None);
-        for item in iter {
-            heap.push(item);
+        for (a, item) in iter {
+            heap.push((a, item));
         }
         heap
     }
 }
 
-impl<T: PartialOrd + Send + Sync> FromParallelIterator<T> for SizedHeap<T> {
-    fn from_par_iter<I: IntoParallelIterator<Item = T>>(par_iter: I) -> Self {
+impl<A: Send + Sync, T: PartialOrd + Send + Sync> FromParallelIterator<(A, T)> for SizedHeap<A, T> {
+    fn from_par_iter<I: IntoParallelIterator<Item = (A, T)>>(par_iter: I) -> Self {
         par_iter
             .into_par_iter()
             .fold(
                 || Self::new(None),
-                |mut acc, item| {
-                    acc.push(item);
+                |mut acc, (a, item)| {
+                    acc.push((a, item));
                     acc
                 },
             )

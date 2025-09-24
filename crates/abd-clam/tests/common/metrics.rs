@@ -40,6 +40,6 @@ pub fn euclidean<I: AsRef<[T]>, T: DistanceValue, U: Float + Sum>(a: &I, b: &I) 
         .sqrt()
 }
 
-pub fn levenshtein<I: AsRef<[u8]>>(a: &I, b: &I) -> usize {
-    abd_clam::utils::sz_lev_builder()(a, b)
-}
+// pub fn levenshtein<I: AsRef<[u8]>>(a: &I, b: &I) -> usize {
+//     abd_clam::sz_lev_builder()(a, b)
+// }

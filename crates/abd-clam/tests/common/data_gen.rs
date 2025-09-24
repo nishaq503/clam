@@ -1,9 +1,5 @@
 //! Data generation utilities for testing.
 
-pub fn tiny() -> Vec<Vec<i32>> {
-    vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]]
-}
-
 pub fn pathological_line() -> Vec<f64> {
     let min_delta = 1e-12;
     let mut delta = min_delta;
@@ -30,6 +26,5 @@ pub fn grid(max: i32) -> Vec<(f32, f32)> {
 }
 
 pub fn tabular(car: usize, dim: usize, min: f32, max: f32) -> Vec<Vec<f32>> {
-    let mut rng = rand::rng();
-    symagen::random_data::random_tabular(car, dim, min, max, &mut rng)
+    symagen::random_data::random_tabular_seedable(car, dim, min, max, 42)
 }
