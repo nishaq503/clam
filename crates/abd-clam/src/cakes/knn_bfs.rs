@@ -7,8 +7,8 @@ use super::{ParSearch, Search};
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
 pub struct KnnBfs(pub usize);
 
-impl<I, T: DistanceValue> Search<I, T> for KnnBfs {
-    fn search<'a, M: Fn(&I, &I) -> T>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnBfs {
+    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
@@ -66,7 +66,7 @@ impl<I, T: DistanceValue> Search<I, T> for KnnBfs {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> ParSearch<I, T> for KnnBfs {}
+impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnBfs {}
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
 fn d_max<I, T: DistanceValue>(ball: &Ball<I, T>, d: T) -> T {

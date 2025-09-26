@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use rand::prelude::*;
 
+use super::metrics;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum AnnDataset {
@@ -25,15 +27,36 @@ pub enum AnnDataset {
 impl AnnDataset {
     pub fn name(&self) -> &'static str {
         match self {
-            AnnDataset::FashionMnist => "fashion-mnist",
-            AnnDataset::Mnist => "mnist",
-            AnnDataset::Sift => "sift",
-            AnnDataset::Gist => "gist",
-            AnnDataset::Glove25 => "glove-25",
-            AnnDataset::Glove50 => "glove-50",
-            AnnDataset::Glove100 => "glove-100",
-            AnnDataset::Glove200 => "glove-200",
-            AnnDataset::DeepImage => "deep-image",
+            Self::FashionMnist => "fmnist-784-euclidean",
+            Self::Mnist => "mnist-784-euclidean",
+            Self::Sift => "sift-128-euclidean",
+            Self::Gist => "gist-960-euclidean",
+            Self::Glove25 => "glove-25-cosine",
+            Self::Glove50 => "glove-50-cosine",
+            Self::Glove100 => "glove-100-cosine",
+            Self::Glove200 => "glove-200-cosine",
+            Self::DeepImage => "deepimage-96-cosine",
+        }
+    }
+
+    pub fn metric<I: AsRef<[f32]>>(&self) -> fn(&I, &I) -> f32 {
+        match self {
+            Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => metrics::euclidean,
+            Self::Glove25 | Self::Glove50 | Self::Glove100 | Self::Glove200 | Self::DeepImage => metrics::cosine,
+        }
+    }
+
+    fn file_name_prefix(&self) -> &'static str {
+        match self {
+            Self::FashionMnist => "fashion-mnist",
+            Self::Mnist => "mnist",
+            Self::Sift => "sift",
+            Self::Gist => "gist",
+            Self::Glove25 => "glove-25",
+            Self::Glove50 => "glove-50",
+            Self::Glove100 => "glove-100",
+            Self::Glove200 => "glove-200",
+            Self::DeepImage => "deep-image",
         }
     }
 
@@ -78,9 +101,11 @@ impl AnnDataset {
     }
 
     fn subset_path<P: AsRef<Path>>(&self, base: &P, subset: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = base
-            .as_ref()
-            .join(format!("{}-{}.npy", self.name(), subset.to_ascii_lowercase()));
+        let path = base.as_ref().join(format!(
+            "{}-{}.npy",
+            self.file_name_prefix(),
+            subset.to_ascii_lowercase()
+        ));
         if path.exists() {
             Ok(path)
         } else {

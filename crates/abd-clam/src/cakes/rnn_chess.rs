@@ -9,8 +9,8 @@ use super::{ParSearch, Search};
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 pub struct RnnChess<T: DistanceValue>(pub T);
 
-impl<I, T: DistanceValue> Search<I, T> for RnnChess<T> {
-    fn search<'a, M: Fn(&I, &I) -> T>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for RnnChess<T> {
+    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         let (mut hits, subsumed, straddlers) = tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters
@@ -37,13 +37,10 @@ impl<I, T: DistanceValue> Search<I, T> for RnnChess<T> {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> ParSearch<I, T> for RnnChess<T> {
-    fn par_search<'a, M: Fn(&I, &I) -> T + Send + Sync>(
-        &self,
-        root: &'a Ball<I, T>,
-        metric: &M,
-        query: &I,
-    ) -> Vec<(&'a I, T)> {
+impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M>
+    for RnnChess<T>
+{
+    fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters

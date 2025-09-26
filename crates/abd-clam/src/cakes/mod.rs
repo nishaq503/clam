@@ -19,7 +19,7 @@ pub use rnn_chess::RnnChess;
 pub use rnn_linear::RnnLinear;
 
 /// A `Search` trait for defining how to search for nearest neighbors.
-pub trait Search<I, T: DistanceValue> {
+pub trait Search<I, T: DistanceValue, M: Fn(&I, &I) -> T> {
     /// Search for the nearest neighbors of a given query item.
     ///
     /// # Arguments
@@ -30,43 +30,27 @@ pub trait Search<I, T: DistanceValue> {
     /// # Returns
     ///
     /// A vector of tuples containing the index and distance of the nearest neighbors.
-    fn search<'a, M: Fn(&I, &I) -> T>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)>;
+    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)>;
 
     /// Batched version of [`Search::search`](Search::search).
-    fn batch_search<'a, M: Fn(&I, &I) -> T, S: IntoIterator<Item = &'a I>>(
-        &self,
-        root: &'a Ball<I, T>,
-        metric: &M,
-        queries: S,
-    ) -> Vec<Vec<(&'a I, T)>> {
-        queries
-            .into_iter()
-            .map(|query| self.search(root, metric, query))
-            .collect()
+    fn batch_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, queries: &[I]) -> Vec<Vec<(&'a I, T)>> {
+        queries.iter().map(|query| self.search(root, metric, query)).collect()
     }
 }
 
 /// A parallel extension of the [`Search`](Search) trait.
-pub trait ParSearch<I: Send + Sync, T: DistanceValue + Send + Sync>: Search<I, T> + Send + Sync {
+pub trait ParSearch<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>:
+    Search<I, T, M> + Send + Sync
+{
     /// Parallel version of [`Search::search`](Search::search).
-    fn par_search<'a, M: Fn(&I, &I) -> T + Send + Sync>(
-        &self,
-        root: &'a Ball<I, T>,
-        metric: &M,
-        query: &I,
-    ) -> Vec<(&'a I, T)> {
+    fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         self.search(root, metric, query)
     }
 
     /// Parallel batched version of [`ParSearch::par_search`](ParSearch::par_search).
-    fn par_batch_search<'a, M: Fn(&I, &I) -> T + Send + Sync, S: IntoParallelIterator<Item = &'a I>>(
-        &self,
-        root: &'a Ball<I, T>,
-        metric: &M,
-        queries: S,
-    ) -> Vec<Vec<(&'a I, T)>> {
+    fn par_batch_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, queries: &[I]) -> Vec<Vec<(&'a I, T)>> {
         queries
-            .into_par_iter()
+            .par_iter()
             .map(|query| self.par_search(root, metric, query))
             .collect()
     }

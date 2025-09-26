@@ -9,8 +9,8 @@ use super::{ParSearch, Search};
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
 pub struct KnnDfs(pub usize);
 
-impl<I, T: DistanceValue> Search<I, T> for KnnDfs {
-    fn search<'a, M: Fn(&I, &I) -> T>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
+    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is greater than the number of items in the tree, so we
             // just return all items in the tree.
@@ -48,7 +48,7 @@ impl<I, T: DistanceValue> Search<I, T> for KnnDfs {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> ParSearch<I, T> for KnnDfs {}
+impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnDfs {}
 
 /// The minimum possible distance from the query to any item in the ball.
 fn d_min<I, T: DistanceValue>(ball: &Ball<I, T>, d: T) -> T {

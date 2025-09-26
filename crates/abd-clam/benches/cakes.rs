@@ -7,13 +7,11 @@ use abd_clam::{
     Ball, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
+use rayon::prelude::*;
 
 mod utils;
 
-use utils::{
-    ann_benchmarks::{base_dir, AnnDataset},
-    metrics,
-};
+use utils::ann_benchmarks::{base_dir, AnnDataset};
 
 fn run_group<I, T, M>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
@@ -25,77 +23,65 @@ fn run_group<I, T, M>(
     T: DistanceValue + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
+    group
+        .throughput(criterion::Throughput::Elements(queries.len() as u64))
+        .sample_size(10);
+
     for k in [10] {
-        let knn_linear = cakes::KnnLinear(k);
         let id = format!("knn-linear-{k}");
+        let items = root.all_items();
         group.bench_function(&id, |b| {
-            b.iter_with_large_drop(|| knn_linear.par_batch_search(root, metric, queries));
+            b.iter_with_large_drop(|| {
+                queries
+                    .into_par_iter()
+                    .map(|q| items.par_iter().map(|&x| (x, metric(q, x))).collect::<Vec<_>>())
+                    .collect::<Vec<_>>()
+            });
         });
 
-        let knn_dfs = cakes::KnnDfs(k);
-        let id = format!("knn-dfs-{k}");
-        group.bench_function(&id, |b| {
-            b.iter_with_large_drop(|| knn_dfs.par_batch_search(root, metric, queries));
-        });
+        let algs: &[(&'static str, Box<dyn ParSearch<I, T, M>>)] = &[
+            ("knn-dfs", Box::new(cakes::KnnDfs(k))),
+            ("knn-bfs", Box::new(cakes::KnnBfs(k))),
+            // ("knn-rrnn", cakes::KnnRrnn(k)),
+        ];
 
-        let knn_bfs = cakes::KnnBfs(k);
-        let id = format!("knn-bfs-{k}");
-        group.bench_function(&id, |b| {
-            b.iter_with_large_drop(|| knn_bfs.par_batch_search(root, metric, queries));
-        });
-
-        // let knn_rrnn = cakes::KnnRrnn(k);
-        // let id = format!("knn-rrnn-{k}");
-        // group.bench_function(&id, |b| {
-        //     b.iter_with_large_drop(|| knn_rrnn.par_batch_search(root, metric, queries));
-        // });
+        for (name, alg) in algs {
+            let id = format!("{name}-{k}");
+            group.bench_function(&id, |b| {
+                b.iter_with_large_drop(|| alg.par_batch_search(root, metric, queries));
+            });
+        }
     }
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let euc_datasets = [
+    let datasets = [
+        // For the paper
         AnnDataset::FashionMnist,
-        AnnDataset::Mnist,
         AnnDataset::Sift,
-        AnnDataset::Gist,
-    ];
-    let cos_datasets = [
         AnnDataset::Glove25,
-        AnnDataset::Glove50,
-        AnnDataset::Glove100,
-        AnnDataset::Glove200,
-        AnnDataset::DeepImage,
+        // The rest
+        // AnnDataset::Mnist,
+        // AnnDataset::Gist,
+        // AnnDataset::Glove50,
+        // AnnDataset::Glove100,
+        // AnnDataset::Glove200,
+        // AnnDataset::DeepImage,
     ];
 
     let shuffle = true;
-    let max_queries = 100;
+    let max_queries = 1000;
 
     let base = base_dir().unwrap();
-    for dataset in &euc_datasets {
+    for dataset in &datasets[..1] {
         let items = dataset.read_train(&base, shuffle).unwrap();
-        let queries = dataset.read_test(&base, shuffle).unwrap()[..max_queries].to_vec();
-        let metric = metrics::euclidean;
-
-        let root = Ball::par_new_tree(items, &metric, &|_| true).unwrap();
-        let mut group = c.benchmark_group(format!("euc-{}", dataset.name()));
-        group
-            .throughput(criterion::Throughput::Elements(queries.len() as u64))
-            .sample_size(10);
-        run_group(&mut group, &root, &metric, &queries);
-        group.finish();
-    }
-
-    for dataset in &cos_datasets {
-        let items = dataset.read_train(&base, shuffle).unwrap();
-        let queries = dataset.read_test(&base, shuffle).unwrap()[..max_queries].to_vec();
-        let metric = metrics::cosine;
+        let queries = dataset.read_test(&base, shuffle).unwrap();
+        let queries = queries[..(max_queries.min(queries.len()))].to_vec();
+        let metric = dataset.metric();
 
         let root = Ball::par_new_tree(items, &metric, &|_| true).unwrap();
 
-        let mut group = c.benchmark_group(format!("cos-{}", dataset.name()));
-        group
-            .throughput(criterion::Throughput::Elements(queries.len() as u64))
-            .sample_size(10);
+        let mut group = c.benchmark_group(dataset.name());
         run_group(&mut group, &root, &metric, &queries);
         group.finish();
     }

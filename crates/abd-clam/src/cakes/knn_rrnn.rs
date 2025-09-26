@@ -12,8 +12,8 @@ use super::{
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);
 
-impl<I, T: DistanceValue> Search<I, T> for KnnRrnn {
-    fn search<'a, M: Fn(&I, &I) -> T>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
+    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is larger than the dataset size, return all items.
             return root
@@ -77,13 +77,8 @@ impl<I, T: DistanceValue> Search<I, T> for KnnRrnn {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> ParSearch<I, T> for KnnRrnn {
-    fn par_search<'a, M: Fn(&I, &I) -> T + Send + Sync>(
-        &self,
-        root: &'a Ball<I, T>,
-        metric: &M,
-        query: &I,
-    ) -> Vec<(&'a I, T)> {
+impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnRrnn {
+    fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is larger than the dataset size, return all items.
             return root
