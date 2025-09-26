@@ -14,6 +14,8 @@ pub struct KnnRrnn(pub usize);
 
 impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
     fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+        profi::prof!("KnnRrnn::search");
+
         if self.0 > root.cardinality() {
             // If k is larger than the dataset size, return all items.
             return root
@@ -27,17 +29,22 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
         let mut radius = radius_for_k(root, self.0);
 
         // Perform the initial tree search.
-        let (mut centers, mut subsumed, mut straddlers) = tree_search(
-            root,
-            metric,
-            query,
-            T::from_f64(radius)
-                .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-        );
+        let (mut centers, mut subsumed, mut straddlers) = {
+            profi::prof!("KnnRrnn::search::tree_search");
+            tree_search(
+                root,
+                metric,
+                query,
+                T::from_f64(radius)
+                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+            )
+        };
 
         // Count the number of confirmed hits.
         let mut num_confirmed = count_hits(&centers, &subsumed);
         while num_confirmed < self.0 {
+            profi::prof!("KnnRrnn::search::while_loop");
+
             // While we don't have enough hits...
             let multiplier = if num_confirmed == 0 {
                 // If no hits, double the radius.
@@ -49,27 +56,33 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
 
             // Increase the radius and repeat the search.
             radius *= multiplier;
-            (centers, subsumed, straddlers) = tree_search(
-                root,
-                metric,
-                query,
-                T::from_f64(radius)
-                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-            );
+            (centers, subsumed, straddlers) = {
+                profi::prof!("KnnRrnn::search::tree_search");
+                tree_search(
+                    root,
+                    metric,
+                    query,
+                    T::from_f64(radius)
+                        .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+                )
+            };
             // Recount the number of confirmed hits.
             num_confirmed = count_hits(&centers, &subsumed);
         }
 
         // We now have at least k confirmed hits; collect them.
         let mut heap = SizedHeap::<&I, T>::new(Some(self.0));
-        heap.extend(centers);
+        {
+            profi::prof!("KnnRrnn::search::leaf_search");
+            heap.extend(centers);
 
-        for ball in subsumed.into_iter().chain(straddlers) {
-            if ball.is_singleton() {
-                let d = metric(query, ball.center());
-                heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
-            } else {
-                heap.extend(ball.subtree_items().iter().map(|&item| (item, metric(query, item))));
+            for ball in subsumed.into_iter().chain(straddlers) {
+                if ball.is_singleton() {
+                    let d = metric(query, ball.center());
+                    heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
+                } else {
+                    heap.extend(ball.subtree_items().iter().map(|&item| (item, metric(query, item))));
+                }
             }
         }
 
@@ -79,6 +92,8 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
 
 impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnRrnn {
     fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+        profi::prof!("KnnRrnn::search");
+
         if self.0 > root.cardinality() {
             // If k is larger than the dataset size, return all items.
             return root
@@ -92,13 +107,16 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
         let mut radius = radius_for_k(root, self.0);
 
         // Perform the initial tree search.
-        let (mut centers, mut subsumed, mut straddlers) = par_tree_search(
-            root,
-            metric,
-            query,
-            T::from_f64(radius)
-                .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-        );
+        let (mut centers, mut subsumed, mut straddlers) = {
+            profi::prof!("KnnRrnn::search::tree_search");
+            par_tree_search(
+                root,
+                metric,
+                query,
+                T::from_f64(radius)
+                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+            )
+        };
 
         // Count the number of confirmed hits.
         let mut num_confirmed = count_hits(&centers, &subsumed);
@@ -114,32 +132,39 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
 
             // Increase the radius and repeat the search.
             radius *= multiplier;
-            (centers, subsumed, straddlers) = par_tree_search(
-                root,
-                metric,
-                query,
-                T::from_f64(radius)
-                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-            );
+            (centers, subsumed, straddlers) = {
+                profi::prof!("KnnRrnn::search::tree_search");
+                par_tree_search(
+                    root,
+                    metric,
+                    query,
+                    T::from_f64(radius)
+                        .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+                )
+            };
             // Recount the number of confirmed hits.
             num_confirmed = count_hits(&centers, &subsumed);
         }
 
         // We now have at least k confirmed hits; collect them.
         let mut heap = SizedHeap::<&I, T>::new(Some(self.0));
-        heap.extend(centers);
+        {
+            profi::prof!("KnnRrnn::search::leaf_search");
 
-        for ball in subsumed.into_iter().chain(straddlers) {
-            if ball.is_singleton() {
-                let d = metric(query, ball.center());
-                heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
-            } else {
-                heap.extend(
-                    ball.subtree_items()
-                        .par_iter()
-                        .map(|&item| (item, metric(query, item)))
-                        .collect::<Vec<_>>(),
-                );
+            heap.extend(centers);
+
+            for ball in subsumed.into_iter().chain(straddlers) {
+                if ball.is_singleton() {
+                    let d = metric(query, ball.center());
+                    heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
+                } else {
+                    heap.extend(
+                        ball.subtree_items()
+                            .par_iter()
+                            .map(|&item| (item, metric(query, item)))
+                            .collect::<Vec<_>>(),
+                    );
+                }
             }
         }
 

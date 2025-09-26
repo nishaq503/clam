@@ -9,6 +9,8 @@ pub struct KnnBfs(pub usize);
 
 impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnBfs {
     fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+        profi::prof!("KnnBfs::search");
+
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
@@ -33,6 +35,7 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnBfs {
                     )  // OR
                     || ball.is_leaf()
                         {
+                            profi::prof!("KnnBfs::search::leaf");
                             // The ball is a leaf, so we have to look at its points
                             if ball.is_singleton() {
                                 // It's a singleton, so just add non-center items with the precomputed distance
@@ -43,6 +46,8 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnBfs {
                                 hits.extend(ball.subtree_items().iter().map(|&p| (p, metric(query, p))));
                             }
                         } else {
+                            profi::prof!("KnnBfs::search::internal");
+
                             // Not a leaf, so add children to candidates
                             let [left, right] = ball.children().unwrap_or_else(|| unreachable!("Ball is a parent"));
 
@@ -76,6 +81,8 @@ fn d_max<I, T: DistanceValue>(ball: &Ball<I, T>, d: T) -> T {
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
 fn filter_candidates<I, T: DistanceValue>(mut candidates: Vec<(&Ball<I, T>, T)>, k: usize) -> Vec<(&Ball<I, T>, T)> {
+    profi::prof!("KnnBfs::filter_candidates");
+
     let threshold_index = quick_partition(&mut candidates, k);
     let threshold = candidates[threshold_index].1;
 
@@ -99,6 +106,8 @@ fn filter_candidates<I, T: DistanceValue>(mut candidates: Vec<(&Ball<I, T>, T)>,
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
 fn quick_partition<I, T: DistanceValue>(items: &mut [(&Ball<I, T>, T)], k: usize) -> usize {
+    profi::prof!("KnnBfs::quick_partition");
+
     qps(items, k, 0, items.len() - 1)
 }
 
@@ -146,6 +155,8 @@ fn qps<I, T: DistanceValue>(items: &mut [(&Ball<I, T>, T)], k: usize, l: usize, 
 /// of pivot are less than or equal to pivot and all elements to right of pivot
 /// are greater than pivot.
 fn find_pivot<I, T: DistanceValue>(items: &mut [(&Ball<I, T>, T)], l: usize, r: usize, pivot: usize) -> usize {
+    profi::prof!("KnnBfs::find_pivot");
+
     // Move pivot to the end
     items.swap(pivot, r);
 

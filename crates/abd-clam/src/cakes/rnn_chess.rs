@@ -41,37 +41,51 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
     for RnnChess<T>
 {
     fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
-        let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, query, self.0);
+        profi::prof!("RnnChess::search");
+
+        let (mut hits, subsumed, straddlers) = {
+            profi::prof!("RnnChess::search::tree_search");
+
+            par_tree_search(root, metric, query, self.0)
+        };
 
         // Add all items from fully subsumed clusters
-        hits.extend(
-            subsumed
-                .into_par_iter()
-                .flat_map(|ball| {
-                    ball.subtree_items()
-                        .into_par_iter()
-                        .map(|item| (item, metric(item, query)))
-                })
-                .collect::<Vec<_>>(),
-        );
+        {
+            profi::prof!("RnnChess::search::subsumed_leaves");
+
+            hits.extend(
+                subsumed
+                    .into_par_iter()
+                    .flat_map(|ball| {
+                        ball.subtree_items()
+                            .into_par_iter()
+                            .map(|item| (item, metric(item, query)))
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
 
         // Check all items from straddling clusters
-        hits.extend(
-            straddlers
-                .into_par_iter()
-                .flat_map(|ball| {
-                    ball.subtree_items().into_par_iter().filter_map(|item| {
-                        let dist = metric(item, query);
-                        if dist <= self.0 {
-                            // Item is within the search radius so include it
-                            Some((item, dist))
-                        } else {
-                            None
-                        }
+        {
+            profi::prof!("RnnChess::search::straddler_leaves");
+
+            hits.extend(
+                straddlers
+                    .into_par_iter()
+                    .flat_map(|ball| {
+                        ball.subtree_items().into_par_iter().filter_map(|item| {
+                            let dist = metric(item, query);
+                            if dist <= self.0 {
+                                // Item is within the search radius so include it
+                                Some((item, dist))
+                            } else {
+                                None
+                            }
+                        })
                     })
-                })
-                .collect::<Vec<_>>(),
-        );
+                    .collect::<Vec<_>>(),
+            );
+        }
 
         hits
     }

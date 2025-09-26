@@ -36,7 +36,7 @@ fn run_group<I, T, M>(
                     .into_par_iter()
                     .map(|q| items.par_iter().map(|&x| (x, metric(q, x))).collect::<Vec<_>>())
                     .collect::<Vec<_>>()
-            });
+            })
         });
 
         let algs: &[(&'static str, Box<dyn ParSearch<I, T, M>>)] = &[
@@ -45,12 +45,37 @@ fn run_group<I, T, M>(
             // ("knn-rrnn", cakes::KnnRrnn(k)),
         ];
 
+        let mut oracles = Vec::new();
         for (name, alg) in algs {
+            oracles = alg
+                .par_batch_search(root, metric, queries)
+                .into_iter()
+                .map(|res| {
+                    res.into_iter()
+                        .max_by_key(|&(i, d)| abd_clam::utils::MaxItem(i, d))
+                        .map(|(_, radius)| cakes::RnnChess(radius))
+                        .unwrap()
+                })
+                .collect();
+
             let id = format!("{name}-{k}");
             group.bench_function(&id, |b| {
-                b.iter_with_large_drop(|| alg.par_batch_search(root, metric, queries));
+                b.iter_with_large_drop(|| alg.par_batch_search(root, metric, queries))
             });
         }
+
+        let id = format!("rnn-oracle-{k}");
+        group.bench_function(&id, |b| {
+            b.iter_with_large_drop(|| {
+                oracles
+                    .par_iter()
+                    .zip(queries.par_iter())
+                    .map(|(oracle, query)| oracle.par_search(root, metric, query))
+                    .collect::<Vec<_>>()
+            })
+        });
+
+        core::mem::drop(oracles);
     }
 }
 
@@ -73,13 +98,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let max_queries = 1000;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets[..1] {
+    for dataset in &datasets {
         let items = dataset.read_train(&base, shuffle).unwrap();
         let queries = dataset.read_test(&base, shuffle).unwrap();
         let queries = queries[..(max_queries.min(queries.len()))].to_vec();
         let metric = dataset.metric();
 
-        let root = Ball::par_new_tree(items, &metric, &|_| true).unwrap();
+        let criteria = |_: &Ball<_, _>| true;
+        // let criteria = |b: &Ball<_, _>| b.cardinality() > 10;
+        let root = Ball::par_new_tree(items, &metric, &criteria).unwrap();
 
         let mut group = c.benchmark_group(dataset.name());
         run_group(&mut group, &root, &metric, &queries);

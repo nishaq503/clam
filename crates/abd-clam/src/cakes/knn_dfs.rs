@@ -11,7 +11,7 @@ pub struct KnnDfs(pub usize);
 
 impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
     fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
-        profi::prof!("knn-dfs-search");
+        profi::prof!("KnnDfs::search");
 
         if self.0 > root.cardinality() {
             // If k is greater than the number of items in the tree, so we
@@ -40,6 +40,8 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
                         .peek() // the theoretical closest candidate
                         .map_or_else(|| unreachable!("`candidates` is non-empty."), |(_, &Reverse((d_min, _)))| d_min))
         {
+            profi::prof!("KnnDfs::search::loop");
+
             // Find the next leaf to process.
             let (leaf, d) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
             // Process the leaf and update hits.
@@ -72,7 +74,7 @@ fn pop_till_leaf<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     candidates: &mut SizedHeap<&'a Ball<I, T>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<&'a I, T>,
 ) -> (&'a Ball<I, T>, T) {
-    profi::prof!();
+    profi::prof!("KnnDfs::pop_till_leaf");
 
     while candidates.peek().map_or_else(
         || unreachable!("`candidates` is non-empty."),
@@ -120,7 +122,7 @@ fn leaf_into_hits<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     leaf: &'a Ball<I, T>,
     d: T,
 ) {
-    profi::prof!();
+    profi::prof!("KnnDfs::leaf_into_hits");
 
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are
