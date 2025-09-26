@@ -4,7 +4,7 @@ use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
-    vectors::{chebyshev, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan},
+    vectors::{chebyshev, dot_product, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan},
     Number,
 };
 
@@ -46,6 +46,10 @@ fn l4(x: &[u32], y: &[u32]) -> f32 {
 
 fn l_inf(x: &[u32], y: &[u32]) -> u32 {
     x.iter().zip(y.iter()).map(|(x, &y)| x.abs_diff(y)).max().unwrap()
+}
+
+fn dot(x: &[u32], y: &[u32]) -> u32 {
+    dot_product(x, y)
 }
 
 #[test]
@@ -98,7 +102,11 @@ fn lp_u32() {
 
             let e_l_inf = l_inf(x, y);
             let a_l_inf = chebyshev(x, y);
-            assert_eq!(e_l_inf, a_l_inf, "Chebyshev: expected: {e_l_inf}, actual: {a_l_inf}",);
+            assert_eq!(e_l_inf, a_l_inf, "Chebyshev: expected: {e_l_inf}, actual: {a_l_inf}");
+
+            let e_dot = dot(x, y);
+            let a_dot = dot_product(x, y);
+            assert_eq!(e_dot, a_dot, "Dot product: expected: {e_dot}, actual: {a_dot}");
         }
     }
 }

@@ -41,7 +41,9 @@ fn run_group<M>(
         10.0 * root.radius() / n_items as f32
     };
 
-    for multiplier in [1, 2, 4, 8, 16, 32, 64] {
+    let multipliers = [1, 2, 4, 8, 16, 32, 64];
+    for &multiplier in &multipliers[..1] {
+        // For quicker benches, only use the first multiplier
         let m_items = if multiplier == 1 {
             items.clone()
         } else {
@@ -112,7 +114,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let max_queries = 100;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets {
+    for dataset in &datasets[..3] {
+        // For quicker benches, only use the first 3 datasets
         let queries = dataset.read_test(&base, shuffle).unwrap();
         let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 

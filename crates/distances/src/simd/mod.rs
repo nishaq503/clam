@@ -37,6 +37,18 @@ pub fn cosine_f64(a: &[f64], b: &[f64]) -> f64 {
     Vectorized::cosine(a, b)
 }
 
+/// Computes the dot product between two vectors.
+#[must_use]
+pub fn dot_product_f32(a: &[f32], b: &[f32]) -> f32 {
+    Vectorized::dot_product(a, b)
+}
+
+/// Computes the dot product between two vectors.
+#[must_use]
+pub fn dot_product_f64(a: &[f64], b: &[f64]) -> f64 {
+    Vectorized::dot_product(a, b)
+}
+
 #[macro_use]
 mod macros;
 
@@ -61,9 +73,10 @@ pub(crate) trait Naive {
 
     fn squared_euclidean(self, other: Self) -> Self::Output;
     fn euclidean(self, other: Self) -> Self::Output;
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn cosine(self, other: Self) -> Self::Output;
     fn cosine_acc(self, other: Self) -> [Self::Output; 3];
+    fn dot_product(self, other: Self) -> Self::Output;
 }
 
 pub(crate) trait Vectorized {
@@ -71,6 +84,7 @@ pub(crate) trait Vectorized {
     fn squared_euclidean(self, other: Self) -> Self::Output;
     fn euclidean(self, other: Self) -> Self::Output;
     fn cosine(self, other: Self) -> Self::Output;
+    fn dot_product(self, other: Self) -> Self::Output;
 }
 
 impl_naive!(f64, f64);
@@ -101,7 +115,6 @@ impl Vectorized for &[f32] {
     type Output = f32;
     fn squared_euclidean(self, other: Self) -> Self::Output {
         if self.len() >= 64 {
-            // TODO will this fail on 128-bit?
             F32x8::squared_euclidean(self, other)
         } else {
             F32x4::squared_euclidean(self, other)
@@ -117,6 +130,14 @@ impl Vectorized for &[f32] {
             F32x8::cosine(self, other)
         } else {
             F32x4::cosine(self, other)
+        }
+    }
+
+    fn dot_product(self, other: Self) -> Self::Output {
+        if self.len() >= 64 {
+            F32x8::dot_product(self, other)
+        } else {
+            F32x4::dot_product(self, other)
         }
     }
 }
@@ -142,12 +163,20 @@ impl Vectorized for &Vec<f32> {
             F32x4::cosine(self, other)
         }
     }
+
+    fn dot_product(self, other: Self) -> Self::Output {
+        if self.len() >= 64 {
+            F32x8::dot_product(self, other)
+        } else {
+            F32x4::dot_product(self, other)
+        }
+    }
 }
 
 impl Vectorized for &[f64] {
     type Output = f64;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 16 {
+        if self.len() >= 32 {
             F64x4::squared_euclidean(self, other)
         } else {
             F64x2::squared_euclidean(self, other)
@@ -159,10 +188,18 @@ impl Vectorized for &[f64] {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 16 {
+        if self.len() >= 32 {
             F64x4::cosine(self, other)
         } else {
             F64x2::cosine(self, other)
+        }
+    }
+
+    fn dot_product(self, other: Self) -> Self::Output {
+        if self.len() >= 32 {
+            F64x4::dot_product(self, other)
+        } else {
+            F64x2::dot_product(self, other)
         }
     }
 }
@@ -170,7 +207,7 @@ impl Vectorized for &[f64] {
 impl Vectorized for &Vec<f64> {
     type Output = f64;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 16 {
+        if self.len() >= 32 {
             F64x4::squared_euclidean(self, other)
         } else {
             F64x2::squared_euclidean(self, other)
@@ -182,10 +219,18 @@ impl Vectorized for &Vec<f64> {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 16 {
+        if self.len() >= 32 {
             F64x4::cosine(self, other)
         } else {
             F64x2::cosine(self, other)
+        }
+    }
+
+    fn dot_product(self, other: Self) -> Self::Output {
+        if self.len() >= 32 {
+            F64x4::dot_product(self, other)
+        } else {
+            F64x2::dot_product(self, other)
         }
     }
 }

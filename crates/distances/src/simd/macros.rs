@@ -169,6 +169,34 @@ macro_rules! impl_distances {
         use super::Naive;
         #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
         impl $name {
+            /// Calculate the dot product of two SIMD lane-slices
+            pub fn dot_product_inner(a: &[$ty], b: &[$ty]) -> $name {
+                let i = $name::from_slice(a);
+                let j = $name::from_slice(b);
+                i * j
+            }
+
+            /// Calculate the dot product of two slices of equal length,
+            /// using auto-vectorized SIMD primitives
+            pub fn dot_product(a: &[$ty], b: &[$ty]) -> $ty {
+                assert_eq!(a.len(), b.len());
+                if a.len() < $name::lanes() {
+                    return Naive::dot_product(a, b);
+                }
+                let mut i = 0;
+                let mut sum = $name::splat(0 as $ty);
+                while a.len() - $name::lanes() >= i {
+                    sum += $name::dot_product_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
+                    i += $name::lanes();
+                }
+
+                let mut sum = sum.horizontal_add();
+                if i < a.len() {
+                    sum += Naive::dot_product(&a[i..], &b[i..]);
+                }
+                sum
+            }
+
             /// Calculate the squared distance between two SIMD lane-slices
             pub fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
                 let i = $name::from_slice(a);
@@ -184,8 +212,8 @@ macro_rules! impl_distances {
                 [i * i, j * j, i * j]
             }
 
-            /// Calculate euclidean distance between two slices of equal length,
-            /// using auto-vectorized SIMD primitives
+            /// Calculate the squared euclidean distance between two slices of
+            /// equal length, using auto-vectorized SIMD primitives
             pub fn squared_euclidean(a: &[$ty], b: &[$ty]) -> $ty {
                 assert_eq!(a.len(), b.len());
                 if a.len() < $name::lanes() {
@@ -300,6 +328,14 @@ macro_rules! impl_naive {
                     }
                 }
             }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                let mut sum = 0 as Self::Output;
+                for i in 0..self.len() {
+                    sum += (self[i] * other[i]) as Self::Output;
+                }
+                sum
+            }
         }
 
         #[allow(clippy::cast_precision_loss, clippy::cast_lossless)]
@@ -342,6 +378,14 @@ macro_rules! impl_naive {
                         d
                     }
                 }
+            }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                let mut sum = 0 as Self::Output;
+                for i in 0..self.len() {
+                    sum += (self[i] * other[i]) as Self::Output;
+                }
+                sum
             }
         }
     };

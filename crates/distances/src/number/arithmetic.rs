@@ -93,11 +93,11 @@ pub trait Multiplication:
         Self::ONE / self
     }
 
-    /// Returns `self + a * b`, potentially as a fused multiply-add operation.
+    /// Returns `self * a + b`, potentially as a fused multiply-add operation.
     #[must_use]
     fn mul_add(self, a: Self, b: Self) -> Self;
 
-    /// Replace `self` with `self + a * b`, potentially as a fused
+    /// Replace `self` with `self * a + b`, potentially as a fused
     /// multiply-add-assign operation.
     fn mul_add_assign(&mut self, a: Self, b: Self);
 
