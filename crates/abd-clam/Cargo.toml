@@ -31,6 +31,7 @@ workspace = true
 [dependencies]
 num = { workspace = true }
 rayon = { workspace = true }
+profi = { workspace = true, default-features = false, features = ["rayon"] }
 
 # For:
 #  - CHAODA
@@ -54,11 +55,12 @@ ndarray-npy = { workspace = true }
 distances = { workspace = true }
 
 [features]
+profile = ["profi/enable"]
+all = []
 # musals = ["dep:stringzilla"]
 # disk-io = ["dep:flate2"]
 # chaoda = ["dep:smartcore"]
 # mbed = ["chaoda", "dep:slotmap"]
-# all = ["chaoda", "mbed", "musals"]
 
 [[bench]]
 name = "cakes"

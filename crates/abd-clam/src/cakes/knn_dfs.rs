@@ -11,6 +11,8 @@ pub struct KnnDfs(pub usize);
 
 impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
     fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+        profi::prof!("knn-dfs-search");
+
         if self.0 > root.cardinality() {
             // If k is greater than the number of items in the tree, so we
             // just return all items in the tree.
@@ -70,31 +72,37 @@ fn pop_till_leaf<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     candidates: &mut SizedHeap<&'a Ball<I, T>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<&'a I, T>,
 ) -> (&'a Ball<I, T>, T) {
+    profi::prof!();
+
     while candidates.peek().map_or_else(
         || unreachable!("`candidates` is non-empty."),
         |(ball, _)| !ball.is_leaf(),
     ) {
-        // Pop the parent candidate.
-        let (parent, _) = candidates
-            .pop()
-            .unwrap_or_else(|| unreachable!("`candidates` is non-empty."));
+        profi::prof!("pop-while-not-leaf");
 
-        // Get the children of the parent.
-        let [left, right] = parent
-            .children()
-            .unwrap_or_else(|| unreachable!("`parent` is not a leaf."));
+        candidates.pop().and_then(|(parent, _)| parent.children()).map_or_else(
+            || unreachable!("Top candidate is a parent."),
+            |[left, right]| {
+                let (d_left, d_right) = {
+                    profi::prof!("child-distances");
 
-        // Compute the distance from the query to each child center.
-        let d_left = metric(query, left.center());
-        let d_right = metric(query, right.center());
+                    let d_left = metric(query, left.center());
+                    let d_right = metric(query, right.center());
+                    (d_left, d_right)
+                };
+                {
+                    profi::prof!("push-children");
 
-        // Push the child centers onto hits.
-        hits.push((left.center(), d_left));
-        hits.push((right.center(), d_right));
+                    // Push the child centers onto hits.
+                    hits.push((left.center(), d_left));
+                    hits.push((right.center(), d_right));
 
-        // Push the children onto candidates.
-        candidates.push((left, Reverse((d_min(left, d_left), d_left))));
-        candidates.push((right, Reverse((d_min(right, d_right), d_right))));
+                    // Push the children onto candidates.
+                    candidates.push((left, Reverse((d_min(left, d_left), d_left))));
+                    candidates.push((right, Reverse((d_min(right, d_right), d_right))));
+                }
+            },
+        );
     }
 
     candidates.pop().map_or_else(
@@ -112,6 +120,8 @@ fn leaf_into_hits<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     leaf: &'a Ball<I, T>,
     d: T,
 ) {
+    profi::prof!();
+
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are
         // exactly `d` from the query.

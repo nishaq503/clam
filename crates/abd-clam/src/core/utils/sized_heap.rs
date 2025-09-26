@@ -48,6 +48,8 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Pushes an item onto the heap, maintaining the max size.
     pub fn push(&mut self, (a, item): (A, T)) {
+        profi::prof!("SizedHeap::push");
+
         if self.heap.len() < self.k {
             self.heap.push(MinItem(a, item));
         } else if let Some(top) = self.heap.peek() {
@@ -60,6 +62,8 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Pushes several items onto the heap, maintaining the max size.
     pub fn extend<I: IntoIterator<Item = (A, T)>>(&mut self, items: I) {
+        profi::prof!("SizedHeap::extend");
+
         for (a, item) in items {
             self.heap.push(MinItem(a, item));
         }
@@ -71,16 +75,21 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Peeks at the top item in the heap.
     #[must_use]
     pub fn peek(&self) -> Option<(&A, &T)> {
+        profi::prof!("SizedHeap::peek");
+
         self.heap.peek().map(|MinItem(a, x)| (a, x))
     }
 
     /// Pops the top item from the heap.
     pub fn pop(&mut self) -> Option<(A, T)> {
+        profi::prof!("SizedHeap::pop");
+
         self.heap.pop().map(|MinItem(a, x)| (a, x))
     }
 
     /// Consumes the `SizedHeap` and returns the items in an iterator.
     pub fn items(self) -> impl Iterator<Item = (A, T)> {
+        profi::prof!();
         self.heap.into_iter().map(|MinItem(a, x)| (a, x))
     }
 
@@ -104,20 +113,16 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Merge two heaps into one.
     pub fn merge(&mut self, other: Self) {
+        profi::prof!("SizedHeap::merge");
+
         self.extend(other.items());
     }
 
     /// Retains only the elements that satisfy the predicate.
     pub fn retain<F: Fn(&T) -> bool>(&mut self, f: F) {
-        self.heap.retain(|MinItem(_, x)| f(x));
-    }
-}
+        profi::prof!("SizedHeap::retain");
 
-impl<A: Send + Sync, T: PartialOrd + Send + Sync> SizedHeap<A, T> {
-    /// Parallel version of [`SizedHeap::items`](crate::core::dataset::SizedHeap::items).
-    #[must_use]
-    pub fn par_items(self) -> impl ParallelIterator<Item = (A, T)> {
-        self.heap.into_par_iter().map(|MinItem(a, x)| (a, x))
+        self.heap.retain(|MinItem(_, x)| f(x));
     }
 }
 
