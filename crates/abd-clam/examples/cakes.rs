@@ -48,11 +48,11 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn build_ball(items: Vec<Vec<f32>>) -> Result<Ball<Vec<f32>, f32>, String> {
-    Ball::par_new_tree(items, &build_metric, &|_| true)
+fn build_ball(items: Vec<Vec<f32>>) -> Result<Ball<usize, Vec<f32>, f32>, String> {
+    Ball::par_new_tree_with_indices(items, &build_metric, &|_| true)
 }
 
-fn search_ball<'a>(root: &'a Ball<Vec<f32>, f32>, queries: &[Vec<f32>], k: usize) {
+fn search_ball<'a>(root: &'a Ball<usize, Vec<f32>, f32>, queries: &[Vec<f32>], k: usize) {
     profi::prof!();
 
     let dfs_results = abd_clam::cakes::KnnDfs(k).par_batch_search(root, &knn_dfs_metric, queries);
@@ -63,7 +63,7 @@ fn search_ball<'a>(root: &'a Ball<Vec<f32>, f32>, queries: &[Vec<f32>], k: usize
         .iter()
         .map(|res| {
             res.iter()
-                .max_by_key(|&&(i, d)| abd_clam::utils::MaxItem(i, d))
+                .max_by_key(|&&(_, d)| abd_clam::utils::MaxItem((), d))
                 .map(|&(_, radius)| abd_clam::cakes::RnnChess(radius))
                 .unwrap()
         })

@@ -11,11 +11,12 @@ use crate::{utils, DistanceValue};
 /// # Type Parameters
 ///
 /// * `I`: The type of items in the tree.
+/// * `Id`: The type of metadata associated each item.
 /// * `T`: The type of distance values between items.
 #[must_use]
-pub struct Ball<I, T: DistanceValue> {
+pub struct Ball<Id, I, T: DistanceValue> {
     /// The center item of the ball.
-    center: I,
+    center: (Id, I),
     /// The radius of the ball.
     radius: T,
     /// The Local Fractal Dimension (LFD) of the ball.
@@ -23,18 +24,18 @@ pub struct Ball<I, T: DistanceValue> {
     /// The number of items in the ball, including the center.
     cardinality: usize,
     /// The `Contents` of the ball.
-    contents: Contents<I, T>,
+    contents: Contents<Id, I, T>,
 }
 
 /// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
-enum Contents<I, T: DistanceValue> {
+enum Contents<Id, I, T: DistanceValue> {
     /// The ball is a leaf and contains items directly.
-    Leaf(Vec<I>),
+    Leaf(Vec<(Id, I)>),
     /// The ball is a parent and contains child balls.
-    Children([Box<Ball<I, T>>; 2]),
+    Children([Box<Ball<Id, I, T>>; 2]),
 }
 
-impl<I: Debug, T: DistanceValue + Debug> Debug for Ball<I, T> {
+impl<I: Debug, Id: Debug, T: DistanceValue + Debug> Debug for Ball<Id, I, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
             .field("center", &self.center)
@@ -46,7 +47,7 @@ impl<I: Debug, T: DistanceValue + Debug> Debug for Ball<I, T> {
     }
 }
 
-impl<I, T: DistanceValue + Debug> Debug for Contents<I, T> {
+impl<Id, I, T: DistanceValue + Debug> Debug for Contents<Id, I, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Leaf(items) => f.debug_tuple("Leaf").field(&items.len()).finish(),
@@ -55,9 +56,41 @@ impl<I, T: DistanceValue + Debug> Debug for Contents<I, T> {
     }
 }
 
-impl<I, T: DistanceValue> Ball<I, T> {
+impl<I, T: DistanceValue> Ball<usize, I, T> {
+    /// Create a new tree of `Ball`s with `usize` indices as item metadata.
+    ///
+    /// # Errors
+    ///
+    /// - See [`new_tree`](Self::new_tree) for details.
+    pub fn new_tree_with_indices<M: Fn(&I, &I) -> T>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &impl Fn(&Self) -> bool,
+    ) -> Result<Self, String> {
+        let indexed_items = items.into_iter().enumerate().collect();
+        Self::new_tree(indexed_items, metric, criteria)
+    }
+}
+
+impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<usize, I, T> {
+    /// Parallel version of [`new_tree_with_indices`](Self::new_tree_with_indices).
+    ///
+    /// # Errors
+    ///
+    /// - See [`new_tree`](Self::new_tree) for details.
+    pub fn par_new_tree_with_indices<M: Fn(&I, &I) -> T + Send + Sync>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+    ) -> Result<Self, String> {
+        let indexed_items = items.into_iter().enumerate().collect();
+        Self::par_new_tree(indexed_items, metric, criteria)
+    }
+}
+
+impl<Id, I, T: DistanceValue> Ball<Id, I, T> {
     /// A reference to the center item of the ball.
-    pub const fn center(&self) -> &I {
+    pub const fn center(&self) -> &(Id, I) {
         &self.center
     }
 
@@ -89,7 +122,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
 
     /// A vector of references to all items in the subtree rooted at this ball,
     /// excluding the center of this ball.
-    pub fn subtree_items(&self) -> Vec<&I> {
+    pub fn subtree_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
             Contents::Leaf(items) => items.iter().collect(),
             Contents::Children([left, right]) => left.all_items().into_iter().chain(right.all_items()).collect(),
@@ -97,7 +130,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
     }
 
     /// A vector of references to all items in the ball, including the center, which is placed first.
-    pub fn all_items(&self) -> Vec<&I> {
+    pub fn all_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
             Contents::Leaf(items) => core::iter::once(&self.center).chain(items.iter()).collect(),
             Contents::Children([left, right]) => core::iter::once(&self.center)
@@ -125,6 +158,16 @@ impl<I, T: DistanceValue> Ball<I, T> {
         self.cardinality == 1 || self.radius.is_zero()
     }
 
+    /// Returns the distance from the given item to the center of the ball using the provided metric.
+    pub fn distance_to_center<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> (&(Id, I), T) {
+        (&self.center, metric(item, &self.center.1))
+    }
+
+    /// Returns the distance from the given item to all items in the ball and its subtree using the provided metric.
+    pub fn distances_to_all<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> Vec<(&(Id, I), T)> {
+        self.all_items().iter().map(|&p| (p, metric(item, &p.1))).collect()
+    }
+
     /// Creates a new tree of `Ball`s.
     ///
     /// # Parameters
@@ -137,7 +180,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
     ///
     /// - If `items` is empty.
     pub fn new_tree<M: Fn(&I, &I) -> T>(
-        items: Vec<I>,
+        items: Vec<(Id, I)>,
         metric: &M,
         criteria: &impl Fn(&Self) -> bool,
     ) -> Result<Self, String> {
@@ -167,7 +210,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
     /// to keep track of which item provided the `radius`, which is wasteful and hard to keep correct when coming back up the recursion stack of `partition`
     /// because the items are reordered. The alternative is to compute the `radius` twice: once in `new` and once in `partition`, which can be very expensive
     /// for large collections of items and/or expensive metrics.
-    fn new<M: Fn(&I, &I) -> T>(mut items: Vec<I>, metric: &M) -> Self {
+    fn new<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton ball: `center` is the only item, `radius` is 0, `LFD` is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
@@ -222,7 +265,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
                 }
                 if items.len() == 1 {
                     // A ball with one center and one item: nothing to partition.
-                    self.radius = metric(&self.center, &items[0]);
+                    self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
                     self.contents = Contents::Leaf(items);
                     return self;
@@ -232,7 +275,10 @@ impl<I, T: DistanceValue> Ball<I, T> {
                 // We have to first compute the radius and LFD because `new` does not compute them.
 
                 // Compute the radius and LFD of the ball.
-                let radial_distances = items.iter().map(|item| metric(&self.center, item)).collect::<Vec<_>>();
+                let radial_distances = items
+                    .iter()
+                    .map(|item| metric(&self.center.1, &item.1))
+                    .collect::<Vec<_>>();
                 let arg_radius = radial_distances
                     .iter()
                     .enumerate()
@@ -263,7 +309,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
                 // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
                 let mut left_distances = items
                     .into_iter()
-                    .map(|item| (metric(&left_pole, &item), item))
+                    .map(|item| (metric(&left_pole.1, &item.1), item))
                     .collect::<Vec<_>>();
 
                 // The right pole is the farthest item from the left pole
@@ -280,7 +326,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
                 // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
                 let (left_assigned, right_assigned) = left_distances
                     .into_iter()
-                    .map(|(l, item)| (l, metric(&right_pole, &item), item))
+                    .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
                     .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
 
                 // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
@@ -329,7 +375,7 @@ impl<I, T: DistanceValue> Ball<I, T> {
 
     /// Removes and returns all items from the ball and its descendants, excluding the center of this ball; the children are dropped in the process and this
     /// ball becomes a leaf with no items other than its center.
-    pub fn take_subtree_items(&mut self) -> Vec<I> {
+    pub fn take_subtree_items(&mut self) -> Vec<(Id, I)> {
         // Take ownership of the contents so we can recurse and drop children.
         let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
         match contents {
@@ -348,14 +394,19 @@ impl<I, T: DistanceValue> Ball<I, T> {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
+impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync> Ball<Id, I, T> {
+    /// Parallel version of [`distance_to_all`](Self::distances_to_all).
+    pub fn par_distances_to_all<M: Fn(&I, &I) -> T + Send + Sync>(&self, item: &I, metric: &M) -> Vec<(&(Id, I), T)> {
+        self.all_items().par_iter().map(|&p| (p, metric(item, &p.1))).collect()
+    }
+
     /// Parallel version of [`new_tree`](Self::new_tree).
     ///
     /// # Errors
     ///
-    /// - If `items` is empty.
+    /// - See [`new_tree`](Self::new_tree) for details.
     pub fn par_new_tree<M: Fn(&I, &I) -> T + Send + Sync>(
-        items: Vec<I>,
+        items: Vec<(Id, I)>,
         metric: &M,
         criteria: &(impl Fn(&Self) -> bool + Send + Sync),
     ) -> Result<Self, String> {
@@ -378,7 +429,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
     }
 
     /// Parallel version of [`new`](Self::new).
-    fn par_new<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<I>, metric: &M) -> Self {
+    fn par_new<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton ball: center is the only item, radius is 0, LFD is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
@@ -431,7 +482,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
                 }
                 if items.len() == 1 {
                     // A ball with one center and one item: nothing to partition.
-                    self.radius = metric(&self.center, &items[0]);
+                    self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
                     self.contents = Contents::Leaf(items);
                     return self;
@@ -443,7 +494,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
                 // Compute the radius and LFD of the ball.
                 let radial_distances = items
                     .par_iter()
-                    .map(|item| metric(&self.center, item))
+                    .map(|item| metric(&self.center.1, &item.1))
                     .collect::<Vec<_>>();
                 let arg_radius = radial_distances
                     .par_iter()
@@ -475,7 +526,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
                 // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
                 let mut left_distances = items
                     .into_par_iter()
-                    .map(|item| (metric(&left_pole, &item), item))
+                    .map(|item| (metric(&left_pole.1, &item.1), item))
                     .collect::<Vec<_>>();
 
                 // The right pole is the farthest item from the left pole
@@ -492,7 +543,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<I, T> {
                 // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
                 let (left_assigned, right_assigned): (Vec<_>, Vec<_>) = left_distances
                     .into_par_iter()
-                    .map(|(l, item)| (l, metric(&right_pole, &item), item))
+                    .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
                     .partition(|&(l, r, _)| l <= r);
 
                 // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
@@ -586,12 +637,12 @@ pub fn lfd_estimate<T: DistanceValue>(distances: &[T], radius: T) -> f64 {
 /// all other items in the slice.
 ///
 /// The user must ensure that the items slice is not empty.
-fn geometric_median<I, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[I], metric: &M) -> usize {
+fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
     // Compute the full distance matrix for the items.
     let distance_matrix = {
         let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        for (r, i) in items.iter().enumerate() {
-            for (c, j) in items.iter().enumerate().take(r) {
+        for (r, (_, i)) in items.iter().enumerate() {
+            for (c, (_, j)) in items.iter().enumerate().take(r) {
                 let d = metric(i, j);
                 matrix[r][c] = d;
                 matrix[c][r] = d;
@@ -610,15 +661,20 @@ fn geometric_median<I, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[I], metric
 }
 
 /// Parallel version of [`geometric_median`](geometric_median).
-fn par_geometric_median<I: Send + Sync, T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
-    items: &[I],
+fn par_geometric_median<
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: (Fn(&I, &I) -> T) + Send + Sync,
+>(
+    items: &[(Id, I)],
     metric: &M,
 ) -> usize {
     // Compute the full distance matrix for the items in parallel.
     let distance_matrix = {
         let matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        items.par_iter().enumerate().for_each(|(r, i)| {
-            items.par_iter().enumerate().take(r).for_each(|(c, j)| {
+        items.par_iter().enumerate().for_each(|(r, (_, i))| {
+            items.par_iter().enumerate().take(r).for_each(|(c, (_, j))| {
                 let d = metric(i, j);
                 // SAFETY: We have exclusive access to each cell in the matrix
                 // because every (r, c) pair is unique.

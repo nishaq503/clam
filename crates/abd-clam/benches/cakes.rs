@@ -27,16 +27,16 @@ fn run_group<M>(
 
     let error = {
         let n_items = items.len();
-        let criteria = |b: &Ball<_, _>| b.cardinality() > n_items;
-        let mut root = Ball::par_new_tree(items, &metric, &criteria).unwrap();
+        let criteria = |b: &Ball<_, _, _>| b.cardinality() > n_items;
+        let mut root = Ball::par_new_tree_with_indices(items, &metric, &criteria).unwrap();
 
         let id = BenchmarkId::new("knn-linear-k10", 1_usize);
         group.bench_function(id, |b| {
             b.iter_with_large_drop(|| abd_clam::cakes::KnnLinear(10).par_batch_search(&root, metric, queries))
         });
 
-        items = root.take_subtree_items();
-        items.push(root.center().clone());
+        items = root.take_subtree_items().into_iter().map(|(_, v)| v).collect();
+        items.push(root.center().1.clone());
 
         10.0 * root.radius() / n_items as f32
     };
@@ -48,11 +48,11 @@ fn run_group<M>(
             symagen::augmentation::augment_data(&items, multiplier, error)
         };
 
-        let criteria = |_: &Ball<_, _>| true;
-        let root = Ball::par_new_tree(m_items, &metric, &criteria).unwrap();
+        let criteria = |_: &Ball<_, _, _>| true;
+        let root = Ball::par_new_tree_with_indices(m_items, &metric, &criteria).unwrap();
 
         for k in [10] {
-            let algs: &[(&'static str, Box<dyn ParSearch<_, _, M>>)] = &[
+            let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, M>>)] = &[
                 ("knn-dfs", Box::new(cakes::KnnDfs(k))),
                 ("knn-bfs", Box::new(cakes::KnnBfs(k))),
                 // ("knn-rrnn", cakes::KnnRrnn(k)),
@@ -65,7 +65,7 @@ fn run_group<M>(
                     .into_iter()
                     .map(|res| {
                         res.into_iter()
-                            .max_by_key(|&(i, d)| abd_clam::utils::MaxItem(i, d))
+                            .max_by_key(|&(_, d)| abd_clam::utils::MaxItem((), d))
                             .map(|(_, radius)| cakes::RnnChess(radius))
                             .unwrap()
                     })

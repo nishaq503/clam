@@ -12,17 +12,14 @@ use super::{
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);
 
-impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
-    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnRrnn {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
-            // If k is larger than the dataset size, return all items.
-            return root
-                .all_items()
-                .into_iter()
-                .map(|item| (item, metric(query, item)))
-                .collect();
+            // If k is greater than the number of points in the tree, return all
+            // items with their distances.
+            return root.distances_to_all(query, metric);
         }
 
         // Estimate an initial radius to cover k points.
@@ -71,17 +68,17 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
         }
 
         // We now have at least k confirmed hits; collect them.
-        let mut heap = SizedHeap::<&I, T>::new(Some(self.0));
+        let mut heap = SizedHeap::<&(Id, I), T>::new(Some(self.0));
         {
             profi::prof!("KnnRrnn::search::leaf_search");
             heap.extend(centers);
 
             for ball in subsumed.into_iter().chain(straddlers) {
                 if ball.is_singleton() {
-                    let d = metric(query, ball.center());
+                    let d = metric(query, &ball.center().1);
                     heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
                 } else {
-                    heap.extend(ball.subtree_items().iter().map(|&item| (item, metric(query, item))));
+                    heap.extend(ball.subtree_items().iter().map(|&item| (item, metric(query, &item.1))));
                 }
             }
         }
@@ -90,17 +87,16 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnRrnn {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnRrnn {
-    fn par_search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
+    ParSearch<Id, I, T, M> for KnnRrnn
+{
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
-            // If k is larger than the dataset size, return all items.
-            return root
-                .all_items()
-                .into_par_iter()
-                .map(|item| (item, metric(query, item)))
-                .collect();
+            // If k is greater than the number of points in the tree, return all
+            // items with their distances.
+            return root.par_distances_to_all(query, metric);
         }
 
         // Estimate an initial radius to cover k points.
@@ -147,7 +143,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
         }
 
         // We now have at least k confirmed hits; collect them.
-        let mut heap = SizedHeap::<&I, T>::new(Some(self.0));
+        let mut heap = SizedHeap::<&(Id, I), T>::new(Some(self.0));
         {
             profi::prof!("KnnRrnn::search::leaf_search");
 
@@ -155,13 +151,13 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
 
             for ball in subsumed.into_iter().chain(straddlers) {
                 if ball.is_singleton() {
-                    let d = metric(query, ball.center());
+                    let d = metric(query, &ball.center().1);
                     heap.extend(ball.subtree_items().iter().map(|&item| (item, d)));
                 } else {
                     heap.extend(
                         ball.subtree_items()
                             .par_iter()
-                            .map(|&item| (item, metric(query, item)))
+                            .map(|&item| (item, metric(query, &item.1)))
                             .collect::<Vec<_>>(),
                     );
                 }
@@ -174,7 +170,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send +
 
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]
-fn radius_for_k<I, T: DistanceValue>(ball: &Ball<I, T>, k: usize) -> f64 {
+fn radius_for_k<I, Id, T: DistanceValue>(ball: &Ball<I, Id, T>, k: usize) -> f64 {
     let r = ball
         .radius()
         .to_f64()
@@ -187,7 +183,7 @@ fn radius_for_k<I, T: DistanceValue>(ball: &Ball<I, T>, k: usize) -> f64 {
 }
 
 /// Counts the total number of hits from confirmed centers and subsumed balls.
-fn count_hits<I, T: DistanceValue>(centers: &[(&I, T)], subsumed: &[&Ball<I, T>]) -> usize {
+fn count_hits<I, Id, T: DistanceValue>(centers: &[(&(I, Id), T)], subsumed: &[&Ball<I, Id, T>]) -> usize {
     centers.len()
         + subsumed
             .iter()
@@ -197,10 +193,10 @@ fn count_hits<I, T: DistanceValue>(centers: &[(&I, T)], subsumed: &[&Ball<I, T>]
 
 /// Calculate a multiplier for the radius using the LFDs of the clusters.
 #[expect(clippy::cast_precision_loss)]
-fn lfd_multiplier<I, T: DistanceValue>(
-    centers: &[(&I, T)],
-    subsumed: &[&Ball<I, T>],
-    straddlers: &[&Ball<I, T>],
+fn lfd_multiplier<I, Id, T: DistanceValue>(
+    centers: &[(&(I, Id), T)],
+    subsumed: &[&Ball<I, Id, T>],
+    straddlers: &[&Ball<I, Id, T>],
     k: usize,
     num_confirmed: usize,
 ) -> f64 {

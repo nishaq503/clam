@@ -9,19 +9,20 @@ mod common;
 #[test]
 fn new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
+
     let metric = common::metrics::manhattan;
 
     let car = items.len();
-    let criteria = |b: &Ball<_, _>| b.cardinality() < car;
-    let root = Ball::new_tree(items, &metric, &criteria)?;
+    let criteria = |b: &Ball<_, _, _>| b.cardinality() < car;
+    let root = Ball::new_tree_with_indices(items, &metric, &criteria)?;
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center().1, vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
-    let criteria = |b: &Ball<_, _>| b.cardinality() > 1;
+    let criteria = |b: &Ball<_, _, _>| b.cardinality() > 1;
     let root = root.partition(&metric, &criteria);
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
@@ -46,19 +47,20 @@ fn new() -> Result<(), String> {
 #[test]
 fn par_new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
+
     let metric = common::metrics::manhattan;
 
     let car = items.len();
-    let criteria = |b: &Ball<_, _>| b.cardinality() < car;
-    let root = Ball::par_new_tree(items, &metric, &criteria)?;
+    let criteria = |b: &Ball<_, _, _>| b.cardinality() < car;
+    let root = Ball::par_new_tree_with_indices(items, &metric, &criteria)?;
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center().1, vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
-    let criteria = |b: &Ball<_, _>| b.cardinality() > 1;
+    let criteria = |b: &Ball<_, _, _>| b.cardinality() > 1;
     let root = root.par_partition(&metric, &criteria);
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
@@ -92,7 +94,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Ball::new_tree(data.clone(), &metric, &|_| true)?;
+        let root = Ball::new_tree_with_indices(data, &metric, &|_| true)?;
 
         let n_clusters = root.subtree().len();
 
@@ -127,7 +129,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Ball::par_new_tree(data.clone(), &metric, &|_| true)?;
+        let root = Ball::par_new_tree_with_indices(data, &metric, &|_| true)?;
 
         let n_clusters = root.subtree().len();
 

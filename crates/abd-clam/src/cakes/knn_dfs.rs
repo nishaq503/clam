@@ -9,24 +9,20 @@ use super::{ParSearch, Search};
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
 pub struct KnnDfs(pub usize);
 
-impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
-    fn search<'a>(&self, root: &'a Ball<I, T>, metric: &M, query: &I) -> Vec<(&'a I, T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnDfs {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnDfs::search");
 
         if self.0 > root.cardinality() {
-            // If k is greater than the number of items in the tree, so we
-            // just return all items in the tree.
-            return root
-                .all_items()
-                .into_iter()
-                .map(|item| (item, metric(query, item)))
-                .collect();
+            // If k is greater than the number of points in the tree, return all
+            // items with their distances.
+            return root.distances_to_all(query, metric);
         }
 
-        let mut candidates = SizedHeap::<&'a Ball<I, T>, Reverse<(T, T)>>::new(None);
-        let mut hits = SizedHeap::<&'a I, T>::new(Some(self.0));
+        let mut candidates = SizedHeap::<&'a Ball<Id, I, T>, Reverse<(T, T)>>::new(None);
+        let mut hits = SizedHeap::<&(Id, I), T>::new(Some(self.0));
 
-        let d = metric(query, root.center());
+        let d = metric(query, &root.center().1);
         hits.push((root.center(), d));
         candidates.push((root, Reverse((d_min(root, d), d))));
 
@@ -52,10 +48,13 @@ impl<I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<I, T, M> for KnnDfs {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync> ParSearch<I, T, M> for KnnDfs {}
+impl<I: Send + Sync, Id: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
+    ParSearch<Id, I, T, M> for KnnDfs
+{
+}
 
 /// The minimum possible distance from the query to any item in the ball.
-fn d_min<I, T: DistanceValue>(ball: &Ball<I, T>, d: T) -> T {
+fn d_min<Id, I, T: DistanceValue>(ball: &Ball<Id, I, T>, d: T) -> T {
     if d < ball.radius() {
         T::zero()
     } else {
@@ -68,12 +67,13 @@ fn d_min<I, T: DistanceValue>(ball: &Ball<I, T>, d: T) -> T {
 ///
 /// The user must ensure that `candidates` is non-empty before calling this
 /// function.
-fn pop_till_leaf<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+#[allow(clippy::type_complexity)]
+fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     query: &I,
     metric: &M,
-    candidates: &mut SizedHeap<&'a Ball<I, T>, Reverse<(T, T)>>,
-    hits: &mut SizedHeap<&'a I, T>,
-) -> (&'a Ball<I, T>, T) {
+    candidates: &mut SizedHeap<&'a Ball<Id, I, T>, Reverse<(T, T)>>,
+    hits: &mut SizedHeap<&'a (Id, I), T>,
+) -> (&'a Ball<Id, I, T>, T) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
     while candidates.peek().map_or_else(
@@ -88,8 +88,8 @@ fn pop_till_leaf<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
                 let (d_left, d_right) = {
                     profi::prof!("child-distances");
 
-                    let d_left = metric(query, left.center());
-                    let d_right = metric(query, right.center());
+                    let d_left = metric(query, &left.center().1);
+                    let d_right = metric(query, &right.center().1);
                     (d_left, d_right)
                 };
                 {
@@ -115,11 +115,11 @@ fn pop_till_leaf<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
 
 /// Given a leaf ball, compute the distance from the query to each item in
 /// the leaf and push them onto `hits`.
-fn leaf_into_hits<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     query: &I,
     metric: &M,
-    hits: &mut SizedHeap<&'a I, T>,
-    leaf: &'a Ball<I, T>,
+    hits: &mut SizedHeap<&'a (Id, I), T>,
+    leaf: &'a Ball<Id, I, T>,
     d: T,
 ) {
     profi::prof!("KnnDfs::leaf_into_hits");
@@ -131,6 +131,10 @@ fn leaf_into_hits<'a, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute
         // the distance from the query to each item in the leaf.
-        hits.extend(leaf.subtree_items().into_iter().map(|item| (item, metric(query, item))));
+        hits.extend(
+            leaf.subtree_items()
+                .into_iter()
+                .map(|item| (item, metric(query, &item.1))),
+        );
     }
 }
