@@ -10,20 +10,20 @@ use super::{ParSearch, Search};
 pub struct KnnDfs(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnDfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnDfs::search");
 
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all(query, metric);
+            return root.distances_to_all_items(query, metric);
         }
 
         let mut candidates = SizedHeap::<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>::new(None);
-        let mut hits = SizedHeap::<&(Id, I), T>::new(Some(self.0));
+        let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
 
-        let d = metric(query, &root.center().1);
-        hits.push((root.center(), d));
+        let d = metric(query, root.center());
+        hits.push(((root.center_id(), root.center()), d));
         candidates.push((root, Reverse((d_min(root, d), d))));
 
         while !hits.is_full()  // We do not have enough hits.
@@ -44,7 +44,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             leaf_into_hits(query, metric, &mut hits, leaf, d);
         }
 
-        hits.items().collect()
+        hits.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 
@@ -77,7 +77,7 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
     candidates: &mut SizedHeap<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>,
-    hits: &mut SizedHeap<&'a (Id, I), T>,
+    hits: &mut SizedHeap<(&'a Id, &'a I), T>,
 ) -> (&'a Ball<Id, I, T, A>, T) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
@@ -93,16 +93,16 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
                 let (d_left, d_right) = {
                     profi::prof!("child-distances");
 
-                    let d_left = metric(query, &left.center().1);
-                    let d_right = metric(query, &right.center().1);
+                    let d_left = metric(query, left.center());
+                    let d_right = metric(query, right.center());
                     (d_left, d_right)
                 };
                 {
                     profi::prof!("push-children");
 
                     // Push the child centers onto hits.
-                    hits.push((left.center(), d_left));
-                    hits.push((right.center(), d_right));
+                    hits.push(((left.center_id(), left.center()), d_left));
+                    hits.push(((right.center_id(), right.center()), d_right));
 
                     // Push the children onto candidates.
                     candidates.push((left, Reverse((d_min(left, d_left), d_left))));
@@ -123,7 +123,7 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
 fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
-    hits: &mut SizedHeap<&'a (Id, I), T>,
+    hits: &mut SizedHeap<(&'a Id, &'a I), T>,
     leaf: &'a Ball<Id, I, T, A>,
     d: T,
 ) {
@@ -132,14 +132,14 @@ fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are
         // exactly `d` from the query.
-        hits.extend(leaf.subtree_items().into_iter().map(|item| (item, d)));
+        hits.extend(leaf.subtree_items().into_iter().map(|(id, item)| ((id, item), d)));
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute
         // the distance from the query to each item in the leaf.
         hits.extend(
             leaf.subtree_items()
                 .into_iter()
-                .map(|item| (item, metric(query, &item.1))),
+                .map(|(id, item)| ((id, item), metric(query, item))),
         );
     }
 }

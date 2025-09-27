@@ -30,10 +30,10 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> {
     /// # Returns
     ///
     /// A vector of tuples containing the index and distance of the nearest neighbors.
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)>;
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>;
 
     /// Batched version of [`Search::search`](Search::search).
-    fn batch_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, queries: &[I]) -> Vec<Vec<(&'a (Id, I), T)>> {
+    fn batch_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, queries: &[I]) -> Vec<Vec<(&'a Id, &'a I, T)>> {
         queries.iter().map(|query| self.search(root, metric, query)).collect()
     }
 }
@@ -48,7 +48,7 @@ pub trait ParSearch<
 >: Search<Id, I, T, M, A> + Send + Sync
 {
     /// Parallel version of [`Search::search`](Search::search).
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         self.search(root, metric, query)
     }
 
@@ -58,7 +58,7 @@ pub trait ParSearch<
         root: &'a Ball<Id, I, T, A>,
         metric: &M,
         queries: &[I],
-    ) -> Vec<Vec<(&'a (Id, I), T)>> {
+    ) -> Vec<Vec<(&'a Id, &'a I, T)>> {
         queries
             .par_iter()
             .map(|query| self.par_search(root, metric, query))

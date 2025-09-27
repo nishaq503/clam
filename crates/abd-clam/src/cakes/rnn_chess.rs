@@ -10,23 +10,23 @@ use super::{ParSearch, Search};
 pub struct RnnChess<T: DistanceValue>(pub T);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnChess<T> {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let (mut hits, subsumed, straddlers) = tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.extend(subsumed.into_iter().flat_map(|ball| {
             ball.subtree_items()
                 .into_iter()
-                .map(|item| (item, metric(&item.1, query)))
+                .map(|(id, item)| (id, item, metric(item, query)))
         }));
 
         // Check all items from straddling clusters
         hits.extend(straddlers.into_iter().flat_map(|ball| {
-            ball.subtree_items().into_iter().filter_map(|item| {
-                let dist = metric(&item.1, query);
+            ball.subtree_items().into_iter().filter_map(|(id, item)| {
+                let dist = metric(item, query);
                 if dist <= self.0 {
                     // Item is within the search radius so include it
-                    Some((item, dist))
+                    Some((id, item, dist))
                 } else {
                     None
                 }
@@ -45,7 +45,7 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for RnnChess<T>
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("RnnChess::search");
 
         let (mut hits, subsumed, straddlers) = {
@@ -64,7 +64,7 @@ impl<
                     .flat_map(|ball| {
                         ball.subtree_items()
                             .into_par_iter()
-                            .map(|item| (item, metric(&item.1, query)))
+                            .map(|(id, item)| (id, item, metric(item, query)))
                     })
                     .collect::<Vec<_>>(),
             );
@@ -78,11 +78,11 @@ impl<
                 straddlers
                     .into_par_iter()
                     .flat_map(|ball| {
-                        ball.subtree_items().into_par_iter().filter_map(|item| {
-                            let dist = metric(&item.1, query);
+                        ball.subtree_items().into_par_iter().filter_map(|(id, item)| {
+                            let dist = metric(item, query);
                             if dist <= self.0 {
                                 // Item is within the search radius so include it
-                                Some((item, dist))
+                                Some((id, item, dist))
                             } else {
                                 None
                             }
@@ -118,7 +118,7 @@ pub fn tree_search<'a, Id, I, T, M, A>(
     query: &I,
     radius: T,
 ) -> (
-    Vec<(&'a (Id, I), T)>,
+    Vec<(&'a Id, &'a I, T)>,
     Vec<&'a Ball<Id, I, T, A>>,
     Vec<&'a Ball<Id, I, T, A>>,
 )
@@ -127,7 +127,7 @@ where
     M: Fn(&I, &I) -> T,
 {
     let center = ball.center();
-    let center_dist = metric(&center.1, query);
+    let center_dist = metric(center, query);
 
     if center_dist > ball.radius() + radius {
         // No overlapping volume between the query ball and this cluster
@@ -136,14 +136,14 @@ where
 
     if radius > center_dist + ball.radius() {
         // This cluster is fully contained within the query ball
-        return (vec![(center, center_dist)], vec![ball], Vec::new());
+        return (vec![(ball.center_id(), center, center_dist)], vec![ball], Vec::new());
     }
 
     // This cluster overlaps the query ball but is not fully contained.
 
     // Check whether our own center is within the query ball
     let mut centers = if center_dist <= radius {
-        vec![(center, center_dist)]
+        vec![(ball.center_id(), center, center_dist)]
     } else {
         Vec::new()
     };
@@ -173,7 +173,7 @@ pub fn par_tree_search<'a, Id, I, T, M, A>(
     query: &I,
     radius: T,
 ) -> (
-    Vec<(&'a (Id, I), T)>,
+    Vec<(&'a Id, &'a I, T)>,
     Vec<&'a Ball<Id, I, T, A>>,
     Vec<&'a Ball<Id, I, T, A>>,
 )
@@ -185,7 +185,7 @@ where
     A: Send + Sync,
 {
     let center = ball.center();
-    let center_dist = metric(&center.1, query);
+    let center_dist = metric(center, query);
 
     if center_dist > ball.radius() + radius {
         // No overlapping volume between the query ball and this cluster
@@ -194,14 +194,14 @@ where
 
     if radius > center_dist + ball.radius() {
         // This cluster is fully contained within the query ball
-        return (vec![(center, center_dist)], vec![ball], Vec::new());
+        return (vec![(ball.center_id(), center, center_dist)], vec![ball], Vec::new());
     }
 
     // This cluster overlaps the query ball but is not fully contained.
 
     // Check whether our own center is within the query ball
     let mut centers = if center_dist <= radius {
-        vec![(center, center_dist)]
+        vec![(ball.center_id(), center, center_dist)]
     } else {
         Vec::new()
     };

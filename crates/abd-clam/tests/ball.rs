@@ -19,7 +19,7 @@ fn new() -> Result<(), String> {
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center().1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     let criteria = |b: &Ball<_, _, _, ()>| b.cardinality() > 1;
@@ -57,7 +57,7 @@ fn par_new() -> Result<(), String> {
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center().1, vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     let criteria = |b: &Ball<_, _, _, ()>| b.cardinality() > 1;

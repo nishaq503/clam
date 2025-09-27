@@ -63,8 +63,8 @@ fn search_ball<'a>(root: &'a Ball<usize, Vec<f32>, f32, ()>, queries: &[Vec<f32>
         .iter()
         .map(|res| {
             res.iter()
-                .max_by_key(|&&(_, d)| abd_clam::utils::MaxItem((), d))
-                .map(|&(_, radius)| abd_clam::cakes::RnnChess(radius))
+                .max_by_key(|&&(_, _, d)| abd_clam::utils::MaxItem((), d))
+                .map(|&(_, _, radius)| abd_clam::cakes::RnnChess(radius))
                 .unwrap()
         })
         .collect::<Vec<_>>();

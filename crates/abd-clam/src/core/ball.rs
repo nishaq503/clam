@@ -101,9 +101,14 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         self.cardinality
     }
 
+    /// Returns a reference to the id of the center item of the ball.
+    pub const fn center_id(&self) -> &Id {
+        &self.center.0
+    }
+
     /// A reference to the center item of the ball.
-    pub const fn center(&self) -> &(Id, I) {
-        &self.center
+    pub const fn center(&self) -> &I {
+        &self.center.1
     }
 
     /// The radius of the ball.
@@ -181,8 +186,8 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
     }
 
     /// Returns the distance from the given item to all items in the ball and its subtree using the provided metric.
-    pub fn distances_to_all<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> Vec<(&(Id, I), T)> {
-        self.all_items().iter().map(|&p| (p, metric(item, &p.1))).collect()
+    pub fn distances_to_all_items<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> Vec<(&Id, &I, T)> {
+        self.all_items().iter().map(|(i, p)| (i, p, metric(item, p))).collect()
     }
 
     /// Creates a new tree of `Ball`s.
@@ -227,6 +232,15 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
             right.annotate(pre, post, metric);
         }
         self.annotation = post(self, metric);
+    }
+
+    /// Removes all annotations from the balls in the tree.
+    pub fn clear_annotations(&mut self) {
+        self.annotation = None;
+        if let Contents::Children([left, right]) = &mut self.contents {
+            left.clear_annotations();
+            right.clear_annotations();
+        }
     }
 
     /// Traverses the tree in pre-order, checking the provided predicate on each ball, and converts balls that satisfy the predicate into leaves by collecting
@@ -438,8 +452,15 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
 
 impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<Id, I, T, A> {
     /// Parallel version of [`distance_to_all`](Self::distances_to_all).
-    pub fn par_distances_to_all<M: Fn(&I, &I) -> T + Send + Sync>(&self, item: &I, metric: &M) -> Vec<(&(Id, I), T)> {
-        self.all_items().par_iter().map(|&p| (p, metric(item, &p.1))).collect()
+    pub fn par_distances_to_all_items<M: Fn(&I, &I) -> T + Send + Sync>(
+        &self,
+        item: &I,
+        metric: &M,
+    ) -> Vec<(&Id, &I, T)> {
+        self.all_items()
+            .par_iter()
+            .map(|(id, p)| (id, p, metric(item, p)))
+            .collect()
     }
 
     /// Parallel version of [`new_tree`](Self::new_tree).
@@ -478,6 +499,14 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             );
         }
         self.annotation = post(self, metric);
+    }
+
+    /// Parallel version of [`clear_annotations`](Self::clear_annotations).
+    pub fn par_clear_annotations(&mut self) {
+        self.annotation = None;
+        if let Contents::Children([left, right]) = &mut self.contents {
+            rayon::join(|| left.par_clear_annotations(), || right.par_clear_annotations());
+        }
     }
 
     /// Parallel version of [`prune`](Self::prune).

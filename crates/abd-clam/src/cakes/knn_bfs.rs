@@ -10,20 +10,20 @@ use super::{ParSearch, Search};
 pub struct KnnBfs(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnBfs::search");
 
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all(query, metric);
+            return root.distances_to_all_items(query, metric);
         }
 
         let mut candidates = Vec::new();
-        let mut hits = SizedHeap::<&(Id, I), T>::new(Some(self.0));
+        let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
 
-        let d = metric(query, &root.center().1);
-        hits.push((root.center(), d));
+        let d = metric(query, root.center());
+        hits.push(((root.center_id(), root.center()), d));
         candidates.push((root, d_max(root, d)));
 
         while !candidates.is_empty() {
@@ -42,11 +42,15 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
                             // The ball is a leaf, so we have to look at its points
                             if ball.is_singleton() {
                                 // It's a singleton, so just add non-center items with the precomputed distance
-                                hits.extend(ball.subtree_items().iter().map(|&item| (item, d)));
+                                hits.extend(ball.subtree_items().iter().map(|(id, item)| ((id, item), d)));
                             } else {
                                 // Not a singleton, so compute distances to all non-center items
                                 // and add them to hits
-                                hits.extend(ball.subtree_items().iter().map(|&item| (item, metric(query, &item.1))));
+                                hits.extend(
+                                    ball.subtree_items()
+                                        .iter()
+                                        .map(|(id, item)| ((id, item), metric(query, item))),
+                                );
                             }
                         } else {
                             profi::prof!("KnnBfs::search::parent");
@@ -55,12 +59,12 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
                             let [left, right] = ball.children().unwrap_or_else(|| unreachable!("Ball is a parent"));
 
                             // Compute distances to child centers
-                            let left_d = metric(query, &left.center().1);
-                            let right_d = metric(query, &right.center().1);
+                            let left_d = metric(query, left.center());
+                            let right_d = metric(query, right.center());
 
                             // Push child centers to hits
-                            hits.push((left.center(), left_d));
-                            hits.push((right.center(), right_d));
+                            hits.push(((left.center_id(), left.center()), left_d));
+                            hits.push(((right.center_id(), right.center()), right_d));
 
                             // Add children to candidates with their theoretical max distances
                             acc_candidates.push((left, d_max(left, left_d)));
@@ -70,7 +74,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
                     });
         }
 
-        hits.items().collect()
+        hits.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 

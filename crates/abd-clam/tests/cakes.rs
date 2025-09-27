@@ -22,21 +22,20 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let query = vec![0.0; dim];
 
     let root = Ball::<_, _, _, ()>::new_tree_with_indices(data.clone(), &metric, &|_| true)?;
+    let all_items = root.all_items();
 
     for radius in [1.0, 1.5, 2.0] {
-        let expected_hits = data
+        let expected_hits = all_items
             .iter()
-            .enumerate()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
                 if dist <= radius {
-                    Some(((i, item.clone()), dist))
+                    Some((i, item, dist))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
-        let expected_hits = expected_hits.iter().map(|(item, d)| (item, *d)).collect();
         let expected_hits = sort_nondescending(expected_hits);
 
         let linear_alg = RnnLinear(radius);
@@ -51,12 +50,10 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     }
 
     for k in [1, 10, 100] {
-        let expected_hits = data
+        let expected_hits = all_items
             .iter()
-            .enumerate()
-            .map(|(i, item)| ((i, item.clone()), metric(item, &query)))
+            .map(|(i, item)| (i, item, metric(item, &query)))
             .collect::<Vec<_>>();
-        let expected_hits = expected_hits.iter().map(|(item, d)| (item, *d)).collect();
         let expected_hits = sort_nondescending(expected_hits)
             .into_iter()
             .take(k)
@@ -104,21 +101,20 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let query = vec![0.0; dim];
 
     let root = Ball::<_, _, _, ()>::par_new_tree_with_indices(data.clone(), &metric, &|_| true)?;
+    let all_items = root.all_items();
 
     for radius in [1.0, 1.5, 2.0] {
-        let expected_hits = data
+        let expected_hits = all_items
             .par_iter()
-            .enumerate()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
                 if dist <= radius {
-                    Some(((i, item.clone()), dist))
+                    Some((i, item, dist))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
-        let expected_hits = expected_hits.iter().map(|(item, d)| (item, *d)).collect();
         let expected_hits = sort_nondescending(expected_hits);
 
         let linear_alg = RnnLinear(radius);
@@ -133,12 +129,10 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     }
 
     for k in [1, 10, 100] {
-        let expected_hits = data
+        let expected_hits = all_items
             .par_iter()
-            .enumerate()
-            .map(|(i, item)| ((i, item.clone()), metric(item, &query)))
+            .map(|(i, item)| (i, item, metric(item, &query)))
             .collect::<Vec<_>>();
-        let expected_hits = expected_hits.iter().map(|(item, d)| (item, *d)).collect();
         let expected_hits = sort_nondescending(expected_hits)
             .into_iter()
             .take(k)
@@ -177,32 +171,32 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
 }
 
 fn check_hits<Id: Debug, I: Debug, T: DistanceValue + Debug>(
-    expected: &[(&(Id, I), T)],
-    actual: &[(&(Id, I), T)],
+    expected: &[(&Id, &I, T)],
+    actual: &[(&Id, &I, T)],
     alg_name: String,
 ) -> Result<(), String> {
     assert_eq!(
         expected.len(),
         actual.len(),
         "{alg_name}: Hit count mismatch: \nexp {:?}, \ngot {:?}",
-        expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
-        actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+        expected.iter().map(|(_, _, d)| d).collect::<Vec<_>>(),
+        actual.iter().map(|(_, _, d)| d).collect::<Vec<_>>()
     );
 
-    for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
+    for (i, (&(_, _, e), &(_, _, a))) in expected.iter().zip(actual.iter()).enumerate() {
         assert_eq!(
             e,
             a,
             "{alg_name}: Distance mismatch at index {i}: \nexp {:?}, \ngot {:?}",
-            expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
-            actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+            expected.iter().map(|(_, _, d)| d).collect::<Vec<_>>(),
+            actual.iter().map(|(_, _, d)| d).collect::<Vec<_>>()
         );
     }
 
     Ok(())
 }
 
-fn sort_nondescending<'a, Id, I, T: PartialOrd + Copy>(mut items: Vec<(&'a (Id, I), T)>) -> Vec<(&'a (Id, I), T)> {
-    items.sort_by_key(|&(_, d)| MaxItem((), d));
+fn sort_nondescending<'a, Id, I, T: PartialOrd + Copy>(mut items: Vec<(&'a Id, &'a I, T)>) -> Vec<(&'a Id, &'a I, T)> {
+    items.sort_by_key(|&(_, _, d)| MaxItem((), d));
     items
 }

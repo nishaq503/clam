@@ -10,10 +10,10 @@ use super::{ParSearch, Search};
 pub struct KnnLinear(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnLinear {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(root.all_items().into_iter().map(|item| (item, metric(query, &item.1))));
-        heap.items().collect()
+        heap.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 
@@ -25,7 +25,7 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for KnnLinear
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(
             root.all_items()
@@ -33,6 +33,6 @@ impl<
                 .map(|item| (item, metric(query, &item.1)))
                 .collect::<Vec<_>>(),
         );
-        heap.items().collect()
+        heap.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }

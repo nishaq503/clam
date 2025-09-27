@@ -25,11 +25,12 @@ fn compute_compression_costs<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     metric: &M,
 ) -> Option<CompressionCosts<T>> {
     let costs = if let Some([left, right]) = ball.children() {
-        // INVARIANT: This function is called bottom-up, so the children's costs are already computed.
+        // INVARIANT: This function is called in post-order, so the children's costs are already computed.
 
-        let bl = metric(&ball.center().1, &left.center().1);
-        let br = metric(&ball.center().1, &right.center().1);
-        let recursive = left.annotation().unwrap().minimum + right.annotation().unwrap().minimum + bl + br;
+        let recursive = left.annotation().unwrap().minimum
+            + right.annotation().unwrap().minimum
+            + metric(left.center(), ball.center())
+            + metric(right.center(), ball.center());
         let unitary = ball.radial_sum();
         let minimum = if recursive < unitary { recursive } else { unitary };
 
@@ -76,7 +77,7 @@ fn run_group<P: AsRef<std::path::Path>>(
         });
 
         items = root.take_subtree_items().into_iter().map(|(_, v)| v).collect();
-        items.push(root.center().1.clone());
+        items.push(root.center().clone());
 
         10.0 * root.radius() / n_items as f32
     };
@@ -90,52 +91,69 @@ fn run_group<P: AsRef<std::path::Path>>(
             symagen::augmentation::augment_data(&items, multiplier, error)
         };
 
-        let criteria = |_: &Ball<_, _, _, CompressionCosts<_>>| true;
-        let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
-        root.par_annotate(&|_, _| None, &compute_compression_costs, &metric);
-
-        let predicate =
-            |b: &Ball<_, _, _, CompressionCosts<_>>| b.annotation().map_or(false, |a| a.unitary <= a.recursive);
-        root.prune(&predicate);
-
-        for k in [10] {
-            let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
-                ("knn-dfs", Box::new(cakes::KnnDfs(k))),
-                ("knn-bfs", Box::new(cakes::KnnBfs(k))),
-                // ("knn-rrnn", cakes::KnnRrnn(k)),
-            ];
-
-            let mut oracles = Vec::new();
-            for (name, alg) in algs {
-                oracles = alg
-                    .par_batch_search(&root, &metric, &queries)
-                    .into_iter()
-                    .map(|res| {
-                        res.into_iter()
-                            .max_by_key(|&(_, d)| abd_clam::utils::MaxItem((), d))
-                            .map(|(_, radius)| cakes::RnnChess(radius))
-                            .unwrap()
-                    })
-                    .collect();
-
-                let id = BenchmarkId::new(format!("{name}-k{k}"), multiplier);
-                group.bench_function(id, |b| {
-                    b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
-                });
-            }
-
-            let id = BenchmarkId::new(format!("rnn-oracle-k{k}"), multiplier);
-            group.bench_function(id, |b| {
-                b.iter_with_large_drop(|| {
-                    oracles
-                        .par_iter()
-                        .zip(queries.par_iter())
-                        .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-                        .collect::<Vec<_>>()
+        let criteria = |_: &_| true;
+        let to_prune_or_not_to_prune = |b: &Ball<_, _, _, _>| {
+            b.annotation()
+                .map_or(false, |&CompressionCosts { unitary, recursive, .. }| {
+                    unitary <= recursive
                 })
-            });
+        };
 
-            core::mem::drop(oracles);
+        let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
+
+        for prune in [false, true] {
+            let pruned_str = if prune {
+                // Compute compression costs
+                root.par_annotate(&|_, _| None, &compute_compression_costs, &metric);
+                // Prune based on compression costs
+                root.prune(&to_prune_or_not_to_prune);
+                // Remove annotations to maybe save some memory
+                root.par_clear_annotations();
+
+                "pruned"
+            } else {
+                "unpruned"
+            };
+
+            for k in [10] {
+                let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
+                    ("dfs", Box::new(cakes::KnnDfs(k))),
+                    ("bfs", Box::new(cakes::KnnBfs(k))),
+                    // ("rrnn", cakes::KnnRrnn(k)),
+                ];
+
+                let mut oracles = Vec::new();
+                for (name, alg) in algs {
+                    oracles = alg
+                        .par_batch_search(&root, &metric, &queries)
+                        .into_iter()
+                        .map(|res| {
+                            res.into_iter()
+                                .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
+                                .map(|(_, _, radius)| cakes::RnnChess(radius))
+                                .unwrap()
+                        })
+                        .collect();
+
+                    let id = BenchmarkId::new(format!("{name}-k{k}-{pruned_str}"), multiplier);
+                    group.bench_function(id, |b| {
+                        b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
+                    });
+                }
+
+                let id = BenchmarkId::new(format!("oracle-k{k}-{pruned_str}"), multiplier);
+                group.bench_function(id, |b| {
+                    b.iter_with_large_drop(|| {
+                        oracles
+                            .par_iter()
+                            .zip(queries.par_iter())
+                            .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+                            .collect::<Vec<_>>()
+                    })
+                });
+
+                core::mem::drop(oracles);
+            }
         }
     }
 }
