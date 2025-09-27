@@ -9,8 +9,8 @@ use super::{ParSearch, Search};
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
 pub struct KnnDfs(pub usize);
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnDfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnDfs {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnDfs::search");
 
         if self.0 > root.cardinality() {
@@ -19,7 +19,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnDfs
             return root.distances_to_all(query, metric);
         }
 
-        let mut candidates = SizedHeap::<&'a Ball<Id, I, T>, Reverse<(T, T)>>::new(None);
+        let mut candidates = SizedHeap::<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>::new(None);
         let mut hits = SizedHeap::<&(Id, I), T>::new(Some(self.0));
 
         let d = metric(query, &root.center().1);
@@ -48,13 +48,18 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnDfs
     }
 }
 
-impl<I: Send + Sync, Id: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
-    ParSearch<Id, I, T, M> for KnnDfs
+impl<
+        I: Send + Sync,
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for KnnDfs
 {
 }
 
 /// The minimum possible distance from the query to any item in the ball.
-fn d_min<Id, I, T: DistanceValue>(ball: &Ball<Id, I, T>, d: T) -> T {
+fn d_min<Id, I, T: DistanceValue, A>(ball: &Ball<Id, I, T, A>, d: T) -> T {
     if d < ball.radius() {
         T::zero()
     } else {
@@ -68,12 +73,12 @@ fn d_min<Id, I, T: DistanceValue>(ball: &Ball<Id, I, T>, d: T) -> T {
 /// The user must ensure that `candidates` is non-empty before calling this
 /// function.
 #[allow(clippy::type_complexity)]
-fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
-    candidates: &mut SizedHeap<&'a Ball<Id, I, T>, Reverse<(T, T)>>,
+    candidates: &mut SizedHeap<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<&'a (Id, I), T>,
-) -> (&'a Ball<Id, I, T>, T) {
+) -> (&'a Ball<Id, I, T, A>, T) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
     while candidates.peek().map_or_else(
@@ -115,11 +120,11 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
 
 /// Given a leaf ball, compute the distance from the query to each item in
 /// the leaf and push them onto `hits`.
-fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
     hits: &mut SizedHeap<&'a (Id, I), T>,
-    leaf: &'a Ball<Id, I, T>,
+    leaf: &'a Ball<Id, I, T, A>,
     d: T,
 ) {
     profi::prof!("KnnDfs::leaf_into_hits");

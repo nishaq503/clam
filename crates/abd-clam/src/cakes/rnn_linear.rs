@@ -9,8 +9,8 @@ use super::{ParSearch, Search};
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for RnnLinear<T> {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnLinear<T> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         root.all_items()
             .into_iter()
             .filter_map(|item| {
@@ -25,10 +25,15 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for RnnLin
     }
 }
 
-impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
-    ParSearch<Id, I, T, M> for RnnLinear<T>
+impl<
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for RnnLinear<T>
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         root.all_items()
             .into_par_iter()
             .filter_map(|item| {

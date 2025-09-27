@@ -13,8 +13,9 @@ use crate::{utils, DistanceValue};
 /// * `I`: The type of items in the tree.
 /// * `Id`: The type of metadata associated each item.
 /// * `T`: The type of distance values between items.
+/// * `A`: The type of arbitrary data associated with the ball.
 #[must_use]
-pub struct Ball<Id, I, T: DistanceValue> {
+pub struct Ball<Id, I, T: DistanceValue, A> {
     /// The center item of the ball.
     center: (Id, I),
     /// The radius of the ball.
@@ -24,18 +25,20 @@ pub struct Ball<Id, I, T: DistanceValue> {
     /// The number of items in the ball, including the center.
     cardinality: usize,
     /// The `Contents` of the ball.
-    contents: Contents<Id, I, T>,
+    contents: Contents<Id, I, T, A>,
+    /// Arbitrary data associated with the ball.
+    annotation: Option<A>,
 }
 
 /// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
-enum Contents<Id, I, T: DistanceValue> {
+enum Contents<Id, I, T: DistanceValue, A> {
     /// The ball is a leaf and contains items directly.
     Leaf(Vec<(Id, I)>),
     /// The ball is a parent and contains child balls.
-    Children([Box<Ball<Id, I, T>>; 2]),
+    Children([Box<Ball<Id, I, T, A>>; 2]),
 }
 
-impl<I: Debug, Id: Debug, T: DistanceValue + Debug> Debug for Ball<Id, I, T> {
+impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Ball<Id, I, T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
             .field("center", &self.center)
@@ -43,11 +46,12 @@ impl<I: Debug, Id: Debug, T: DistanceValue + Debug> Debug for Ball<Id, I, T> {
             .field("lfd", &self.lfd)
             .field("cardinality", &self.cardinality)
             .field("contents", &self.contents)
+            .field("annotation", &self.annotation)
             .finish()
     }
 }
 
-impl<Id, I, T: DistanceValue + Debug> Debug for Contents<Id, I, T> {
+impl<Id, I, T: DistanceValue + Debug, A: Debug> Debug for Contents<Id, I, T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Leaf(items) => f.debug_tuple("Leaf").field(&items.len()).finish(),
@@ -56,7 +60,7 @@ impl<Id, I, T: DistanceValue + Debug> Debug for Contents<Id, I, T> {
     }
 }
 
-impl<I, T: DistanceValue> Ball<usize, I, T> {
+impl<I, T: DistanceValue, A> Ball<usize, I, T, A> {
     /// Create a new tree of `Ball`s with `usize` indices as item metadata.
     ///
     /// # Errors
@@ -72,7 +76,7 @@ impl<I, T: DistanceValue> Ball<usize, I, T> {
     }
 }
 
-impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<usize, I, T> {
+impl<I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<usize, I, T, A> {
     /// Parallel version of [`new_tree_with_indices`](Self::new_tree_with_indices).
     ///
     /// # Errors
@@ -88,7 +92,7 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Ball<usize, I, T> {
     }
 }
 
-impl<Id, I, T: DistanceValue> Ball<Id, I, T> {
+impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
     /// A reference to the center item of the ball.
     pub const fn center(&self) -> &(Id, I) {
         &self.center
@@ -220,6 +224,7 @@ impl<Id, I, T: DistanceValue> Ball<Id, I, T> {
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
                 cardinality: 1,
                 contents: Contents::Leaf(Vec::new()),
+                annotation: None,
             }
         } else {
             // Find and remove the `center`.
@@ -242,6 +247,7 @@ impl<Id, I, T: DistanceValue> Ball<Id, I, T> {
                 lfd: f64::MAX,                // Placeholder; to be computed in `partition`
                 cardinality: items.len() + 1, // +1 for the `center`
                 contents: Contents::Leaf(items),
+                annotation: None,
             }
         }
     }
@@ -394,7 +400,7 @@ impl<Id, I, T: DistanceValue> Ball<Id, I, T> {
     }
 }
 
-impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync> Ball<Id, I, T> {
+impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<Id, I, T, A> {
     /// Parallel version of [`distance_to_all`](Self::distances_to_all).
     pub fn par_distances_to_all<M: Fn(&I, &I) -> T + Send + Sync>(&self, item: &I, metric: &M) -> Vec<(&(Id, I), T)> {
         self.all_items().par_iter().map(|&p| (p, metric(item, &p.1))).collect()
@@ -439,6 +445,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync> Ball<Id, I
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
                 cardinality: 1,
                 contents: Contents::Leaf(Vec::new()),
+                annotation: None,
             }
         } else {
             // Find and remove the center item.
@@ -461,6 +468,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync> Ball<Id, I
                 lfd: f64::MAX,                // Placeholder; to be computed in partition
                 cardinality: items.len() + 1, // +1 for the center
                 contents: Contents::Leaf(items),
+                annotation: None,
             }
         }
     }

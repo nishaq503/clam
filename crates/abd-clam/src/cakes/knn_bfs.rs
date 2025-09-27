@@ -1,5 +1,7 @@
 //! K-Nearest Neighbors (KNN) search using the Breadth-First Sieve algorithm.
 
+#![expect(clippy::type_complexity)]
+
 use crate::{utils::SizedHeap, Ball, DistanceValue};
 
 use super::{ParSearch, Search};
@@ -7,8 +9,8 @@ use super::{ParSearch, Search};
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
 pub struct KnnBfs(pub usize);
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnBfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBfs {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnBfs::search");
 
         if self.0 > root.cardinality() {
@@ -72,22 +74,27 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnBfs
     }
 }
 
-impl<I: Send + Sync, Id: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
-    ParSearch<Id, I, T, M> for KnnBfs
+impl<
+        I: Send + Sync,
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for KnnBfs
 {
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
-fn d_max<Id, I, T: DistanceValue>(ball: &Ball<Id, I, T>, d: T) -> T {
+fn d_max<Id, I, T: DistanceValue, A>(ball: &Ball<Id, I, T, A>, d: T) -> T {
     ball.radius() + d
 }
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
-fn filter_candidates<Id, I, T: DistanceValue>(
-    mut candidates: Vec<(&Ball<Id, I, T>, T)>,
+fn filter_candidates<Id, I, T: DistanceValue, A>(
+    mut candidates: Vec<(&Ball<Id, I, T, A>, T)>,
     k: usize,
-) -> Vec<(&Ball<Id, I, T>, T)> {
+) -> Vec<(&Ball<Id, I, T, A>, T)> {
     profi::prof!("KnnBfs::filter_candidates");
 
     let threshold_index = quick_partition(&mut candidates, k);
@@ -112,14 +119,14 @@ fn filter_candidates<Id, I, T: DistanceValue>(
 /// also reordering the list so that all elements to the left of the k-th
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
-fn quick_partition<Id, I, T: DistanceValue>(items: &mut [(&Ball<Id, I, T>, T)], k: usize) -> usize {
+fn quick_partition<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usize) -> usize {
     profi::prof!("KnnBfs::quick_partition");
 
     qps(items, k, 0, items.len() - 1)
 }
 
 /// The recursive helper function for the Quick Partition algorithm.
-fn qps<Id, I, T: DistanceValue>(items: &mut [(&Ball<Id, I, T>, T)], k: usize, l: usize, r: usize) -> usize {
+fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usize, l: usize, r: usize) -> usize {
     if l >= r {
         core::cmp::min(l, r)
     } else {
@@ -161,7 +168,12 @@ fn qps<Id, I, T: DistanceValue>(items: &mut [(&Ball<Id, I, T>, T)], k: usize, l:
 /// Moves pivot point and swaps elements around so that all elements to left
 /// of pivot are less than or equal to pivot and all elements to right of pivot
 /// are greater than pivot.
-fn find_pivot<Id, I, T: DistanceValue>(items: &mut [(&Ball<Id, I, T>, T)], l: usize, r: usize, pivot: usize) -> usize {
+fn find_pivot<Id, I, T: DistanceValue, A>(
+    items: &mut [(&Ball<Id, I, T, A>, T)],
+    l: usize,
+    r: usize,
+    pivot: usize,
+) -> usize {
     profi::prof!("KnnBfs::find_pivot");
 
     // Move pivot to the end

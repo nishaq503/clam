@@ -114,7 +114,9 @@ pub(crate) fn vector_euclidean<T: Vectorized>(a: T, b: T) -> T::Output {
 impl Vectorized for &[f32] {
     type Output = f32;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::squared_euclidean(self, other)
+        } else if self.len() >= 8 {
             F32x8::squared_euclidean(self, other)
         } else {
             F32x4::squared_euclidean(self, other)
@@ -126,7 +128,9 @@ impl Vectorized for &[f32] {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::cosine(self, other)
+        } else if self.len() >= 8 {
             F32x8::cosine(self, other)
         } else {
             F32x4::cosine(self, other)
@@ -134,7 +138,9 @@ impl Vectorized for &[f32] {
     }
 
     fn dot_product(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::dot_product(self, other)
+        } else if self.len() >= 8 {
             F32x8::dot_product(self, other)
         } else {
             F32x4::dot_product(self, other)
@@ -145,7 +151,9 @@ impl Vectorized for &[f32] {
 impl Vectorized for &Vec<f32> {
     type Output = f32;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::squared_euclidean(self, other)
+        } else if self.len() >= 8 {
             F32x8::squared_euclidean(self, other)
         } else {
             F32x4::squared_euclidean(self, other)
@@ -157,7 +165,9 @@ impl Vectorized for &Vec<f32> {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::cosine(self, other)
+        } else if self.len() >= 8 {
             F32x8::cosine(self, other)
         } else {
             F32x4::cosine(self, other)
@@ -165,7 +175,9 @@ impl Vectorized for &Vec<f32> {
     }
 
     fn dot_product(self, other: Self) -> Self::Output {
-        if self.len() >= 64 {
+        if self.len() >= 16 {
+            F32x16::dot_product(self, other)
+        } else if self.len() >= 8 {
             F32x8::dot_product(self, other)
         } else {
             F32x4::dot_product(self, other)
@@ -176,7 +188,9 @@ impl Vectorized for &Vec<f32> {
 impl Vectorized for &[f64] {
     type Output = f64;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::squared_euclidean(self, other)
+        } else if self.len() >= 4 {
             F64x4::squared_euclidean(self, other)
         } else {
             F64x2::squared_euclidean(self, other)
@@ -188,7 +202,9 @@ impl Vectorized for &[f64] {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::cosine(self, other)
+        } else if self.len() >= 4 {
             F64x4::cosine(self, other)
         } else {
             F64x2::cosine(self, other)
@@ -196,7 +212,9 @@ impl Vectorized for &[f64] {
     }
 
     fn dot_product(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::dot_product(self, other)
+        } else if self.len() >= 4 {
             F64x4::dot_product(self, other)
         } else {
             F64x2::dot_product(self, other)
@@ -207,7 +225,9 @@ impl Vectorized for &[f64] {
 impl Vectorized for &Vec<f64> {
     type Output = f64;
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::squared_euclidean(self, other)
+        } else if self.len() >= 4 {
             F64x4::squared_euclidean(self, other)
         } else {
             F64x2::squared_euclidean(self, other)
@@ -219,7 +239,9 @@ impl Vectorized for &Vec<f64> {
     }
 
     fn cosine(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::cosine(self, other)
+        } else if self.len() >= 4 {
             F64x4::cosine(self, other)
         } else {
             F64x2::cosine(self, other)
@@ -227,7 +249,9 @@ impl Vectorized for &Vec<f64> {
     }
 
     fn dot_product(self, other: Self) -> Self::Output {
-        if self.len() >= 32 {
+        if self.len() >= 8 {
+            F64x8::dot_product(self, other)
+        } else if self.len() >= 4 {
             F64x4::dot_product(self, other)
         } else {
             F64x2::dot_product(self, other)

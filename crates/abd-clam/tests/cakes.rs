@@ -21,7 +21,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Ball::new_tree_with_indices(data.clone(), &metric, &|_| true)?;
+    let root = Ball::<_, _, _, ()>::new_tree_with_indices(data.clone(), &metric, &|_| true)?;
 
     for radius in [1.0, 1.5, 2.0] {
         let expected_hits = data
@@ -103,7 +103,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Ball::par_new_tree_with_indices(data.clone(), &metric, &|_| true)?;
+    let root = Ball::<_, _, _, ()>::par_new_tree_with_indices(data.clone(), &metric, &|_| true)?;
 
     for radius in [1.0, 1.5, 2.0] {
         let expected_hits = data

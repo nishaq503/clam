@@ -33,7 +33,7 @@ fn run_group<P: AsRef<std::path::Path>>(
 
     let error = {
         let n_items = items.len();
-        let criteria = |b: &Ball<_, _, _>| b.cardinality() > n_items;
+        let criteria = |b: &Ball<_, _, _, ()>| b.cardinality() > n_items;
         let mut root = Ball::par_new_tree_with_indices(items, &metric, &criteria).unwrap();
 
         let id = BenchmarkId::new("knn-linear-k10", 1_usize);
@@ -53,17 +53,14 @@ fn run_group<P: AsRef<std::path::Path>>(
         let augmented_items = if multiplier == 1 {
             items.clone()
         } else {
-            #[allow(unused_mut)]
-            let mut augmented_items = symagen::augmentation::augment_data(&items, multiplier, error);
-            // dataset.normalize_if_cosine(&mut augmented_items);
-            augmented_items
+            symagen::augmentation::augment_data(&items, multiplier, error)
         };
 
-        let criteria = |_: &Ball<_, _, _>| true;
+        let criteria = |_: &Ball<_, _, _, ()>| true;
         let root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
 
         for k in [10] {
-            let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _>>)] = &[
+            let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
                 ("knn-dfs", Box::new(cakes::KnnDfs(k))),
                 ("knn-bfs", Box::new(cakes::KnnBfs(k))),
                 // ("knn-rrnn", cakes::KnnRrnn(k)),

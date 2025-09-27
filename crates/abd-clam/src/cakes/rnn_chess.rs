@@ -9,8 +9,8 @@ use super::{ParSearch, Search};
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 pub struct RnnChess<T: DistanceValue>(pub T);
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for RnnChess<T> {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnChess<T> {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         let (mut hits, subsumed, straddlers) = tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters
@@ -37,10 +37,15 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for RnnChe
     }
 }
 
-impl<I: Send + Sync, Id: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
-    ParSearch<Id, I, T, M> for RnnChess<T>
+impl<
+        I: Send + Sync,
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for RnnChess<T>
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("RnnChess::search");
 
         let (mut hits, subsumed, straddlers) = {
@@ -107,12 +112,16 @@ impl<I: Send + Sync, Id: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, 
 ///   - clusters that are fully subsumed by the query ball.
 ///   - clusters that have overlapping volume with the query ball but are not fully subsumed.
 #[allow(clippy::type_complexity)]
-pub fn tree_search<'a, Id, I, T, M>(
-    ball: &'a Ball<Id, I, T>,
+pub fn tree_search<'a, Id, I, T, M, A>(
+    ball: &'a Ball<Id, I, T, A>,
     metric: &M,
     query: &I,
     radius: T,
-) -> (Vec<(&'a (Id, I), T)>, Vec<&'a Ball<Id, I, T>>, Vec<&'a Ball<Id, I, T>>)
+) -> (
+    Vec<(&'a (Id, I), T)>,
+    Vec<&'a Ball<Id, I, T, A>>,
+    Vec<&'a Ball<Id, I, T, A>>,
+)
 where
     T: DistanceValue + 'a,
     M: Fn(&I, &I) -> T,
@@ -158,17 +167,22 @@ where
 
 /// Parallel version of [`tree_search`](tree_search).
 #[allow(clippy::type_complexity)]
-pub fn par_tree_search<'a, Id, I, T, M>(
-    ball: &'a Ball<Id, I, T>,
+pub fn par_tree_search<'a, Id, I, T, M, A>(
+    ball: &'a Ball<Id, I, T, A>,
     metric: &M,
     query: &I,
     radius: T,
-) -> (Vec<(&'a (Id, I), T)>, Vec<&'a Ball<Id, I, T>>, Vec<&'a Ball<Id, I, T>>)
+) -> (
+    Vec<(&'a (Id, I), T)>,
+    Vec<&'a Ball<Id, I, T, A>>,
+    Vec<&'a Ball<Id, I, T, A>>,
+)
 where
     Id: Send + Sync,
     I: Send + Sync,
     T: DistanceValue + Send + Sync + 'a,
     M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
     let center = ball.center();
     let center_dist = metric(&center.1, query);

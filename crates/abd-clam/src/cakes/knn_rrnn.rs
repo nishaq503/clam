@@ -12,8 +12,8 @@ use super::{
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnRrnn {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnRrnn {
+    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
@@ -87,10 +87,15 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T> Search<Id, I, T, M> for KnnRrn
     }
 }
 
-impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, &I) -> T + Send + Sync>
-    ParSearch<Id, I, T, M> for KnnRrnn
+impl<
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for KnnRrnn
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
+    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a (Id, I), T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
@@ -170,7 +175,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: Fn(&I, 
 
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]
-fn radius_for_k<I, Id, T: DistanceValue>(ball: &Ball<I, Id, T>, k: usize) -> f64 {
+fn radius_for_k<I, Id, T: DistanceValue, A>(ball: &Ball<I, Id, T, A>, k: usize) -> f64 {
     let r = ball
         .radius()
         .to_f64()
@@ -183,7 +188,7 @@ fn radius_for_k<I, Id, T: DistanceValue>(ball: &Ball<I, Id, T>, k: usize) -> f64
 }
 
 /// Counts the total number of hits from confirmed centers and subsumed balls.
-fn count_hits<I, Id, T: DistanceValue>(centers: &[(&(I, Id), T)], subsumed: &[&Ball<I, Id, T>]) -> usize {
+fn count_hits<I, Id, T: DistanceValue, A>(centers: &[(&(I, Id), T)], subsumed: &[&Ball<I, Id, T, A>]) -> usize {
     centers.len()
         + subsumed
             .iter()
@@ -193,10 +198,10 @@ fn count_hits<I, Id, T: DistanceValue>(centers: &[(&(I, Id), T)], subsumed: &[&B
 
 /// Calculate a multiplier for the radius using the LFDs of the clusters.
 #[expect(clippy::cast_precision_loss)]
-fn lfd_multiplier<I, Id, T: DistanceValue>(
+fn lfd_multiplier<I, Id, T: DistanceValue, A>(
     centers: &[(&(I, Id), T)],
-    subsumed: &[&Ball<I, Id, T>],
-    straddlers: &[&Ball<I, Id, T>],
+    subsumed: &[&Ball<I, Id, T, A>],
+    straddlers: &[&Ball<I, Id, T, A>],
     k: usize,
     num_confirmed: usize,
 ) -> f64 {
