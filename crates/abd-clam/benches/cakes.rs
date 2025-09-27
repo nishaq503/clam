@@ -4,7 +4,7 @@
 
 use abd_clam::{
     cakes::{self, ParSearch},
-    Ball,
+    Ball, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::prelude::*;
@@ -12,6 +12,41 @@ use rayon::prelude::*;
 mod utils;
 
 use utils::ann_benchmarks::{base_dir, AnnDataset};
+
+struct CompressionCosts<T: DistanceValue> {
+    recursive: T,
+    unitary: T,
+    minimum: T,
+}
+
+#[allow(clippy::unwrap_used)]
+fn compute_compression_costs<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+    ball: &Ball<Id, I, T, CompressionCosts<T>>,
+    metric: &M,
+) -> Option<CompressionCosts<T>> {
+    let costs = if let Some([left, right]) = ball.children() {
+        // INVARIANT: This function is called bottom-up, so the children's costs are already computed.
+
+        let bl = metric(&ball.center().1, &left.center().1);
+        let br = metric(&ball.center().1, &right.center().1);
+        let recursive = left.annotation().unwrap().minimum + right.annotation().unwrap().minimum + bl + br;
+        let unitary = ball.radial_sum();
+        let minimum = if recursive < unitary { recursive } else { unitary };
+
+        CompressionCosts {
+            recursive,
+            unitary,
+            minimum,
+        }
+    } else {
+        CompressionCosts {
+            recursive: ball.radial_sum(),
+            unitary: ball.radial_sum(),
+            minimum: ball.radial_sum(),
+        }
+    };
+    Some(costs)
+}
 
 fn run_group<P: AsRef<std::path::Path>>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
@@ -24,7 +59,6 @@ fn run_group<P: AsRef<std::path::Path>>(
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
     let mut items = dataset.read_train(base, shuffle).unwrap();
-    // dataset.normalize_if_cosine(&mut items);
     let metric = dataset.metric();
 
     group
@@ -56,8 +90,13 @@ fn run_group<P: AsRef<std::path::Path>>(
             symagen::augmentation::augment_data(&items, multiplier, error)
         };
 
-        let criteria = |_: &Ball<_, _, _, ()>| true;
-        let root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
+        let criteria = |_: &Ball<_, _, _, CompressionCosts<_>>| true;
+        let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
+        root.annotate(&|_, _| None, &compute_compression_costs, &metric);
+
+        let predicate =
+            |b: &Ball<_, _, _, CompressionCosts<_>>| b.annotation().map_or(false, |a| a.unitary <= a.recursive);
+        root.trim(&predicate);
 
         for k in [10] {
             let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[

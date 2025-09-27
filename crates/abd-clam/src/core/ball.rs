@@ -28,6 +28,8 @@ pub struct Ball<Id, I, T: DistanceValue, A> {
     contents: Contents<Id, I, T, A>,
     /// Arbitrary data associated with the ball.
     annotation: Option<A>,
+    /// The sum of all radial distances from the center to all items in the ball.
+    radial_sum: T,
 }
 
 /// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
@@ -113,6 +115,16 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         self.cardinality
     }
 
+    /// A reference to the arbitrary data associated with the ball, if any.
+    pub const fn annotation(&self) -> Option<&A> {
+        self.annotation.as_ref()
+    }
+
+    /// The sum of all radial distances from the center to all items in the ball.
+    pub const fn radial_sum(&self) -> T {
+        self.radial_sum
+    }
+
     /// A vector of references to all clusters in the tree in pre-order (i.e., parent before children).
     pub fn subtree(&self) -> Vec<&Self> {
         match &self.contents {
@@ -195,6 +207,27 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         Ok(Self::new(items, metric).partition(metric, &criteria))
     }
 
+    /// Annotates all balls in the tree by applying the provided functions.
+    ///
+    /// # Parameters
+    ///
+    /// * `f`: A function that computes a pre-order annotation for a ball. It is applied before the children are annotated.
+    /// * `g`: A function that computes a post-order annotation for a ball. It is applied after the children are annotated.
+    /// * `metric`: A function that computes the distance between two items.
+    pub fn annotate<M: Fn(&I, &I) -> T, Pre: Fn(&Self, &M) -> Option<A>, Post: Fn(&Self, &M) -> Option<A>>(
+        &mut self,
+        f: &Pre,
+        g: &Post,
+        metric: &M,
+    ) {
+        self.annotation = f(self, metric);
+        if let Contents::Children([left, right]) = &mut self.contents {
+            left.annotate(f, g, metric);
+            right.annotate(f, g, metric);
+        }
+        self.annotation = g(self, metric);
+    }
+
     /// Traverses the tree in pre-order and trims the subtree of any ball on which the provided predicate returns `true`.
     pub fn trim<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
         if predicate(self) {
@@ -225,6 +258,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 cardinality: 1,
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
+                radial_sum: T::zero(),
             }
         } else {
             // Find and remove the `center`.
@@ -248,6 +282,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 cardinality: items.len() + 1, // +1 for the `center`
                 contents: Contents::Leaf(items),
                 annotation: None,
+                radial_sum: T::zero(), // Placeholder; to be computed in `partition`
             }
         }
     }
@@ -273,6 +308,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                     // A ball with one center and one item: nothing to partition.
                     self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
+                    self.radial_sum = self.radius;
                     self.contents = Contents::Leaf(items);
                     return self;
                 }
@@ -292,6 +328,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                     .map_or(0, |(i, _)| i);
                 self.radius = radial_distances[arg_radius];
                 self.lfd = lfd_estimate(&radial_distances, self.radius);
+                self.radial_sum = radial_distances.iter().copied().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
@@ -446,6 +483,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 cardinality: 1,
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
+                radial_sum: T::zero(),
             }
         } else {
             // Find and remove the center item.
@@ -469,6 +507,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 cardinality: items.len() + 1, // +1 for the center
                 contents: Contents::Leaf(items),
                 annotation: None,
+                radial_sum: T::zero(),
             }
         }
     }
@@ -511,6 +550,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     .map_or(0, |(i, _)| i);
                 self.radius = radial_distances[arg_radius];
                 self.lfd = lfd_estimate(&radial_distances, self.radius);
+                self.radial_sum = radial_distances.par_iter().copied().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
