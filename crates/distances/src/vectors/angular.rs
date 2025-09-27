@@ -55,11 +55,6 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
     }
 }
 
-/// Computes the Cosine distance between two vectors whose magnitudes are 1.0.
-pub fn normalized_cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    U::ONE - U::from(crate::vectors::dot_product(x, y))
-}
-
 /// Computes the Hamming distance between two vectors.
 ///
 /// The Hamming distance is defined as the number of positions at which

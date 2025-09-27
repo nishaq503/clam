@@ -42,7 +42,10 @@ impl AnnDataset {
     pub fn metric<I: AsRef<[f32]>>(&self) -> fn(&I, &I) -> f32 {
         match self {
             Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => metrics::euclidean,
-            Self::Glove25 | Self::Glove50 | Self::Glove100 | Self::Glove200 | Self::DeepImage => metrics::cosine,
+            Self::Glove25 | Self::Glove50 | Self::Glove100 | Self::Glove200 | Self::DeepImage => {
+                metrics::cosine
+                // metrics::normalized_cosine
+            }
         }
     }
 
