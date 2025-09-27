@@ -92,11 +92,11 @@ fn run_group<P: AsRef<std::path::Path>>(
 
         let criteria = |_: &Ball<_, _, _, CompressionCosts<_>>| true;
         let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
-        root.annotate(&|_, _| None, &compute_compression_costs, &metric);
+        root.par_annotate(&|_, _| None, &compute_compression_costs, &metric);
 
         let predicate =
             |b: &Ball<_, _, _, CompressionCosts<_>>| b.annotation().map_or(false, |a| a.unitary <= a.recursive);
-        root.trim(&predicate);
+        root.prune(&predicate);
 
         for k in [10] {
             let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[

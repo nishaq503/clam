@@ -16,20 +16,20 @@ use crate::{utils, DistanceValue};
 /// * `A`: The type of arbitrary data associated with the ball.
 #[must_use]
 pub struct Ball<Id, I, T: DistanceValue, A> {
+    /// The number of items in the ball, including the center.
+    cardinality: usize,
     /// The center item of the ball.
     center: (Id, I),
     /// The radius of the ball.
     radius: T,
     /// The Local Fractal Dimension (LFD) of the ball.
     lfd: f64,
-    /// The number of items in the ball, including the center.
-    cardinality: usize,
+    /// The sum of all radial distances from the center to all items in the ball.
+    radial_sum: T,
     /// The `Contents` of the ball.
     contents: Contents<Id, I, T, A>,
     /// Arbitrary data associated with the ball.
     annotation: Option<A>,
-    /// The sum of all radial distances from the center to all items in the ball.
-    radial_sum: T,
 }
 
 /// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
@@ -43,10 +43,11 @@ enum Contents<Id, I, T: DistanceValue, A> {
 impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Ball<Id, I, T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ball")
+            .field("cardinality", &self.cardinality)
             .field("center", &self.center)
             .field("radius", &self.radius)
             .field("lfd", &self.lfd)
-            .field("cardinality", &self.cardinality)
+            .field("radial_sum", &self.radial_sum)
             .field("contents", &self.contents)
             .field("annotation", &self.annotation)
             .finish()
@@ -95,6 +96,11 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<usize,
 }
 
 impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
+    /// The number of items in the ball, including the center.
+    pub const fn cardinality(&self) -> usize {
+        self.cardinality
+    }
+
     /// A reference to the center item of the ball.
     pub const fn center(&self) -> &(Id, I) {
         &self.center
@@ -110,19 +116,14 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         self.lfd
     }
 
-    /// The number of items in the ball, including the center.
-    pub const fn cardinality(&self) -> usize {
-        self.cardinality
+    /// The sum of all radial distances from the center to all items in the ball.
+    pub const fn radial_sum(&self) -> T {
+        self.radial_sum
     }
 
     /// A reference to the arbitrary data associated with the ball, if any.
     pub const fn annotation(&self) -> Option<&A> {
         self.annotation.as_ref()
-    }
-
-    /// The sum of all radial distances from the center to all items in the ball.
-    pub const fn radial_sum(&self) -> T {
-        self.radial_sum
     }
 
     /// A vector of references to all clusters in the tree in pre-order (i.e., parent before children).
@@ -204,61 +205,59 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
             return Err("Cannot create a Ball tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::new(items, metric).partition(metric, &criteria))
+        Ok(Self::with_center_only(items, metric).partition(metric, &criteria))
     }
 
     /// Annotates all balls in the tree by applying the provided functions.
     ///
     /// # Parameters
     ///
-    /// * `f`: A function that computes a pre-order annotation for a ball. It is applied before the children are annotated.
-    /// * `g`: A function that computes a post-order annotation for a ball. It is applied after the children are annotated.
+    /// * `pre`: A function that computes a pre-order annotation for a ball. It is applied before the children are annotated.
+    /// * `post`: A function that computes a post-order annotation for a ball. It is applied after the children are annotated.
     /// * `metric`: A function that computes the distance between two items.
     pub fn annotate<M: Fn(&I, &I) -> T, Pre: Fn(&Self, &M) -> Option<A>, Post: Fn(&Self, &M) -> Option<A>>(
         &mut self,
-        f: &Pre,
-        g: &Post,
+        pre: &Pre,
+        post: &Post,
         metric: &M,
     ) {
-        self.annotation = f(self, metric);
+        self.annotation = pre(self, metric);
         if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate(f, g, metric);
-            right.annotate(f, g, metric);
+            left.annotate(pre, post, metric);
+            right.annotate(pre, post, metric);
         }
-        self.annotation = g(self, metric);
+        self.annotation = post(self, metric);
     }
 
-    /// Traverses the tree in pre-order and trims the subtree of any ball on which the provided predicate returns `true`.
-    pub fn trim<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
+    /// Traverses the tree in pre-order, checking the provided predicate on each ball, and converts balls that satisfy the predicate into leaves by collecting
+    /// all items from their descendants and dropping the descendants in the process.
+    pub fn prune<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
         if predicate(self) {
             // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its descendants.
             self.contents = Contents::Leaf(self.take_subtree_items());
         } else if let Contents::Children([left, right]) = &mut self.contents {
             // The predicate is not satisfied, so we continue checking children.
-            left.trim(predicate);
-            right.trim(predicate);
+            left.prune(predicate);
+            right.prune(predicate);
         }
     }
 
     /// Private constructor for `Ball`.
     ///
-    /// WARNING: This function does not compute the `radius` or `LFD` of the ball. This is left for the `partition` method because the item that provides the
-    /// `radius` will be needed as one of the poles about which the cluster will be partitioned. This way of doing things avoids having to store an `arg_radial`
-    /// to keep track of which item provided the `radius`, which is wasteful and hard to keep correct when coming back up the recursion stack of `partition`
-    /// because the items are reordered. The alternative is to compute the `radius` twice: once in `new` and once in `partition`, which can be very expensive
-    /// for large collections of items and/or expensive metrics.
-    fn new<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
+    /// WARNING: This function does only sets the `center` and `cardinality` fields correctly. Other fields are placeholders and must be computed in
+    /// `partition`.
+    fn with_center_only<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton ball: `center` is the only item, `radius` is 0, `LFD` is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
             Self {
+                cardinality: 1,
                 center,
                 radius: T::zero(),
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
-                cardinality: 1,
+                radial_sum: T::zero(),
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
-                radial_sum: T::zero(),
             }
         } else {
             // Find and remove the `center`.
@@ -276,13 +275,13 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
             };
 
             Self {
-                center,
-                radius: T::max_value(),       // Placeholder; to be computed in `partition`
-                lfd: f64::MAX,                // Placeholder; to be computed in `partition`
                 cardinality: items.len() + 1, // +1 for the `center`
+                center,
+                radius: T::max_value(), // Placeholder; to be computed in `partition`
+                lfd: f64::MAX,          // Placeholder; to be computed in `partition`
+                radial_sum: T::zero(),  // Placeholder; to be computed in `partition`
                 contents: Contents::Leaf(items),
                 annotation: None,
-                radial_sum: T::zero(), // Placeholder; to be computed in `partition`
             }
         }
     }
@@ -314,7 +313,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 }
 
                 // At this point, we have at least 2 items so radius computation is meaningful, and we can always remove two poles to partition with.
-                // We have to first compute the radius and LFD because `new` does not compute them.
+                // We have to first compute the radius and LFD because `with_center_only` does not compute them.
 
                 // Compute the radius and LFD of the ball.
                 let radial_distances = items
@@ -382,8 +381,8 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
 
                 // Recursively create children and set the contents to the new children.
                 self.contents = Contents::Children([
-                    Box::new(Self::new(left_items, metric).partition(metric, criteria)),
-                    Box::new(Self::new(right_items, metric).partition(metric, criteria)),
+                    Box::new(Self::with_center_only(left_items, metric).partition(metric, criteria)),
+                    Box::new(Self::with_center_only(right_items, metric).partition(metric, criteria)),
                 ]);
             }
             Contents::Children(children) => {
@@ -457,33 +456,54 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             return Err("Cannot create a Ball tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::par_new(items, metric).par_partition(metric, &criteria))
+        Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria))
     }
 
-    /// Parallel version of [`trim`](Self::trim).
-    pub fn par_trim<P: (Fn(&Self) -> bool) + Send + Sync>(&mut self, predicate: &P) {
+    /// Parallel version of [`annotate`](Self::annotate).
+    pub fn par_annotate<
+        M: Fn(&I, &I) -> T + Send + Sync,
+        Pre: Fn(&Self, &M) -> Option<A> + Send + Sync,
+        Post: Fn(&Self, &M) -> Option<A> + Send + Sync,
+    >(
+        &mut self,
+        pre: &Pre,
+        post: &Post,
+        metric: &M,
+    ) {
+        self.annotation = pre(self, metric);
+        if let Contents::Children([left, right]) = &mut self.contents {
+            rayon::join(
+                || left.par_annotate(pre, post, metric),
+                || right.par_annotate(pre, post, metric),
+            );
+        }
+        self.annotation = post(self, metric);
+    }
+
+    /// Parallel version of [`prune`](Self::prune).
+    pub fn par_prune<P: (Fn(&Self) -> bool) + Send + Sync>(&mut self, predicate: &P) {
         if predicate(self) {
             // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its subtree.
             self.contents = Contents::Leaf(self.take_subtree_items());
         } else if let Contents::Children([left, right]) = &mut self.contents {
             // The predicate is not satisfied, so we continue checking children.
-            rayon::join(|| left.par_trim(predicate), || right.par_trim(predicate));
+            rayon::join(|| left.par_prune(predicate), || right.par_prune(predicate));
         }
     }
 
-    /// Parallel version of [`new`](Self::new).
-    fn par_new<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
+    /// Parallel version of [`with_center_only`](Self::with_center_only).
+    fn par_with_center_only<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton ball: center is the only item, radius is 0, LFD is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
             Self {
+                cardinality: 1,
                 center,
                 radius: T::zero(),
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
-                cardinality: 1,
+                radial_sum: T::zero(),
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
-                radial_sum: T::zero(),
             }
         } else {
             // Find and remove the center item.
@@ -501,13 +521,13 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             };
 
             Self {
-                center,
-                radius: T::max_value(),       // Placeholder; to be computed in partition
-                lfd: f64::MAX,                // Placeholder; to be computed in partition
                 cardinality: items.len() + 1, // +1 for the center
+                center,
+                radius: T::max_value(), // Placeholder; to be computed in partition
+                lfd: f64::MAX,          // Placeholder; to be computed in partition
+                radial_sum: T::zero(),  // Placeholder; to be computed in partition
                 contents: Contents::Leaf(items),
                 annotation: None,
-                radial_sum: T::zero(),
             }
         }
     }
@@ -531,6 +551,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     // A ball with one center and one item: nothing to partition.
                     self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
+                    self.radial_sum = self.radius;
                     self.contents = Contents::Leaf(items);
                     return self;
                 }
@@ -604,8 +625,8 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
 
                 // Recursively create children and set the contents to the new children.
                 let (left, right) = rayon::join(
-                    || Self::par_new(left_items, metric).par_partition(metric, criteria),
-                    || Self::par_new(right_items, metric).par_partition(metric, criteria),
+                    || Self::par_with_center_only(left_items, metric).par_partition(metric, criteria),
+                    || Self::par_with_center_only(right_items, metric).par_partition(metric, criteria),
                 );
                 self.contents = Contents::Children([Box::new(left), Box::new(right)]);
             }
