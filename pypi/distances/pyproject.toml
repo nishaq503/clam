@@ -13,8 +13,8 @@ dependencies = [
     "numpy",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "seaborn>=0.13.2",
     "editdistance>=0.8.1",
     "scipy>=1.15.2",
