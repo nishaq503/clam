@@ -219,19 +219,13 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
     ///
     /// * `pre`: A function that computes a pre-order annotation for a ball. It is applied before the children are annotated.
     /// * `post`: A function that computes a post-order annotation for a ball. It is applied after the children are annotated.
-    /// * `metric`: A function that computes the distance between two items.
-    pub fn annotate<M: Fn(&I, &I) -> T, Pre: Fn(&Self, &M) -> Option<A>, Post: Fn(&Self, &M) -> Option<A>>(
-        &mut self,
-        pre: &Pre,
-        post: &Post,
-        metric: &M,
-    ) {
-        self.annotation = pre(self, metric);
+    pub fn annotate<Pre: Fn(&Self) -> Option<A>, Post: Fn(&Self) -> Option<A>>(&mut self, pre: &Pre, post: &Post) {
+        self.annotation = pre(self);
         if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate(pre, post, metric);
-            right.annotate(pre, post, metric);
+            left.annotate(pre, post);
+            right.annotate(pre, post);
         }
-        self.annotation = post(self, metric);
+        self.annotation = post(self);
     }
 
     /// Removes all annotations from the balls in the tree.
@@ -481,24 +475,16 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     }
 
     /// Parallel version of [`annotate`](Self::annotate).
-    pub fn par_annotate<
-        M: Fn(&I, &I) -> T + Send + Sync,
-        Pre: Fn(&Self, &M) -> Option<A> + Send + Sync,
-        Post: Fn(&Self, &M) -> Option<A> + Send + Sync,
-    >(
+    pub fn par_annotate<Pre: Fn(&Self) -> Option<A> + Send + Sync, Post: Fn(&Self) -> Option<A> + Send + Sync>(
         &mut self,
         pre: &Pre,
         post: &Post,
-        metric: &M,
     ) {
-        self.annotation = pre(self, metric);
+        self.annotation = pre(self);
         if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(
-                || left.par_annotate(pre, post, metric),
-                || right.par_annotate(pre, post, metric),
-            );
+            rayon::join(|| left.par_annotate(pre, post), || right.par_annotate(pre, post));
         }
-        self.annotation = post(self, metric);
+        self.annotation = post(self);
     }
 
     /// Parallel version of [`clear_annotations`](Self::clear_annotations).

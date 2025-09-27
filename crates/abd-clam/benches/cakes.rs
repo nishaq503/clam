@@ -19,36 +19,6 @@ struct CompressionCosts<T: DistanceValue> {
     minimum: T,
 }
 
-#[allow(clippy::unwrap_used)]
-fn compute_compression_costs<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
-    ball: &Ball<Id, I, T, CompressionCosts<T>>,
-    metric: &M,
-) -> Option<CompressionCosts<T>> {
-    let costs = if let Some([left, right]) = ball.children() {
-        // INVARIANT: This function is called in post-order, so the children's costs are already computed.
-
-        let recursive = left.annotation().unwrap().minimum
-            + right.annotation().unwrap().minimum
-            + metric(left.center(), ball.center())
-            + metric(right.center(), ball.center());
-        let unitary = ball.radial_sum();
-        let minimum = if recursive < unitary { recursive } else { unitary };
-
-        CompressionCosts {
-            recursive,
-            unitary,
-            minimum,
-        }
-    } else {
-        CompressionCosts {
-            recursive: ball.radial_sum(),
-            unitary: ball.radial_sum(),
-            minimum: ball.radial_sum(),
-        }
-    };
-    Some(costs)
-}
-
 fn run_group<P: AsRef<std::path::Path>>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     dataset: &AnnDataset,
@@ -61,6 +31,42 @@ fn run_group<P: AsRef<std::path::Path>>(
     let metric = dataset.metric();
     let queries = dataset.read_test(base, shuffle).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
+
+    // Criteria for building the initial tree down to singleton leaves
+    let criteria = |_: &_| true;
+    // Function to compute compression costs for a ball in a post-order traversal
+    let compute_compression_costs = |ball: &Ball<_, _, _, CompressionCosts<_>>| {
+        let costs = if let Some([left, right]) = ball.children() {
+            // INVARIANT: This function is called in post-order, so the children's costs are already computed.
+
+            let recursive = left.annotation().unwrap().minimum
+                + right.annotation().unwrap().minimum
+                + metric(left.center(), ball.center())
+                + metric(right.center(), ball.center());
+            let unitary = ball.radial_sum();
+            let minimum = if recursive < unitary { recursive } else { unitary };
+
+            CompressionCosts {
+                recursive,
+                unitary,
+                minimum,
+            }
+        } else {
+            CompressionCosts {
+                recursive: ball.radial_sum(),
+                unitary: ball.radial_sum(),
+                minimum: ball.radial_sum(),
+            }
+        };
+        Some(costs)
+    };
+    // Predicate to decide whether to prune a ball based on its compression costs
+    let to_prune_or_not_to_prune = |b: &Ball<_, _, _, _>| {
+        b.annotation()
+            .map_or(false, |&CompressionCosts { unitary, recursive, .. }| {
+                unitary <= recursive
+            })
+    };
 
     group
         .throughput(criterion::Throughput::Elements(queries.len() as u64))
@@ -93,23 +99,16 @@ fn run_group<P: AsRef<std::path::Path>>(
             symagen::augmentation::augment_data(&items, multiplier, augmentation_error)
         };
 
-        let criteria = |_: &_| true;
-        let to_prune_or_not_to_prune = |b: &Ball<_, _, _, _>| {
-            b.annotation()
-                .map_or(false, |&CompressionCosts { unitary, recursive, .. }| {
-                    unitary <= recursive
-                })
-        };
-
+        // This is mutable so we can later annotate and prune it
         let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
 
         for prune in [false, true] {
             let pruned_str = if prune {
                 // Compute compression costs
-                root.par_annotate(&|_, _| None, &compute_compression_costs, &metric);
+                root.par_annotate(&|_| None, &compute_compression_costs);
                 // Prune based on compression costs
                 root.prune(&to_prune_or_not_to_prune);
-                // Remove annotations to maybe save some memory
+                // Remove annotations to (maybe) save memory
                 root.par_clear_annotations();
 
                 "pruned"
@@ -121,7 +120,7 @@ fn run_group<P: AsRef<std::path::Path>>(
                 let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
                     ("dfs", Box::new(cakes::KnnDfs(k))),
                     ("bfs", Box::new(cakes::KnnBfs(k))),
-                    // ("rrnn", cakes::KnnRrnn(k)),
+                    // ("rrnn", Box::new(cakes::KnnRrnn(k))),
                 ];
 
                 let mut oracles = Vec::new();
