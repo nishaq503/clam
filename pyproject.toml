@@ -23,7 +23,10 @@ requires-python = ">= 3.13"
 
 [tool.uv]
 managed = true
-dev-dependencies = [
+package = false
+
+[dependency-groups]
+dev = [
     "pre-commit>=4.2.0",
     "bump2version>=1.0.1",
     "pytest>=8.2.2",
@@ -39,7 +42,6 @@ dev-dependencies = [
     "types-editdistance>=0.8.0.20250401",
     "editdistance>=0.8.1",
 ]
-package = false
 
 [tool.uv.workspace]
 members = [
