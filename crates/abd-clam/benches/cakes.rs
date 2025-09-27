@@ -53,42 +53,44 @@ fn run_group<P: AsRef<std::path::Path>>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     dataset: &AnnDataset,
     base: &P,
+    max_items: usize,
     max_queries: usize,
     shuffle: bool,
 ) {
+    let items = dataset.read_train(base, shuffle).unwrap();
+    let metric = dataset.metric();
     let queries = dataset.read_test(base, shuffle).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
-
-    let mut items = dataset.read_train(base, shuffle).unwrap();
-    let metric = dataset.metric();
 
     group
         .throughput(criterion::Throughput::Elements(queries.len() as u64))
         .sample_size(10);
 
-    let error = {
+    let augmentation_error = {
         let n_items = items.len();
         let criteria = |b: &Ball<_, _, _, ()>| b.cardinality() > n_items;
-        let mut root = Ball::par_new_tree_with_indices(items, &metric, &criteria).unwrap();
+        let root = Ball::par_new_tree_with_indices(items.clone(), &metric, &criteria).unwrap();
 
+        // Baseline: linear scan with k=10 on the original data only
         let id = BenchmarkId::new("knn-linear-k10", 1_usize);
         group.bench_function(id, |b| {
             b.iter_with_large_drop(|| abd_clam::cakes::KnnLinear(10).par_batch_search(&root, &metric, &queries))
         });
 
-        items = root.take_subtree_items().into_iter().map(|(_, v)| v).collect();
-        items.push(root.center().clone());
-
-        10.0 * root.radius() / n_items as f32
+        // augmentation error: 0.1% of the radius of the root ball
+        root.radius() / 1000.0
     };
 
-    let multipliers = [1, 2, 4, 8, 16, 32, 64];
-    for &multiplier in &multipliers[..1] {
-        // For quicker benches, only use the first multiplier
+    for multiplier in (0..).map(|p| 2_usize.pow(p)) {
+        if multiplier > 1 && items.len() * multiplier > max_items {
+            // Stop if augmentation would exceed max_items
+            break;
+        }
+
         let augmented_items = if multiplier == 1 {
             items.clone()
         } else {
-            symagen::augmentation::augment_data(&items, multiplier, error)
+            symagen::augmentation::augment_data(&items, multiplier, augmentation_error)
         };
 
         let criteria = |_: &_| true;
@@ -173,14 +175,16 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         AnnDataset::DeepImage,
     ];
 
-    let shuffle = true;
+    // Set `max_items` and `max_queries` to limit the running time
+    let max_items = 32_000_000;
     let max_queries = 100;
+    let shuffle = true;
 
     let base = base_dir().unwrap();
     for dataset in &datasets[..3] {
-        // For quicker benches, only use the first 3 datasets
+        // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
-        run_group(&mut group, dataset, &base, max_queries, shuffle);
+        run_group(&mut group, dataset, &base, max_items, max_queries, shuffle);
         group.finish();
     }
 }
