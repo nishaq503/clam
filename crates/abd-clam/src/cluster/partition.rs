@@ -1,195 +1,12 @@
-//! The most basic representation of a `Cluster` is a metric-`Ball`.
-
-use core::fmt::Debug;
+//! A `Cluster` can be partitioned into a tree.
 
 use rayon::prelude::*;
 
-use crate::{utils, DistanceValue};
+use crate::DistanceValue;
 
-/// A `Ball` is a collection of items in a dataset that are within a `radius` from a `center` item.
-///
-/// # Type Parameters
-///
-/// * `I`: The type of items in the tree.
-/// * `Id`: The type of metadata associated each item.
-/// * `T`: The type of distance values between items.
-/// * `A`: The type of arbitrary data associated with the ball.
-#[must_use]
-pub struct Ball<Id, I, T: DistanceValue, A> {
-    /// The number of items in the ball, including the center.
-    cardinality: usize,
-    /// The center item of the ball.
-    center: (Id, I),
-    /// The radius of the ball.
-    radius: T,
-    /// The Local Fractal Dimension (LFD) of the ball.
-    lfd: f64,
-    /// The sum of all radial distances from the center to all items in the ball.
-    radial_sum: T,
-    /// The `Contents` of the ball.
-    contents: Contents<Id, I, T, A>,
-    /// Arbitrary data associated with the ball.
-    annotation: Option<A>,
-}
-
-/// The contents of a `Ball` can either be a collection of items (if it is a leaf) or a collection of child `Ball`s (if it is a parent).
-enum Contents<Id, I, T: DistanceValue, A> {
-    /// The ball is a leaf and contains items directly.
-    Leaf(Vec<(Id, I)>),
-    /// The ball is a parent and contains child balls.
-    Children([Box<Ball<Id, I, T, A>>; 2]),
-}
-
-impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Ball<Id, I, T, A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Ball")
-            .field("cardinality", &self.cardinality)
-            .field("center", &self.center)
-            .field("radius", &self.radius)
-            .field("lfd", &self.lfd)
-            .field("radial_sum", &self.radial_sum)
-            .field("contents", &self.contents)
-            .field("annotation", &self.annotation)
-            .finish()
-    }
-}
-
-impl<Id, I, T: DistanceValue + Debug, A: Debug> Debug for Contents<Id, I, T, A> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Leaf(items) => f.debug_tuple("Leaf").field(&items.len()).finish(),
-            Self::Children(_) => f.debug_tuple("Children").finish(),
-        }
-    }
-}
-
-impl<I, T: DistanceValue, A> Ball<usize, I, T, A> {
-    /// Create a new tree of `Ball`s with `usize` indices as item metadata.
-    ///
-    /// # Errors
-    ///
-    /// - See [`new_tree`](Self::new_tree) for details.
-    pub fn new_tree_with_indices<M: Fn(&I, &I) -> T>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &impl Fn(&Self) -> bool,
-    ) -> Result<Self, String> {
-        let indexed_items = items.into_iter().enumerate().collect();
-        Self::new_tree(indexed_items, metric, criteria)
-    }
-}
-
-impl<I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<usize, I, T, A> {
-    /// Parallel version of [`new_tree_with_indices`](Self::new_tree_with_indices).
-    ///
-    /// # Errors
-    ///
-    /// - See [`new_tree`](Self::new_tree) for details.
-    pub fn par_new_tree_with_indices<M: Fn(&I, &I) -> T + Send + Sync>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
-    ) -> Result<Self, String> {
-        let indexed_items = items.into_iter().enumerate().collect();
-        Self::par_new_tree(indexed_items, metric, criteria)
-    }
-}
+use super::{Ball, Contents};
 
 impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
-    /// The number of items in the ball, including the center.
-    pub const fn cardinality(&self) -> usize {
-        self.cardinality
-    }
-
-    /// Returns a reference to the id of the center item of the ball.
-    pub const fn center_id(&self) -> &Id {
-        &self.center.0
-    }
-
-    /// A reference to the center item of the ball.
-    pub const fn center(&self) -> &I {
-        &self.center.1
-    }
-
-    /// The radius of the ball.
-    pub const fn radius(&self) -> T {
-        self.radius
-    }
-
-    /// The Local Fractal Dimension (LFD) of the ball.
-    pub const fn lfd(&self) -> f64 {
-        self.lfd
-    }
-
-    /// The sum of all radial distances from the center to all items in the ball.
-    pub const fn radial_sum(&self) -> T {
-        self.radial_sum
-    }
-
-    /// A reference to the arbitrary data associated with the ball, if any.
-    pub const fn annotation(&self) -> Option<&A> {
-        self.annotation.as_ref()
-    }
-
-    /// A vector of references to all clusters in the tree in pre-order (i.e., parent before children).
-    pub fn subtree(&self) -> Vec<&Self> {
-        match &self.contents {
-            Contents::Leaf(_) => vec![self],
-            Contents::Children([left, right]) => core::iter::once(self)
-                .chain(left.subtree())
-                .chain(right.subtree())
-                .collect(),
-        }
-    }
-
-    /// A vector of references to all items in the subtree rooted at this ball,
-    /// excluding the center of this ball.
-    pub fn subtree_items(&self) -> Vec<&(Id, I)> {
-        match &self.contents {
-            Contents::Leaf(items) => items.iter().collect(),
-            Contents::Children([left, right]) => left.all_items().into_iter().chain(right.all_items()).collect(),
-        }
-    }
-
-    /// A vector of references to all items in the ball, including the center, which is placed first.
-    pub fn all_items(&self) -> Vec<&(Id, I)> {
-        match &self.contents {
-            Contents::Leaf(items) => core::iter::once(&self.center).chain(items.iter()).collect(),
-            Contents::Children([left, right]) => core::iter::once(&self.center)
-                .chain(left.all_items())
-                .chain(right.all_items())
-                .collect(),
-        }
-    }
-
-    /// A vector of references to the child balls of this ball. Returns `None` if the ball is a leaf.
-    pub fn children(&self) -> Option<[&Self; 2]> {
-        match &self.contents {
-            Contents::Leaf(_) => None,
-            Contents::Children([left, right]) => Some([left, right]),
-        }
-    }
-
-    /// Checks if the ball is a leaf.
-    pub const fn is_leaf(&self) -> bool {
-        matches!(self.contents, Contents::Leaf(_))
-    }
-
-    /// Checks if the ball is a singleton (i.e., contains only one distinct item).
-    pub fn is_singleton(&self) -> bool {
-        self.cardinality == 1 || self.radius.is_zero()
-    }
-
-    /// Returns the distance from the given item to the center of the ball using the provided metric.
-    pub fn distance_to_center<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> (&(Id, I), T) {
-        (&self.center, metric(item, &self.center.1))
-    }
-
-    /// Returns the distance from the given item to all items in the ball and its subtree using the provided metric.
-    pub fn distances_to_all_items<M: Fn(&I, &I) -> T>(&self, item: &I, metric: &M) -> Vec<(&Id, &I, T)> {
-        self.all_items().iter().map(|(i, p)| (i, p, metric(item, p))).collect()
-    }
-
     /// Creates a new tree of `Ball`s.
     ///
     /// # Parameters
@@ -211,43 +28,6 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
         Ok(Self::with_center_only(items, metric).partition(metric, &criteria))
-    }
-
-    /// Annotates all balls in the tree by applying the provided functions.
-    ///
-    /// # Parameters
-    ///
-    /// * `pre`: A function that computes a pre-order annotation for a ball. It is applied before the children are annotated.
-    /// * `post`: A function that computes a post-order annotation for a ball. It is applied after the children are annotated.
-    pub fn annotate<Pre: Fn(&Self) -> Option<A>, Post: Fn(&Self) -> Option<A>>(&mut self, pre: &Pre, post: &Post) {
-        self.annotation = pre(self);
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate(pre, post);
-            right.annotate(pre, post);
-        }
-        self.annotation = post(self);
-    }
-
-    /// Removes all annotations from the balls in the tree.
-    pub fn clear_annotations(&mut self) {
-        self.annotation = None;
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.clear_annotations();
-            right.clear_annotations();
-        }
-    }
-
-    /// Traverses the tree in pre-order, checking the provided predicate on each ball, and converts balls that satisfy the predicate into leaves by collecting
-    /// all items from their descendants and dropping the descendants in the process.
-    pub fn prune<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
-        if predicate(self) {
-            // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its descendants.
-            self.contents = Contents::Leaf(self.take_subtree_items());
-        } else if let Contents::Children([left, right]) = &mut self.contents {
-            // The predicate is not satisfied, so we continue checking children.
-            left.prune(predicate);
-            right.prune(predicate);
-        }
     }
 
     /// Private constructor for `Ball`.
@@ -274,11 +54,11 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 let gm_sample = if items.len() < 100 {
                     &items[..]
                 } else {
-                    let num_samples = utils::num_samples(items.len(), 100, 10_000);
+                    let num_samples = num_samples(items.len(), 100, 10_000);
                     &items[..num_samples]
                 };
                 // Remove and return the `center`.
-                let gm_index = geometric_median(gm_sample, metric);
+                let gm_index = crate::utils::geometric_median(gm_sample, metric);
                 items.swap_remove(gm_index)
             };
 
@@ -331,10 +111,10 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 let arg_radius = radial_distances
                     .iter()
                     .enumerate()
-                    .max_by_key(|&(i, &d)| utils::MaxItem(i, d))
+                    .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
                     .map_or(0, |(i, _)| i);
                 self.radius = radial_distances[arg_radius];
-                self.lfd = lfd_estimate(&radial_distances, self.radius);
+                self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
                 self.radial_sum = radial_distances.iter().copied().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
@@ -366,7 +146,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 let arg_right = left_distances
                     .iter()
                     .enumerate()
-                    .max_by_key(|&(i, &(d, _))| utils::MaxItem(i, d))
+                    .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
                     .map_or(0, |(i, _)| i);
                 // Remove it from the items list.
                 let right_pole = left_distances.swap_remove(arg_right).1;
@@ -425,7 +205,10 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
 
     /// Removes and returns all items from the ball and its descendants, excluding the center of this ball; the children are dropped in the process and this
     /// ball becomes a leaf with no items other than its center.
-    pub fn take_subtree_items(&mut self) -> Vec<(Id, I)> {
+    ///
+    /// WARNING: This function does not recompute any properties for the up to the root after removing the items. The caller must ensure that the properties are
+    /// still valid after this operation.
+    pub(crate) fn take_subtree_items(&mut self) -> Vec<(Id, I)> {
         // Take ownership of the contents so we can recurse and drop children.
         let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
         match contents {
@@ -445,18 +228,6 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
 }
 
 impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<Id, I, T, A> {
-    /// Parallel version of [`distance_to_all`](Self::distances_to_all).
-    pub fn par_distances_to_all_items<M: Fn(&I, &I) -> T + Send + Sync>(
-        &self,
-        item: &I,
-        metric: &M,
-    ) -> Vec<(&Id, &I, T)> {
-        self.all_items()
-            .par_iter()
-            .map(|(id, p)| (id, p, metric(item, p)))
-            .collect()
-    }
-
     /// Parallel version of [`new_tree`](Self::new_tree).
     ///
     /// # Errors
@@ -472,38 +243,6 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
         Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria))
-    }
-
-    /// Parallel version of [`annotate`](Self::annotate).
-    pub fn par_annotate<Pre: Fn(&Self) -> Option<A> + Send + Sync, Post: Fn(&Self) -> Option<A> + Send + Sync>(
-        &mut self,
-        pre: &Pre,
-        post: &Post,
-    ) {
-        self.annotation = pre(self);
-        if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(|| left.par_annotate(pre, post), || right.par_annotate(pre, post));
-        }
-        self.annotation = post(self);
-    }
-
-    /// Parallel version of [`clear_annotations`](Self::clear_annotations).
-    pub fn par_clear_annotations(&mut self) {
-        self.annotation = None;
-        if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(|| left.par_clear_annotations(), || right.par_clear_annotations());
-        }
-    }
-
-    /// Parallel version of [`prune`](Self::prune).
-    pub fn par_prune<P: (Fn(&Self) -> bool) + Send + Sync>(&mut self, predicate: &P) {
-        if predicate(self) {
-            // The predicate is satisfied, so we convert this ball to a leaf by collecting all items from its subtree.
-            self.contents = Contents::Leaf(self.take_subtree_items());
-        } else if let Contents::Children([left, right]) = &mut self.contents {
-            // The predicate is not satisfied, so we continue checking children.
-            rayon::join(|| left.par_prune(predicate), || right.par_prune(predicate));
-        }
     }
 
     /// Parallel version of [`with_center_only`](Self::with_center_only).
@@ -527,10 +266,10 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 let gm_sample = if items.len() < 100 {
                     &items[..]
                 } else {
-                    let num_samples = utils::num_samples(items.len(), 100, 10_000);
+                    let num_samples = num_samples(items.len(), 100, 10_000);
                     &items[..num_samples]
                 };
-                let gm_index = par_geometric_median(gm_sample, metric);
+                let gm_index = crate::utils::par_geometric_median(gm_sample, metric);
                 // Remove and return the center item.
                 items.swap_remove(gm_index)
             };
@@ -582,10 +321,10 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 let arg_radius = radial_distances
                     .par_iter()
                     .enumerate()
-                    .max_by_key(|&(i, &d)| utils::MaxItem(i, d))
+                    .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
                     .map_or(0, |(i, _)| i);
                 self.radius = radial_distances[arg_radius];
-                self.lfd = lfd_estimate(&radial_distances, self.radius);
+                self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
                 self.radial_sum = radial_distances.par_iter().copied().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
@@ -617,7 +356,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 let arg_right = left_distances
                     .par_iter()
                     .enumerate()
-                    .max_by_key(|&(i, &(d, _))| utils::MaxItem(i, d))
+                    .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
                     .map_or(0, |(i, _)| i);
                 // Remove it from the items list.
                 let right_pole = left_distances.swap_remove(arg_right).1;
@@ -677,110 +416,30 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     }
 }
 
-/// Estimates the Local Fractal Dimension (LFD) of a ball given the distances
-/// of its items from the center and the radius of the ball.
+/// Return the number of samples to take from the given population size so as to achieve linear time complexity for geometric median estimation.
 ///
-/// This uses the formula `log2(N / n)`, where `N` is the total number of items
-/// in the ball, and `n` is the number of items within half the radius.
+/// The number of samples is aggregated as follows:
 ///
-/// If the radius is zero or if there are no items within half the radius,
-/// the LFD is defined to be 1.0.
-#[expect(clippy::cast_precision_loss)]
-pub fn lfd_estimate<T: DistanceValue>(distances: &[T], radius: T) -> f64 {
-    let half_radius = radius.to_f64().unwrap_or(0.0) / 2.0;
-    if distances.is_empty() || distances.len() == 1 || half_radius <= f64::EPSILON {
-        // In all three of the following cases, we define LFD to be 1.0:
-        //   - No non-center items (singleton ball)
-        //   - One non-center item (ball with two items)
-        //   - Radius is zero or too small to be meaningful
-        1.0
+/// - The first `sqrt_thresh` samples are taken from the population.
+/// - Of the next `log2_thresh - sqrt_thresh` samples, the square root of
+///   the number of samples is taken.
+/// - For any remaining samples, the logarithm (base 2) of the number of
+///   samples is taken.
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usize) -> usize {
+    if population_size < sqrt_thresh {
+        population_size
     } else {
-        // The ball has at least 2 non-center items, so LFD computation is
-        // meaningful.
-
-        // Count how many items are within half the radius.
-        // We use f64::MAX as a sentinel to exclude items whose distance
-        // could not be converted to f64.
-        let count = distances
-            .iter()
-            .map(|d| d.to_f64().unwrap_or(f64::MAX))
-            .filter(|&d| d <= half_radius)
-            .count()
-            + 1; // +1 to include the center
-
-        // Compute and return the LFD. This is well-defined because
-        // `distances.len() >= 2` and `count >= 1`, so the argument to log2
-        // is always >= 1.0
-        ((distances.len() as f64) / (count as f64)).log2()
+        sqrt_thresh
+            + if population_size < sqrt_thresh + log2_thresh {
+                ((population_size - sqrt_thresh) as f64).sqrt()
+            } else {
+                (log2_thresh as f64).sqrt() + ((population_size - sqrt_thresh - log2_thresh) as f64).log2()
+            } as usize
     }
-}
-
-/// Returns the index of the geometric median of the given items.
-///
-/// The geometric median is the item that minimizes the sum of distances to
-/// all other items in the slice.
-///
-/// The user must ensure that the items slice is not empty.
-fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {
-    // Compute the full distance matrix for the items.
-    let distance_matrix = {
-        let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        for (r, (_, i)) in items.iter().enumerate() {
-            for (c, (_, j)) in items.iter().enumerate().take(r) {
-                let d = metric(i, j);
-                matrix[r][c] = d;
-                matrix[c][r] = d;
-            }
-        }
-        matrix
-    };
-
-    // Find the index of the item with the minimum total distance to all other items.
-    distance_matrix
-        .into_iter()
-        .map(|row| row.into_iter().sum::<T>())
-        .enumerate()
-        .min_by_key(|&(i, v)| utils::MinItem(i, v))
-        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
-}
-
-/// Parallel version of [`geometric_median`](geometric_median).
-fn par_geometric_median<
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: (Fn(&I, &I) -> T) + Send + Sync,
->(
-    items: &[(Id, I)],
-    metric: &M,
-) -> usize {
-    // Compute the full distance matrix for the items in parallel.
-    let distance_matrix = {
-        let matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        items.par_iter().enumerate().for_each(|(r, (_, i))| {
-            items.par_iter().enumerate().take(r).for_each(|(c, (_, j))| {
-                let d = metric(i, j);
-                // SAFETY: We have exclusive access to each cell in the matrix
-                // because every (r, c) pair is unique.
-                #[allow(unsafe_code)]
-                unsafe {
-                    let row_ptr = &mut *matrix.as_ptr().cast_mut().add(r);
-                    row_ptr[c] = d;
-
-                    let col_ptr = &mut *matrix.as_ptr().cast_mut().add(c);
-                    col_ptr[r] = d;
-                }
-            });
-        });
-        matrix
-    };
-
-    // Find the index of the item with the minimum total distance to all
-    // other items.
-    distance_matrix
-        .into_par_iter()
-        .map(|row| row.into_iter().sum::<T>())
-        .enumerate()
-        .min_by_key(|&(i, v)| utils::MinItem(i, v))
-        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }

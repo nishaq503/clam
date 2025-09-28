@@ -19,6 +19,64 @@ struct CompressionCosts<T: DistanceValue> {
     minimum: T,
 }
 
+fn bench_for_ks<Id, I, T, A, M>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    root: &Ball<Id, I, T, A>,
+    metric: &M,
+    queries: &[I],
+    pruned: bool,
+    multiplier: usize,
+    ks: &[usize],
+) where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    let pruned_str = if pruned { "pruned" } else { "unpruned" };
+
+    for &k in ks {
+        let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
+            ("dfs", Box::new(cakes::KnnDfs(k))),
+            ("bfs", Box::new(cakes::KnnBfs(k))),
+            // ("rrnn", Box::new(cakes::KnnRrnn(k))),
+        ];
+
+        let mut oracles = Vec::new();
+        for (name, alg) in algs {
+            oracles = alg
+                .par_batch_search(&root, &metric, &queries)
+                .into_iter()
+                .map(|res| {
+                    res.into_iter()
+                        .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
+                        .map(|(_, _, radius)| cakes::RnnChess(radius))
+                        .unwrap()
+                })
+                .collect();
+
+            let id = BenchmarkId::new(format!("{name}-k{k}-{pruned_str}"), multiplier);
+            group.bench_function(id, |b| {
+                b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
+            });
+        }
+
+        let id = BenchmarkId::new(format!("oracle-k{k}-{pruned_str}"), multiplier);
+        group.bench_function(id, |b| {
+            b.iter_with_large_drop(|| {
+                oracles
+                    .par_iter()
+                    .zip(queries.par_iter())
+                    .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+                    .collect::<Vec<_>>()
+            })
+        });
+
+        core::mem::drop(oracles);
+    }
+}
+
 fn run_group<P: AsRef<std::path::Path>>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
     dataset: &AnnDataset,
@@ -26,19 +84,17 @@ fn run_group<P: AsRef<std::path::Path>>(
     max_items: usize,
     max_queries: usize,
     shuffle: bool,
+    ks: &[usize],
 ) {
     let items = dataset.read_train(base, shuffle).unwrap();
     let metric = dataset.metric();
     let queries = dataset.read_test(base, shuffle).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
-    // Criteria for building the initial tree down to singleton leaves
-    let criteria = |_: &_| true;
     // Function to compute compression costs for a ball in a post-order traversal
     let compute_compression_costs = |ball: &Ball<_, _, _, CompressionCosts<_>>| {
-        let costs = if let Some([left, right]) = ball.children() {
+        if let Some([left, right]) = ball.children() {
             // INVARIANT: This function is called in post-order, so the children's costs are already computed.
-
             let recursive = left.annotation().unwrap().minimum
                 + right.annotation().unwrap().minimum
                 + metric(left.center(), ball.center())
@@ -57,8 +113,7 @@ fn run_group<P: AsRef<std::path::Path>>(
                 unitary: ball.radial_sum(),
                 minimum: ball.radial_sum(),
             }
-        };
-        Some(costs)
+        }
     };
     // Predicate to decide whether to prune a ball based on its compression costs
     let to_prune_or_not_to_prune = |b: &Ball<_, _, _, _>| {
@@ -74,8 +129,7 @@ fn run_group<P: AsRef<std::path::Path>>(
 
     let augmentation_error = {
         let n_items = items.len();
-        let criteria = |b: &Ball<_, _, _, ()>| b.cardinality() > n_items;
-        let root = Ball::par_new_tree_with_indices(items.clone(), &metric, &criteria).unwrap();
+        let root = Ball::par_new_tree_minimal(items.clone(), &metric, &|b: _| b.cardinality() > n_items).unwrap();
 
         // Baseline: linear scan with k=10 on the original data only
         let id = BenchmarkId::new("knn-linear-k10", 1_usize);
@@ -99,63 +153,18 @@ fn run_group<P: AsRef<std::path::Path>>(
             symagen::augmentation::augment_data(&items, multiplier, augmentation_error)
         };
 
-        // This is mutable so we can later annotate and prune it
-        let mut root = Ball::par_new_tree_with_indices(augmented_items, &metric, &criteria).unwrap();
+        // Build a tree with no annotations and benchmark the search algorithms
+        let root = Ball::par_new_tree_minimal(augmented_items, &metric, &|_| true).unwrap();
+        bench_for_ks(group, &root, &metric, &queries, false, multiplier, ks);
 
-        for prune in [false, true] {
-            let pruned_str = if prune {
-                // Compute compression costs
-                root.par_annotate(&|_| None, &compute_compression_costs);
-                // Prune based on compression costs
-                root.prune(&to_prune_or_not_to_prune);
-                // Remove annotations to (maybe) save memory
-                root.par_clear_annotations();
-
-                "pruned"
-            } else {
-                "unpruned"
-            };
-
-            for k in [10] {
-                let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
-                    ("dfs", Box::new(cakes::KnnDfs(k))),
-                    ("bfs", Box::new(cakes::KnnBfs(k))),
-                    // ("rrnn", Box::new(cakes::KnnRrnn(k))),
-                ];
-
-                let mut oracles = Vec::new();
-                for (name, alg) in algs {
-                    oracles = alg
-                        .par_batch_search(&root, &metric, &queries)
-                        .into_iter()
-                        .map(|res| {
-                            res.into_iter()
-                                .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
-                                .map(|(_, _, radius)| cakes::RnnChess(radius))
-                                .unwrap()
-                        })
-                        .collect();
-
-                    let id = BenchmarkId::new(format!("{name}-k{k}-{pruned_str}"), multiplier);
-                    group.bench_function(id, |b| {
-                        b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
-                    });
-                }
-
-                let id = BenchmarkId::new(format!("oracle-k{k}-{pruned_str}"), multiplier);
-                group.bench_function(id, |b| {
-                    b.iter_with_large_drop(|| {
-                        oracles
-                            .par_iter()
-                            .zip(queries.par_iter())
-                            .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-                            .collect::<Vec<_>>()
-                    })
-                });
-
-                core::mem::drop(oracles);
-            }
-        }
+        // Annotate the tree with compression costs, prune it to the necessarily unitary leaves, and benchmark the search algorithms again
+        let root = {
+            let mut root = root.par_reset_annotations(); // We first have to change the annotation type
+            root.par_annotate_post_order(&compute_compression_costs); // Compute compression costs
+            root.prune(&to_prune_or_not_to_prune); // Prune based on compression costs
+            root.par_reset_annotations::<()>() // We don't need the annotations anymore, so we clear them to save memory
+        };
+        bench_for_ks(group, &root, &metric, &queries, true, multiplier, ks);
     }
 }
 
@@ -174,16 +183,19 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         AnnDataset::DeepImage,
     ];
 
-    // Set `max_items` and `max_queries` to limit the running time
+    // Whether to shuffle the dataset before building the tree
+    let shuffle = true;
+
+    // Set these parameters to control the runtime of the benchmarks
     let max_items = 32_000_000;
     let max_queries = 100;
-    let shuffle = true;
+    let ks = [10];
 
     let base = base_dir().unwrap();
     for dataset in &datasets[..3] {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
-        run_group(&mut group, dataset, &base, max_items, max_queries, shuffle);
+        run_group(&mut group, dataset, &base, max_items, max_queries, shuffle, &ks);
         group.finish();
     }
 }

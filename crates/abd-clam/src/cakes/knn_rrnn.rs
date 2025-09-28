@@ -214,7 +214,7 @@ fn lfd_multiplier<Id, I, T: DistanceValue, A>(
         .iter()
         .max_by_key(|&&d| crate::utils::MaxItem((), d))
         .map_or_else(T::zero, |&d| d);
-    let lfd_recip_sum_init = crate::core::lfd_estimate(&radial_distances, radius).recip();
+    let lfd_recip_sum_init = crate::utils::lfd_estimate(&radial_distances, radius).recip();
 
     let lfd_recip_sum = lfd_recip_sum_init
         + subsumed
