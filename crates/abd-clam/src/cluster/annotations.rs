@@ -2,18 +2,18 @@
 
 use crate::DistanceValue;
 
-use super::{Ball, Contents};
+use super::{Cluster, Contents};
 
-impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
+impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Changes the type of annotations in the tree, setting all annotations to `None`.
-    pub fn reset_annotations<B>(self) -> Ball<Id, I, T, B> {
+    pub fn reset_annotations<B>(self) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
             Contents::Children([left, right]) => {
                 Contents::Children([Box::new(left.reset_annotations()), Box::new(right.reset_annotations())])
             }
         };
-        Ball {
+        Cluster {
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,
@@ -34,7 +34,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         self.annotation.take()
     }
 
-    /// Annotates all balls in the tree by applying the provided function in a pre-order traversal.
+    /// Annotates all clusters in the tree by applying the provided function in a pre-order traversal.
     pub fn annotate_pre_order<Pre: Fn(&Self) -> A>(&mut self, pre: &Pre) {
         self.annotation = Some(pre(self));
         if let Contents::Children([left, right]) = &mut self.contents {
@@ -43,7 +43,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         }
     }
 
-    /// Annotates all balls in the tree by applying the provided function in a post-order traversal.
+    /// Annotates all clusters in the tree by applying the provided function in a post-order traversal.
     pub fn annotate_post_order<Post: Fn(&Self) -> A>(&mut self, post: &Post) {
         self.annotation = Some(post(self));
         if let Contents::Children([left, right]) = &mut self.contents {
@@ -52,7 +52,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         }
     }
 
-    /// Annotates all balls in the tree first by applying the `pre` function before visiting children, and then applying the `post` function after visiting the
+    /// Annotates all clusters in the tree first by applying the `pre` function before visiting children, and then applying the `post` function after visiting the
     /// children, in a full traversal.
     pub fn annotate_pre_post<Pre: Fn(&Self) -> A, Post: Fn(&Self) -> A>(&mut self, pre: &Pre, post: &Post) {
         self.annotation = Some(pre(self));
@@ -96,9 +96,9 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
     }
 }
 
-impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<Id, I, T, A> {
+impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Cluster<Id, I, T, A> {
     /// Parallel version of [`reset_annotations`](Self::reset_annotations).
-    pub fn par_reset_annotations<B: Send + Sync>(self) -> Ball<Id, I, T, B> {
+    pub fn par_reset_annotations<B: Send + Sync>(self) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
             Contents::Children([left, right]) => {
@@ -106,7 +106,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 Contents::Children([Box::new(left), Box::new(right)])
             }
         };
-        Ball {
+        Cluster {
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,

@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Ball, DistanceValue};
+use crate::{Cluster, DistanceValue};
 
 mod knn_bfs;
 mod knn_dfs;
@@ -30,10 +30,15 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> {
     /// # Returns
     ///
     /// A vector of tuples containing the index and distance of the nearest neighbors.
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>;
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>;
 
     /// Batched version of [`Search::search`](Search::search).
-    fn batch_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, queries: &[I]) -> Vec<Vec<(&'a Id, &'a I, T)>> {
+    fn batch_search<'a>(
+        &self,
+        root: &'a Cluster<Id, I, T, A>,
+        metric: &M,
+        queries: &[I],
+    ) -> Vec<Vec<(&'a Id, &'a I, T)>> {
         queries.iter().map(|query| self.search(root, metric, query)).collect()
     }
 }
@@ -48,14 +53,14 @@ pub trait ParSearch<
 >: Search<Id, I, T, M, A> + Send + Sync
 {
     /// Parallel version of [`Search::search`](Search::search).
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         self.search(root, metric, query)
     }
 
     /// Parallel batched version of [`ParSearch::par_search`](ParSearch::par_search).
     fn par_batch_search<'a>(
         &self,
-        root: &'a Ball<Id, I, T, A>,
+        root: &'a Cluster<Id, I, T, A>,
         metric: &M,
         queries: &[I],
     ) -> Vec<Vec<(&'a Id, &'a I, T)>> {

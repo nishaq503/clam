@@ -2,7 +2,7 @@
 
 #![expect(clippy::type_complexity)]
 
-use crate::{utils::SizedHeap, Ball, DistanceValue};
+use crate::{utils::SizedHeap, Cluster, DistanceValue};
 
 use super::{ParSearch, Search};
 
@@ -10,7 +10,7 @@ use super::{ParSearch, Search};
 pub struct KnnBfs(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnBfs::search");
 
         if self.0 > root.cardinality() {
@@ -28,50 +28,53 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
 
         while !candidates.is_empty() {
             // TODO Najib: Break this massive fold into several smaller pieces for optimal profiling
-            candidates =
-                filter_candidates(candidates, self.0)
-                    .into_iter()
-                    .fold(Vec::new(), |mut acc_candidates, (ball, d)| {
-                        if (
+            candidates = filter_candidates(candidates, self.0).into_iter().fold(
+                Vec::new(),
+                |mut acc_candidates, (cluster, d)| {
+                    if (
                         acc_candidates.len() <= self.0  // We still need more points to satisfy k, AND
-                        && (ball.cardinality() < (self.0 - acc_candidates.len()))  // The ball cannot provide enough points to get to k
+                        && (cluster.cardinality() < (self.0 - acc_candidates.len()))  // The cluster cannot provide enough points to get to k
                     )  // OR
-                    || ball.is_leaf()
-                        {
-                            profi::prof!("KnnBfs::search::leaf");
-                            // The ball is a leaf, so we have to look at its points
-                            if ball.is_singleton() {
-                                // It's a singleton, so just add non-center items with the precomputed distance
-                                hits.extend(ball.subtree_items().iter().map(|(id, item)| ((id, item), d)));
-                            } else {
-                                // Not a singleton, so compute distances to all non-center items
-                                // and add them to hits
-                                hits.extend(
-                                    ball.subtree_items()
-                                        .iter()
-                                        .map(|(id, item)| ((id, item), metric(query, item))),
-                                );
-                            }
+                    || cluster.is_leaf()
+                    {
+                        profi::prof!("KnnBfs::search::leaf");
+                        // The cluster is a leaf, so we have to look at its points
+                        if cluster.is_singleton() {
+                            // It's a singleton, so just add non-center items with the precomputed distance
+                            hits.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
                         } else {
-                            profi::prof!("KnnBfs::search::parent");
-
-                            // Not a leaf, so add children to candidates
-                            let [left, right] = ball.children().unwrap_or_else(|| unreachable!("Ball is a parent"));
-
-                            // Compute distances to child centers
-                            let left_d = metric(query, left.center());
-                            let right_d = metric(query, right.center());
-
-                            // Push child centers to hits
-                            hits.push(((left.center_id(), left.center()), left_d));
-                            hits.push(((right.center_id(), right.center()), right_d));
-
-                            // Add children to candidates with their theoretical max distances
-                            acc_candidates.push((left, d_max(left, left_d)));
-                            acc_candidates.push((right, d_max(right, right_d)));
+                            // Not a singleton, so compute distances to all non-center items
+                            // and add them to hits
+                            hits.extend(
+                                cluster
+                                    .subtree_items()
+                                    .iter()
+                                    .map(|(id, item)| ((id, item), metric(query, item))),
+                            );
                         }
-                        acc_candidates
-                    });
+                    } else {
+                        profi::prof!("KnnBfs::search::parent");
+
+                        // Not a leaf, so add children to candidates
+                        let [left, right] = cluster
+                            .children()
+                            .unwrap_or_else(|| unreachable!("Cluster is a parent"));
+
+                        // Compute distances to child centers
+                        let left_d = metric(query, left.center());
+                        let right_d = metric(query, right.center());
+
+                        // Push child centers to hits
+                        hits.push(((left.center_id(), left.center()), left_d));
+                        hits.push(((right.center_id(), right.center()), right_d));
+
+                        // Add children to candidates with their theoretical max distances
+                        acc_candidates.push((left, d_max(left, left_d)));
+                        acc_candidates.push((right, d_max(right, right_d)));
+                    }
+                    acc_candidates
+                },
+            );
         }
 
         hits.items().map(|((id, item), d)| (id, item, d)).collect()
@@ -89,16 +92,16 @@ impl<
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
-fn d_max<Id, I, T: DistanceValue, A>(ball: &Ball<Id, I, T, A>, d: T) -> T {
-    ball.radius() + d
+fn d_max<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
+    cluster.radius() + d
 }
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
 fn filter_candidates<Id, I, T: DistanceValue, A>(
-    mut candidates: Vec<(&Ball<Id, I, T, A>, T)>,
+    mut candidates: Vec<(&Cluster<Id, I, T, A>, T)>,
     k: usize,
-) -> Vec<(&Ball<Id, I, T, A>, T)> {
+) -> Vec<(&Cluster<Id, I, T, A>, T)> {
     profi::prof!("KnnBfs::filter_candidates");
 
     let threshold_index = quick_partition(&mut candidates, k);
@@ -106,11 +109,11 @@ fn filter_candidates<Id, I, T: DistanceValue, A>(
 
     candidates
         .into_iter()
-        .filter_map(|(ball, d)| {
-            let diam = ball.radius() + ball.radius();
+        .filter_map(|(cluster, d)| {
+            let diam = cluster.radius() + cluster.radius();
             let d_min = if d <= diam { T::zero() } else { d - diam };
             if d_min <= threshold {
-                Some((ball, d))
+                Some((cluster, d))
             } else {
                 None
             }
@@ -123,14 +126,14 @@ fn filter_candidates<Id, I, T: DistanceValue, A>(
 /// also reordering the list so that all elements to the left of the k-th
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
-fn quick_partition<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usize) -> usize {
+fn quick_partition<Id, I, T: DistanceValue, A>(items: &mut [(&Cluster<Id, I, T, A>, T)], k: usize) -> usize {
     profi::prof!("KnnBfs::quick_partition");
 
     qps(items, k, 0, items.len() - 1)
 }
 
 /// The recursive helper function for the Quick Partition algorithm.
-fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usize, l: usize, r: usize) -> usize {
+fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Cluster<Id, I, T, A>, T)], k: usize, l: usize, r: usize) -> usize {
     if l >= r {
         core::cmp::min(l, r)
     } else {
@@ -143,8 +146,8 @@ fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usi
         let cumulative_guarantees = items
             .iter()
             .take(p)
-            .scan(0, |acc, (ball, _)| {
-                *acc += ball.cardinality();
+            .scan(0, |acc, (cluster, _)| {
+                *acc += cluster.cardinality();
                 Some(*acc)
             })
             .collect::<Vec<_>>();
@@ -173,7 +176,7 @@ fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Ball<Id, I, T, A>, T)], k: usi
 /// of pivot are less than or equal to pivot and all elements to right of pivot
 /// are greater than pivot.
 fn find_pivot<Id, I, T: DistanceValue, A>(
-    items: &mut [(&Ball<Id, I, T, A>, T)],
+    items: &mut [(&Cluster<Id, I, T, A>, T)],
     l: usize,
     r: usize,
     pivot: usize,

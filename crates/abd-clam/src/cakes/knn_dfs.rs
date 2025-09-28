@@ -2,7 +2,7 @@
 
 use core::cmp::Reverse;
 
-use crate::{utils::SizedHeap, Ball, DistanceValue};
+use crate::{utils::SizedHeap, Cluster, DistanceValue};
 
 use super::{ParSearch, Search};
 
@@ -10,7 +10,7 @@ use super::{ParSearch, Search};
 pub struct KnnDfs(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnDfs {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnDfs::search");
 
         if self.0 > root.cardinality() {
@@ -19,7 +19,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             return root.distances_to_all_items(query, metric);
         }
 
-        let mut candidates = SizedHeap::<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>::new(None);
+        let mut candidates = SizedHeap::<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>::new(None);
         let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
 
         let d = metric(query, root.center());
@@ -58,12 +58,12 @@ impl<
 {
 }
 
-/// The minimum possible distance from the query to any item in the ball.
-fn d_min<Id, I, T: DistanceValue, A>(ball: &Ball<Id, I, T, A>, d: T) -> T {
-    if d < ball.radius() {
+/// The minimum possible distance from the query to any item in the cluster.
+fn d_min<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
+    if d < cluster.radius() {
         T::zero()
     } else {
-        d - ball.radius()
+        d - cluster.radius()
     }
 }
 
@@ -76,14 +76,14 @@ fn d_min<Id, I, T: DistanceValue, A>(ball: &Ball<Id, I, T, A>, d: T) -> T {
 fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
-    candidates: &mut SizedHeap<&'a Ball<Id, I, T, A>, Reverse<(T, T)>>,
+    candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-) -> (&'a Ball<Id, I, T, A>, T) {
+) -> (&'a Cluster<Id, I, T, A>, T) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
     while candidates.peek().map_or_else(
         || unreachable!("`candidates` is non-empty."),
-        |(ball, _)| !ball.is_leaf(),
+        |(cluster, _)| !cluster.is_leaf(),
     ) {
         profi::prof!("pop-while-not-leaf");
 
@@ -118,13 +118,13 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     )
 }
 
-/// Given a leaf ball, compute the distance from the query to each item in
+/// Given a leaf cluster, compute the distance from the query to each item in
 /// the leaf and push them onto `hits`.
 fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-    leaf: &'a Ball<Id, I, T, A>,
+    leaf: &'a Cluster<Id, I, T, A>,
     d: T,
 ) {
     profi::prof!("KnnDfs::leaf_into_hits");

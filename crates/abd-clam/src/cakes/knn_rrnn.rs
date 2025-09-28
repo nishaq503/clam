@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{utils::SizedHeap, Ball, DistanceValue};
+use crate::{utils::SizedHeap, Cluster, DistanceValue};
 
 use super::{
     rnn_chess::{par_tree_search, tree_search},
@@ -13,7 +13,7 @@ use super::{
 pub struct KnnRrnn(pub usize);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnRrnn {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
@@ -73,13 +73,14 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             profi::prof!("KnnRrnn::search::leaf_search");
             heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
 
-            for ball in subsumed.into_iter().chain(straddlers) {
-                if ball.is_singleton() {
-                    let d = metric(query, ball.center());
-                    heap.extend(ball.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+            for cluster in subsumed.into_iter().chain(straddlers) {
+                if cluster.is_singleton() {
+                    let d = metric(query, cluster.center());
+                    heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
                 } else {
                     heap.extend(
-                        ball.subtree_items()
+                        cluster
+                            .subtree_items()
                             .iter()
                             .map(|(id, item)| ((id, item), metric(query, item))),
                     );
@@ -99,7 +100,7 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for KnnRrnn
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnRrnn::search");
 
         if self.0 > root.cardinality() {
@@ -158,13 +159,14 @@ impl<
 
             heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
 
-            for ball in subsumed.into_iter().chain(straddlers) {
-                if ball.is_singleton() {
-                    let d = metric(query, ball.center());
-                    heap.extend(ball.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+            for cluster in subsumed.into_iter().chain(straddlers) {
+                if cluster.is_singleton() {
+                    let d = metric(query, cluster.center());
+                    heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
                 } else {
                     heap.extend(
-                        ball.subtree_items()
+                        cluster
+                            .subtree_items()
                             .par_iter()
                             .map(|(id, item)| ((id, item), metric(query, item)))
                             .collect::<Vec<_>>(),
@@ -179,20 +181,20 @@ impl<
 
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]
-fn radius_for_k<I, Id, T: DistanceValue, A>(ball: &Ball<I, Id, T, A>, k: usize) -> f64 {
-    let r = ball
+fn radius_for_k<I, Id, T: DistanceValue, A>(cluster: &Cluster<I, Id, T, A>, k: usize) -> f64 {
+    let r = cluster
         .radius()
         .to_f64()
         .unwrap_or_else(|| unreachable!("Radius of type {} to f64 conversion failed", std::any::type_name::<T>()));
-    if ball.cardinality() == k {
+    if cluster.cardinality() == k {
         r
     } else {
-        r * (k as f64 / ball.cardinality() as f64).powf(ball.lfd().recip())
+        r * (k as f64 / cluster.cardinality() as f64).powf(cluster.lfd().recip())
     }
 }
 
-/// Counts the total number of hits from confirmed centers and subsumed balls.
-fn count_hits<Id, I, T: DistanceValue, A>(centers: &[(&Id, &I, T)], subsumed: &[&Ball<Id, I, T, A>]) -> usize {
+/// Counts the total number of hits from confirmed centers and subsumed clusters.
+fn count_hits<Id, I, T: DistanceValue, A>(centers: &[(&Id, &I, T)], subsumed: &[&Cluster<Id, I, T, A>]) -> usize {
     centers.len()
         + subsumed
             .iter()
@@ -204,8 +206,8 @@ fn count_hits<Id, I, T: DistanceValue, A>(centers: &[(&Id, &I, T)], subsumed: &[
 #[expect(clippy::cast_precision_loss)]
 fn lfd_multiplier<Id, I, T: DistanceValue, A>(
     centers: &[(&Id, &I, T)],
-    subsumed: &[&Ball<Id, I, T, A>],
-    straddlers: &[&Ball<Id, I, T, A>],
+    subsumed: &[&Cluster<Id, I, T, A>],
+    straddlers: &[&Cluster<Id, I, T, A>],
     k: usize,
     num_confirmed: usize,
 ) -> f64 {

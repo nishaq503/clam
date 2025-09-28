@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use abd_clam::{cakes::ParSearch, Ball};
+use abd_clam::{cakes::ParSearch, Cluster};
 use rayon::prelude::*;
 
 fn build_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
@@ -48,11 +48,11 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn build_ball(items: Vec<Vec<f32>>) -> Result<Ball<usize, Vec<f32>, f32, ()>, String> {
-    Ball::par_new_tree_minimal(items, &build_metric, &|_| true)
+fn build_ball(items: Vec<Vec<f32>>) -> Result<Cluster<usize, Vec<f32>, f32, ()>, String> {
+    Cluster::par_new_tree_minimal(items, &build_metric, &|_| true)
 }
 
-fn search_ball<'a>(root: &'a Ball<usize, Vec<f32>, f32, ()>, queries: &[Vec<f32>], k: usize) {
+fn search_ball<'a>(root: &'a Cluster<usize, Vec<f32>, f32, ()>, queries: &[Vec<f32>], k: usize) {
     profi::prof!();
 
     let dfs_results = abd_clam::cakes::KnnDfs(k).par_batch_search(root, &knn_dfs_metric, queries);

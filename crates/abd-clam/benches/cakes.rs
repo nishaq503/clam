@@ -4,7 +4,7 @@
 
 use abd_clam::{
     cakes::{self, ParSearch},
-    Ball, DistanceValue,
+    Cluster, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::prelude::*;
@@ -21,7 +21,7 @@ struct CompressionCosts<T: DistanceValue> {
 
 fn bench_for_ks<Id, I, T, A, M>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    root: &Ball<Id, I, T, A>,
+    root: &Cluster<Id, I, T, A>,
     metric: &M,
     queries: &[I],
     pruned: bool,
@@ -92,7 +92,7 @@ fn run_group<P: AsRef<std::path::Path>>(
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
     // Function to compute compression costs for a ball in a post-order traversal
-    let compute_compression_costs = |ball: &Ball<_, _, _, CompressionCosts<_>>| {
+    let compute_compression_costs = |ball: &Cluster<_, _, _, CompressionCosts<_>>| {
         if let Some([left, right]) = ball.children() {
             // INVARIANT: This function is called in post-order, so the children's costs are already computed.
             let recursive = left.annotation().unwrap().minimum
@@ -116,7 +116,7 @@ fn run_group<P: AsRef<std::path::Path>>(
         }
     };
     // Predicate to decide whether to prune a ball based on its compression costs
-    let to_prune_or_not_to_prune = |b: &Ball<_, _, _, _>| {
+    let to_prune_or_not_to_prune = |b: &Cluster<_, _, _, _>| {
         b.annotation()
             .map_or(false, |&CompressionCosts { unitary, recursive, .. }| {
                 unitary <= recursive
@@ -129,7 +129,7 @@ fn run_group<P: AsRef<std::path::Path>>(
 
     let augmentation_error = {
         let n_items = items.len();
-        let root = Ball::par_new_tree_minimal(items.clone(), &metric, &|b: _| b.cardinality() > n_items).unwrap();
+        let root = Cluster::par_new_tree_minimal(items.clone(), &metric, &|b: _| b.cardinality() > n_items).unwrap();
 
         // Baseline: linear scan with k=10 on the original data only
         let id = BenchmarkId::new("knn-linear-k10", 1_usize);
@@ -154,7 +154,7 @@ fn run_group<P: AsRef<std::path::Path>>(
         };
 
         // Build a tree with no annotations and benchmark the search algorithms
-        let root = Ball::par_new_tree_minimal(augmented_items, &metric, &|_| true).unwrap();
+        let root = Cluster::par_new_tree_minimal(augmented_items, &metric, &|_| true).unwrap();
         bench_for_ks(group, &root, &metric, &queries, false, multiplier, ks);
 
         // Annotate the tree with compression costs, prune it to the necessarily unitary leaves, and benchmark the search algorithms again

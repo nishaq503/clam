@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use abd_clam::{
     cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
     utils::MaxItem,
-    Ball, DistanceValue,
+    Cluster, DistanceValue,
 };
 use rayon::prelude::*;
 
@@ -21,7 +21,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Ball::new_tree_minimal(data.clone(), &metric, &|_| true)?;
+    let root = Cluster::new_tree_minimal(data.clone(), &metric, &|_| true)?;
     let all_items = root.all_items();
 
     for radius in [1.0, 1.5, 2.0] {
@@ -100,7 +100,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Ball::par_new_tree_minimal(data.clone(), &metric, &|_| true)?;
+    let root = Cluster::par_new_tree_minimal(data.clone(), &metric, &|_| true)?;
     let all_items = root.all_items();
 
     for radius in [1.0, 1.5, 2.0] {

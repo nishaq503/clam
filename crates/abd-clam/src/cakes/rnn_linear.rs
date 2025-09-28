@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{Ball, DistanceValue};
+use crate::{Cluster, DistanceValue};
 
 use super::{ParSearch, Search};
 
@@ -10,7 +10,7 @@ use super::{ParSearch, Search};
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnLinear<T> {
-    fn search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         root.all_items()
             .into_iter()
             .filter_map(|(id, item)| {
@@ -33,7 +33,7 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for RnnLinear<T>
 {
-    fn par_search<'a>(&self, root: &'a Ball<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         root.all_items()
             .into_par_iter()
             .filter_map(|(id, item)| {

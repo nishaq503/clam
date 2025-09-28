@@ -4,16 +4,16 @@ use rayon::prelude::*;
 
 use crate::DistanceValue;
 
-use super::{Ball, Contents};
+use super::{Cluster, Contents};
 
-impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
-    /// Creates a new tree of `Ball`s.
+impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
+    /// Creates a new tree of `Cluster`s.
     ///
     /// # Parameters
     ///
-    /// * `items`: The items to be clustered into a tree of balls.
+    /// * `items`: The items to be clustered into a tree of clusters.
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a ball should be partitioned into child balls. As a default, the user can use `&|_| true`.
+    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`.
     ///
     /// # Errors
     ///
@@ -24,19 +24,19 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         criteria: &impl Fn(&Self) -> bool,
     ) -> Result<Self, String> {
         if items.is_empty() {
-            return Err("Cannot create a Ball tree with no items".to_string());
+            return Err("Cannot create a Cluster tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
         Ok(Self::with_center_only(items, metric).partition(metric, &criteria))
     }
 
-    /// Private constructor for `Ball`.
+    /// Private constructor for `Cluster`.
     ///
     /// WARNING: This function does only sets the `center` and `cardinality` fields correctly. Other fields are placeholders and must be computed in
     /// `partition`.
     fn with_center_only<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
-            // A singleton ball: `center` is the only item, `radius` is 0, `LFD` is 1
+            // A singleton cluster: `center` is the only item, `radius` is 0, `LFD` is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
             Self {
                 cardinality: 1,
@@ -74,25 +74,25 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
         }
     }
 
-    /// Partitions the ball into two child balls based on the provided `metric` and `criteria`, then recursively partitions the children until the criteria are
+    /// Partitions the cluster into two child clusters based on the provided `metric` and `criteria`, then recursively partitions the children until the criteria are
     /// no longer satisfied.
     ///
     /// # Parameters
     ///
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a ball should be partitioned into child balls. As a default, the user can use `&|_| true`.
+    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`.
     pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, criteria: &impl Fn(&Self) -> bool) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
                 if items.is_empty() {
-                    // A singleton ball: nothing to partition.
+                    // A singleton cluster: nothing to partition.
                     self.radius = T::zero();
                     self.lfd = 1.0; // LFD of a singleton is _defined_ as 1
                     self.contents = Contents::Leaf(Vec::new());
                     return self;
                 }
                 if items.len() == 1 {
-                    // A ball with one center and one item: nothing to partition.
+                    // A cluster with one center and one item: nothing to partition.
                     self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
                     self.radial_sum = self.radius;
@@ -103,7 +103,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                 // At this point, we have at least 2 items so radius computation is meaningful, and we can always remove two poles to partition with.
                 // We have to first compute the radius and LFD because `with_center_only` does not compute them.
 
-                // Compute the radius and LFD of the ball.
+                // Compute the radius and LFD of the cluster.
                 let radial_distances = items
                     .iter()
                     .map(|item| metric(&self.center.1, &item.1))
@@ -125,7 +125,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
                     return self;
                 }
 
-                // Criteria are satisfied, so we partition the ball.
+                // Criteria are satisfied, so we partition the cluster.
 
                 // Take ownership of the items for partitioning.
                 let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
@@ -199,12 +199,12 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
             }
         }
 
-        // Return the (possibly) partitioned ball.
+        // Return the (possibly) partitioned cluster.
         self
     }
 
-    /// Removes and returns all items from the ball and its descendants, excluding the center of this ball; the children are dropped in the process and this
-    /// ball becomes a leaf with no items other than its center.
+    /// Removes and returns all items from the cluster and its descendants, excluding the center of this cluster; the children are dropped in the process and this
+    /// cluster becomes a leaf with no items other than its center.
     ///
     /// WARNING: This function does not recompute any properties for the up to the root after removing the items. The caller must ensure that the properties are
     /// still valid after this operation.
@@ -227,7 +227,7 @@ impl<Id, I, T: DistanceValue, A> Ball<Id, I, T, A> {
     }
 }
 
-impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Ball<Id, I, T, A> {
+impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Cluster<Id, I, T, A> {
     /// Parallel version of [`new_tree`](Self::new_tree).
     ///
     /// # Errors
@@ -239,7 +239,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         criteria: &(impl Fn(&Self) -> bool + Send + Sync),
     ) -> Result<Self, String> {
         if items.is_empty() {
-            return Err("Cannot create a Ball tree with no items".to_string());
+            return Err("Cannot create a Cluster tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
         Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria))
@@ -248,7 +248,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     /// Parallel version of [`with_center_only`](Self::with_center_only).
     fn par_with_center_only<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
-            // A singleton ball: center is the only item, radius is 0, LFD is 1
+            // A singleton cluster: center is the only item, radius is 0, LFD is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
             Self {
                 cardinality: 1,
@@ -295,14 +295,14 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         match self.contents {
             Contents::Leaf(items) => {
                 if items.is_empty() {
-                    // A singleton ball: nothing to partition.
+                    // A singleton cluster: nothing to partition.
                     self.radius = T::zero();
                     self.lfd = 1.0; // LFD of a singleton is _defined_ as 1
                     self.contents = Contents::Leaf(Vec::new());
                     return self;
                 }
                 if items.len() == 1 {
-                    // A ball with one center and one item: nothing to partition.
+                    // A cluster with one center and one item: nothing to partition.
                     self.radius = metric(&self.center.1, &items[0].1);
                     self.lfd = 1.0; // LFD of clusters with 2 items is _defined_ as 1
                     self.radial_sum = self.radius;
@@ -313,7 +313,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // At this point, we have at least 2 items so radius computation is meaningful, and we can always remove two poles to partition with.
                 // We have to first compute the radius and LFD because `new` does not compute them.
 
-                // Compute the radius and LFD of the ball.
+                // Compute the radius and LFD of the cluster.
                 let radial_distances = items
                     .par_iter()
                     .map(|item| metric(&self.center.1, &item.1))
@@ -335,7 +335,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     return self;
                 }
 
-                // Criteria are satisfied, so we partition the ball.
+                // Criteria are satisfied, so we partition the cluster.
 
                 // Take ownership of the items for partitioning.
                 let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
@@ -411,7 +411,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             }
         }
 
-        // Return the (possibly) partitioned ball.
+        // Return the (possibly) partitioned cluster.
         self
     }
 }
