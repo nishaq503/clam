@@ -125,7 +125,7 @@ fn run_group<P: AsRef<std::path::Path>>(
 
     group
         .throughput(criterion::Throughput::Elements(queries.len() as u64))
-        .sample_size(10);
+        .sample_size(100);
 
     let augmentation_error = {
         let n_items = items.len();
@@ -172,8 +172,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let datasets = [
         // For the paper
         AnnDataset::FashionMnist,
-        AnnDataset::Sift,
         AnnDataset::Glove25,
+        AnnDataset::Sift,
         // The rest
         AnnDataset::Mnist,
         AnnDataset::Gist,
@@ -187,7 +187,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let shuffle = true;
 
     // Set these parameters to control the runtime of the benchmarks
-    let max_items = 32_000_000;
+    let max_items = 10_000_000;
     let max_queries = 100;
     let ks = [10];
 

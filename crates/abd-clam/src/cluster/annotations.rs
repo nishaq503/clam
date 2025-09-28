@@ -45,11 +45,11 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 
     /// Annotates all clusters in the tree by applying the provided function in a post-order traversal.
     pub fn annotate_post_order<Post: Fn(&Self) -> A>(&mut self, post: &Post) {
-        self.annotation = Some(post(self));
         if let Contents::Children([left, right]) = &mut self.contents {
             left.annotate_post_order(post);
             right.annotate_post_order(post);
         }
+        self.annotation = Some(post(self));
     }
 
     /// Annotates all clusters in the tree first by applying the `pre` function before visiting children, and then applying the `post` function after visiting the
@@ -74,11 +74,11 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 
     /// Same as [`annotate_post_order`](Self::annotate_post_order) but the function can mutate its internal state.
     pub fn annotate_post_order_mut<Post: FnMut(&Self) -> A>(&mut self, post: &mut Post) {
-        self.annotation = Some(post(self));
         if let Contents::Children([left, right]) = &mut self.contents {
             left.annotate_post_order_mut(post);
             right.annotate_post_order_mut(post);
         }
+        self.annotation = Some(post(self));
     }
 
     /// Same as [`annotate_pre_post`](Self::annotate_pre_post) but the functions can mutate their internal state.
@@ -130,13 +130,13 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
 
     /// Parallel version of [`annotate_post_order`](Self::annotate_post_order).
     pub fn par_annotate_post_order<Post: Fn(&Self) -> A + Send + Sync>(&mut self, post: &Post) {
-        self.annotation = Some(post(self));
         if let Contents::Children([left, right]) = &mut self.contents {
             rayon::join(
                 || left.par_annotate_post_order(post),
                 || right.par_annotate_post_order(post),
             );
         }
+        self.annotation = Some(post(self));
     }
 
     /// Parallel version of [`annotate_pre_post`](Self::annotate_pre_post).
