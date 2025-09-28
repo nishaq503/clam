@@ -2,12 +2,13 @@
 
 use rayon::prelude::*;
 
-use crate::{utils::SizedHeap, Cluster, DistanceValue};
-
-use super::{
-    rnn_chess::{par_tree_search, tree_search},
-    ParSearch, Search,
+use crate::{
+    cakes::{ParSearch, Search},
+    utils::SizedHeap,
+    Cluster, DistanceValue,
 };
+
+use super::rnn_chess::{par_tree_search, tree_search};
 
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);

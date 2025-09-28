@@ -4,19 +4,10 @@ use rayon::prelude::*;
 
 use crate::{Cluster, DistanceValue};
 
-mod knn_bfs;
-mod knn_dfs;
-mod knn_linear;
-mod knn_rrnn;
-mod rnn_chess;
-mod rnn_linear;
+pub mod approximate;
+mod exact;
 
-pub use knn_bfs::KnnBfs;
-pub use knn_dfs::KnnDfs;
-pub use knn_linear::KnnLinear;
-pub use knn_rrnn::KnnRrnn;
-pub use rnn_chess::RnnChess;
-pub use rnn_linear::RnnLinear;
+pub use exact::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A `Search` trait for defining how to search for nearest neighbors.
 pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> {

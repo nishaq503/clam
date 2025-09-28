@@ -2,9 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue};
-
-use super::{ParSearch, Search};
+use crate::{
+    cakes::{ParSearch, Search},
+    Cluster, DistanceValue,
+};
 
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 pub struct RnnLinear<T: DistanceValue>(pub T);

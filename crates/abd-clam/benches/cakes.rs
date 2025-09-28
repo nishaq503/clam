@@ -225,13 +225,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand::rng();
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
-    let max_items = 100_000_000;
-    let max_queries = 10_000;
-    let ks = [10, 100];
+    let max_items = 100_000;
+    let max_queries = 10;
+    let ks = [10];
     let prune = true;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets {
+    for dataset in &datasets[..1] {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
         run_group(

@@ -2,9 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue};
-
-use super::{ParSearch, Search};
+use crate::{
+    cakes::{ParSearch, Search},
+    Cluster, DistanceValue,
+};
 
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 pub struct RnnChess<T: DistanceValue>(pub T);

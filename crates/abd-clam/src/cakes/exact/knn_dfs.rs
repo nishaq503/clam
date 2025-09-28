@@ -2,9 +2,11 @@
 
 use core::cmp::Reverse;
 
-use crate::{utils::SizedHeap, Cluster, DistanceValue};
-
-use super::{ParSearch, Search};
+use crate::{
+    cakes::{ParSearch, Search},
+    utils::SizedHeap,
+    Cluster, DistanceValue,
+};
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
 pub struct KnnDfs(pub usize);

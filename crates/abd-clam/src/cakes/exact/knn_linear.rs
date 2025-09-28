@@ -2,9 +2,11 @@
 
 use rayon::prelude::*;
 
-use crate::{utils::SizedHeap, Cluster, DistanceValue};
-
-use super::{ParSearch, Search};
+use crate::{
+    cakes::{ParSearch, Search},
+    utils::SizedHeap,
+    Cluster, DistanceValue,
+};
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
 pub struct KnnLinear(pub usize);
