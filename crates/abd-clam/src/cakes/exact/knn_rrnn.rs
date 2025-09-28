@@ -13,6 +13,12 @@ use super::rnn_chess::{par_tree_search, tree_search};
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);
 
+impl std::fmt::Display for KnnRrnn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KnnRrnn(k={})", self.0)
+    }
+}
+
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnRrnn {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnRrnn::search");

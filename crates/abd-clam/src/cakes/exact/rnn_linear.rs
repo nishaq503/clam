@@ -10,6 +10,12 @@ use crate::{
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
+impl<T: DistanceValue> std::fmt::Display for RnnLinear<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RnnLinear(radius={})", self.0.to_f64().unwrap_or(f64::NAN))
+    }
+}
+
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnLinear<T> {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         root.all_items()

@@ -37,32 +37,18 @@ fn bench_for_ks<Id, I, T, A, M>(
     let pruned_str = if pruned { "pruned" } else { "unpruned" };
 
     for &k in ks {
-        let algs: &[(&'static str, Box<dyn ParSearch<_, _, _, _, _>>)] = &[
-            ("dfs", Box::new(cakes::KnnDfs(k))),
-            ("bfs", Box::new(cakes::KnnBfs(k))),
-            // ("rrnn", Box::new(cakes::KnnRrnn(k))),
-        ];
+        let true_hits = cakes::KnnLinear(k).par_batch_search(&root, &metric, &queries);
+        let oracles = true_hits
+            .iter()
+            .map(|res| {
+                res.iter()
+                    .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
+                    .map(|&(_, _, radius)| cakes::RnnChess(radius))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
 
-        let mut oracles = Vec::new();
-        for (name, alg) in algs {
-            oracles = alg
-                .par_batch_search(&root, &metric, &queries)
-                .into_iter()
-                .map(|res| {
-                    res.into_iter()
-                        .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
-                        .map(|(_, _, radius)| cakes::RnnChess(radius))
-                        .unwrap()
-                })
-                .collect();
-
-            let id = BenchmarkId::new(format!("{name}-k{k}-{pruned_str}"), multiplier);
-            group.bench_function(id, |b| {
-                b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
-            });
-        }
-
-        let id = BenchmarkId::new(format!("oracle-k{k}-{pruned_str}"), multiplier);
+        let id = BenchmarkId::new(format!("KnnOracle(k={k})-{pruned_str}"), multiplier);
         group.bench_function(id, |b| {
             b.iter_with_large_drop(|| {
                 oracles
@@ -73,7 +59,48 @@ fn bench_for_ks<Id, I, T, A, M>(
             })
         });
 
-        core::mem::drop(oracles);
+        let pred_hits = {
+            oracles
+                .par_iter()
+                .zip(queries.par_iter())
+                .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+                .collect::<Vec<_>>()
+        };
+        let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
+        println!("Recall stats for oracle-k{k}-{pruned_str}, multiplier {multiplier}:");
+        for (stat_name, stat_value) in recall_stats {
+            println!("    {stat_name}: {stat_value:.8}");
+        }
+
+        let algs = {
+            let mut algs: Vec<Box<dyn ParSearch<_, _, _, _, _>>> = vec![Box::new(cakes::KnnDfs(k))];
+
+            for n in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000] {
+                algs.push(Box::new(cakes::approximate::KnnDfs(k, n)));
+            }
+
+            // algs.push(Box::new(cakes::KnnBfs(k)));
+            // algs.push(Box::new(cakes::KnnRrnn(k)));
+
+            algs
+        };
+
+        for alg in algs {
+            let id = BenchmarkId::new(format!("{}-{pruned_str}", alg.to_string()), multiplier);
+            group.bench_function(id, |b| {
+                b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
+            });
+
+            let pred_hits = alg.par_batch_search(&root, &metric, &queries);
+            let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
+            println!(
+                "Search quality of {} with {pruned_str} tree and dataset multiplier {multiplier}:",
+                alg.to_string()
+            );
+            for (stat_name, stat_value) in recall_stats {
+                println!("    {stat_name}: {stat_value:.8}");
+            }
+        }
     }
 }
 
@@ -198,7 +225,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 }
 
 fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, n_queries: usize) {
-    group.sample_size(100);
+    group.sample_size(10);
     group.throughput(criterion::Throughput::Elements(n_queries as u64));
 
     let plot_config = criterion::PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
@@ -226,12 +253,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
     let max_items = 100_000;
-    let max_queries = 10;
-    let ks = [10];
+    let max_queries = 10_000;
+    let ks = [10, 100];
     let prune = true;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets[..1] {
+    for dataset in &datasets[..3] {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
         run_group(

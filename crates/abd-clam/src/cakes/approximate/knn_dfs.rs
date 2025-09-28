@@ -9,11 +9,11 @@ use crate::{
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
-pub struct KnnDfs(pub usize);
+pub struct KnnDfs(pub usize, pub usize); // (k, max_leaves_visited)
 
 impl std::fmt::Display for KnnDfs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "KnnDfs(k={})", self.0)
+        write!(f, "ApproxKnnDfs(k={},max_leaves_visited={})", self.0, self.1)
     }
 }
 
@@ -34,8 +34,11 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         hits.push(((root.center_id(), root.center()), d));
         candidates.push((root, Reverse((d_min(root, d), d))));
 
-        while !candidates.is_empty() {
+        let mut leaves_visited = 0;
+
+        while !candidates.is_empty() && leaves_visited < self.1 {
             profi::prof!("KnnDfs::search::loop");
+            leaves_visited += 1;
 
             // Find the next leaf to process.
             let (leaf, d) = pop_till_leaf(query, metric, &mut candidates, &mut hits);

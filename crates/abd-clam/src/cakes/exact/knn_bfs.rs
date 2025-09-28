@@ -11,6 +11,12 @@ use crate::{
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
 pub struct KnnBfs(pub usize);
 
+impl std::fmt::Display for KnnBfs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KnnBfs(k={})", self.0)
+    }
+}
+
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBfs {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnBfs::search");
