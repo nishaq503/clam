@@ -2,7 +2,10 @@
 
 use std::path::Path;
 
-use abd_clam::{cakes::ParSearch, Cluster};
+use abd_clam::{
+    cakes::{BatchedSearch, Search},
+    Cluster,
+};
 use rayon::prelude::*;
 
 fn build_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {

@@ -5,7 +5,7 @@
 use std::usize;
 
 use abd_clam::{
-    cakes::{self, ParSearch},
+    cakes::{self, BatchedSearch},
     Cluster, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -75,40 +75,108 @@ fn bench_for_ks<Id, I, T, A, M>(
         // }
 
         let true_hits = cakes::KnnDfs(k).par_batch_search(&root, &metric, &queries);
+        // Benchmark the exact algorithms
+        bench_one_alg(
+            group,
+            &cakes::KnnDfs(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnBranch(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnBfs(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnRrnn(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
 
-        let algs = {
-            let mut algs: Vec<Box<dyn ParSearch<_, _, _, _, _>>> = vec![Box::new(cakes::KnnDfs(k))];
-            algs.push(Box::new(cakes::KnnBranch(k)));
-
-            // for n in [10, 20, 50, 100, 200, 500, 1000] {
-            //     algs.push(Box::new(cakes::approximate::KnnDfs(k, n, usize::MAX)));
-            // }
-            // for n in [1, 2, 5, 10, 20, 50, 100] {
-            //     algs.push(Box::new(cakes::approximate::KnnDfs(k, usize::MAX, n * 100)));
-            // }
-
-            algs.push(Box::new(cakes::KnnBfs(k)));
-            algs.push(Box::new(cakes::KnnRrnn(k)));
-
-            algs
-        };
-
-        for alg in algs {
-            let id = BenchmarkId::new(format!("{}-{pruned_str}", alg.to_string()), multiplier);
-            group.bench_function(id, |b| {
-                b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
-            });
-
-            let pred_hits = alg.par_batch_search(&root, &metric, &queries);
-            let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
-            println!(
-                "Search quality of {} with {pruned_str} tree and dataset multiplier {multiplier}:",
-                alg.to_string()
+        // Benchmark the approximate algorithms
+        for n in [10, 20, 50, 100, 200, 500, 1000] {
+            // Varying number of leaves explored
+            bench_one_alg(
+                group,
+                &cakes::approximate::KnnDfs(k, n, usize::MAX),
+                root,
+                metric,
+                queries,
+                &true_hits,
+                pruned_str,
+                multiplier,
             );
-            for (stat_name, stat_value) in recall_stats {
-                println!("    {stat_name}: {stat_value:.8}");
-            }
         }
+        for n in [1, 2, 5, 10, 20, 50, 100] {
+            // Varying number of distance computations performed
+            bench_one_alg(
+                group,
+                &cakes::approximate::KnnDfs(k, usize::MAX, n * 100),
+                root,
+                metric,
+                queries,
+                &true_hits,
+                pruned_str,
+                multiplier,
+            );
+        }
+    }
+}
+
+fn bench_one_alg<Id, I, T, A, M, Alg>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    alg: &Alg,
+    root: &Cluster<Id, I, T, A>,
+    metric: &M,
+    queries: &[I],
+    true_hits: &[Vec<(&Id, &I, T)>],
+    pruned_str: &str,
+    multiplier: usize,
+) where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    Alg: BatchedSearch<Id, I, T, M, A> + Send + Sync,
+{
+    let id = BenchmarkId::new(format!("{}-{pruned_str}", alg.to_string()), multiplier);
+    group.bench_function(id, |b| {
+        b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
+    });
+
+    let pred_hits = alg.par_batch_search(&root, &metric, &queries);
+    let recall_stats = cakes::search_quality_stats(true_hits, &pred_hits);
+    println!(
+        "Search quality of {} with {pruned_str} tree and dataset multiplier {multiplier}:",
+        alg.to_string()
+    );
+    for (stat_name, stat_value) in recall_stats {
+        println!("    {stat_name}: {stat_value:.8}");
     }
 }
 

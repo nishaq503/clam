@@ -3,7 +3,7 @@
 use std::cmp::Reverse;
 
 use crate::{
-    cakes::{d_max, d_min, ParSearch, RnnChess, Search},
+    cakes::{d_max, d_min, BatchedSearch, RnnChess, Search},
     utils::{MinItem, SizedHeap},
     Cluster, DistanceValue,
 };
@@ -71,12 +71,4 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnBranch
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    A: Send + Sync,
-{
-}
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnBranch {}

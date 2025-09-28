@@ -3,7 +3,7 @@
 #![expect(clippy::type_complexity)]
 
 use crate::{
-    cakes::{d_max, ParSearch, Search},
+    cakes::{d_max, BatchedSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -81,15 +81,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnBfs
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    A: Send + Sync,
-{
-}
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnBfs {}
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.

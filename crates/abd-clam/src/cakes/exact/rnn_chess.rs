@@ -3,7 +3,7 @@
 use rayon::prelude::*;
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{BatchedSearch, Search},
     Cluster, DistanceValue,
 };
 
@@ -43,17 +43,16 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
 
         hits
     }
-}
 
-impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for RnnChess<T>
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    A: Send + Sync,
-{
-    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+        A: Send + Sync,
+    {
         let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters
@@ -90,6 +89,8 @@ where
         hits
     }
 }
+
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for RnnChess<T> {}
 
 /// Perform coarse-grained tree search.
 ///

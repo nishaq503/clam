@@ -3,7 +3,7 @@
 use rayon::prelude::*;
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{BatchedSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -24,6 +24,27 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         heap.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 
+    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+        A: Send + Sync,
+    {
+        let mut heap = SizedHeap::new(Some(self.0));
+        heap.extend(
+            root.all_items()
+                .into_par_iter()
+                .map(|item| (item, metric(query, &item.1)))
+                .collect::<Vec<_>>(),
+        );
+        heap.items().map(|((id, item), d)| (id, item, d)).collect()
+    }
+}
+
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnLinear {
     fn batch_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
@@ -40,33 +61,21 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             })
             .collect()
     }
-}
-
-impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnLinear
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    A: Send + Sync,
-{
-    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(
-            root.all_items()
-                .into_par_iter()
-                .map(|item| (item, metric(query, &item.1)))
-                .collect::<Vec<_>>(),
-        );
-        heap.items().map(|((id, item), d)| (id, item, d)).collect()
-    }
 
     fn par_batch_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
         metric: &M,
         queries: &[I],
-    ) -> Vec<Vec<(&'a Id, &'a I, T)>> {
+    ) -> Vec<Vec<(&'a Id, &'a I, T)>>
+    where
+        Self: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+        A: Send + Sync,
+    {
         let all_items = root.all_items();
         queries
             .par_iter()
@@ -95,6 +104,7 @@ where
         I: Send + Sync,
         T: Send + Sync,
         M: Send + Sync,
+        A: Send + Sync,
     {
         self.par_batch_search(root, metric, queries)
     }

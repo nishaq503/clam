@@ -1,7 +1,7 @@
 //! K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{BatchedSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -84,7 +84,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnRrnn
+impl<Id, I, T, M, A> BatchedSearch<Id, I, T, M, A> for KnnRrnn
 where
     Id: Send + Sync,
     I: Send + Sync,

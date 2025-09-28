@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use abd_clam::{
-    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
+    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
     utils::MaxItem,
     Cluster, DistanceValue,
 };
