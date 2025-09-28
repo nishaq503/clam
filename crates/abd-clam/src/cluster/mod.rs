@@ -67,7 +67,7 @@ impl<Id, I, T: DistanceValue + Debug, A: Debug> Debug for Contents<Id, I, T, A> 
 }
 
 impl<I, T: DistanceValue> Cluster<usize, I, T, ()> {
-    /// Create a new tree of `Cluster`s with `usize` indices as item metadata, and no annotations.
+    /// Create a new tree of `Cluster`s with `usize` indices as item metadata, the `()` type for annotations.
     ///
     /// # Errors
     ///
@@ -132,6 +132,16 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// A reference to the annotations, if any.
     pub const fn annotation(&self) -> Option<&A> {
         self.annotation.as_ref()
+    }
+
+    /// A mutable reference to the annotations, if any.
+    pub const fn annotation_mut(&mut self) -> Option<&mut A> {
+        self.annotation.as_mut()
+    }
+
+    /// Takes the annotations, leaving `None` in its place.
+    pub const fn take_annotation(&mut self) -> Option<A> {
+        self.annotation.take()
     }
 
     /// Checks if the cluster is a leaf.

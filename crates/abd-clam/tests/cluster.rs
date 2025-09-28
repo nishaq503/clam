@@ -95,7 +95,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Cluster::new_tree_minimal(data, &metric, &|_| true)?;
+        let root = Cluster::par_new_tree_minimal(data, &metric, &|_| true)?;
 
         let n_clusters = root.subtree().len();
 

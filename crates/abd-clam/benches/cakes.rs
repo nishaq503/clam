@@ -155,13 +155,14 @@ fn run_group<P: AsRef<std::path::Path>>(
         let root = Cluster::par_new_tree_minimal(augmented_items, &metric, &|_| true).unwrap();
         bench_for_ks(group, &root, &metric, &queries, false, multiplier, ks);
 
-        // Annotate the tree with compression costs, prune it to the necessarily unitary leaves, and benchmark the search algorithms again
-        let root = {
-            let mut root = root.par_reset_annotations(); // We first have to change the annotation type
-            root.par_annotate_post_order(&compute_compression_costs); // Compute compression costs
-            root.prune(&to_prune_or_not_to_prune); // Prune based on compression costs
-            root.par_reset_annotations::<()>() // We don't need the annotations anymore, so we clear them to save memory
-        };
+        // We change the annotation type to CompressionCosts and compute them in post-order, in one pass over the tree
+        let post = |b: &_, _: _| Some(compute_compression_costs(b));
+        let mut root = root.change_annotation_type(&post);
+        // Now prune the tree based on the compression costs
+        root.prune(&to_prune_or_not_to_prune);
+        // Finally, we don't need the annotations anymore, so we clear them to save memory
+        let root = root.remove_annotations();
+        // Benchmark the search algorithms on the pruned tree
         bench_for_ks(group, &root, &metric, &queries, true, multiplier, ks);
     }
 }

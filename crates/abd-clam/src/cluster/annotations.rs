@@ -5,15 +5,25 @@ use crate::DistanceValue;
 use super::{Cluster, Contents};
 
 impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
-    /// Changes the type of annotations in the tree, setting all annotations to `None`.
-    pub fn reset_annotations<B>(self) -> Cluster<Id, I, T, B> {
+    /// A wrapper to remove the annotations from the tree and change the type of annotations to the unit type `()`.
+    pub fn remove_annotations(self) -> Cluster<Id, I, T, ()> {
+        self.change_annotation_type(&|_, _| None)
+    }
+
+    /// Changes the type of annotations in the tree, applying the provided function, in post-order, to each cluster and the previous annotation (if any) to
+    /// produce the new annotation.
+    pub fn change_annotation_type<B, Post: Fn(&Cluster<Id, I, T, B>, Option<A>) -> Option<B>>(
+        self,
+        post: &Post,
+    ) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
-            Contents::Children([left, right]) => {
-                Contents::Children([Box::new(left.reset_annotations()), Box::new(right.reset_annotations())])
-            }
+            Contents::Children([left, right]) => Contents::Children([
+                Box::new(left.change_annotation_type(post)),
+                Box::new(right.change_annotation_type(post)),
+            ]),
         };
-        Cluster {
+        let mut c = Cluster {
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,
@@ -21,17 +31,9 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
             radial_sum: self.radial_sum,
             contents,
             annotation: None,
-        }
-    }
-
-    /// A mutable reference to the annotations, if any.
-    pub const fn annotation_mut(&mut self) -> Option<&mut A> {
-        self.annotation.as_mut()
-    }
-
-    /// Takes the annotations, leaving `None` in its place.
-    pub const fn take_annotation(&mut self) -> Option<A> {
-        self.annotation.take()
+        };
+        c.annotation = post(&c, self.annotation);
+        c
     }
 
     /// Annotates all clusters in the tree by applying the provided function in a pre-order traversal.
@@ -97,16 +99,30 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 }
 
 impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Cluster<Id, I, T, A> {
-    /// Parallel version of [`reset_annotations`](Self::reset_annotations).
-    pub fn par_reset_annotations<B: Send + Sync>(self) -> Cluster<Id, I, T, B> {
+    /// Parallel version of [`remove_annotations`](Self::remove_annotations).
+    pub fn par_remove_annotations(self) -> Cluster<Id, I, T, ()> {
+        self.change_annotation_type(&|_, _| None)
+    }
+
+    /// Parallel version of [`change_annotation_type`](Self::change_annotation_type).
+    pub fn par_change_annotation_type<
+        B: Send + Sync,
+        Post: Fn(&Cluster<Id, I, T, B>, Option<A>) -> Option<B> + Send + Sync,
+    >(
+        self,
+        post: &Post,
+    ) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
             Contents::Children([left, right]) => {
-                let (left, right) = rayon::join(|| left.par_reset_annotations(), || right.par_reset_annotations());
+                let (left, right) = rayon::join(
+                    || left.change_annotation_type(post),
+                    || right.change_annotation_type(post),
+                );
                 Contents::Children([Box::new(left), Box::new(right)])
             }
         };
-        Cluster {
+        let mut c = Cluster {
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,
@@ -114,7 +130,9 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             radial_sum: self.radial_sum,
             contents,
             annotation: None,
-        }
+        };
+        c.annotation = post(&c, self.annotation);
+        c
     }
 
     /// Parallel version of [`annotate_pre_order`](Self::annotate_pre_order).
