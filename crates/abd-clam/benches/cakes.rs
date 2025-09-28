@@ -91,6 +91,8 @@ fn run_group<P: AsRef<std::path::Path>>(
     let queries = dataset.read_test(base, shuffle).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
+    config_group(group, queries.len());
+
     // Function to compute compression costs for a ball in a post-order traversal
     let compute_compression_costs = |ball: &Cluster<_, _, _, CompressionCosts<_>>| {
         if let Some([left, right]) = ball.children() {
@@ -122,10 +124,6 @@ fn run_group<P: AsRef<std::path::Path>>(
                 unitary <= recursive
             })
     };
-
-    group
-        .throughput(criterion::Throughput::Elements(queries.len() as u64))
-        .sample_size(100);
 
     let augmentation_error = {
         let n_items = items.len();
@@ -168,6 +166,14 @@ fn run_group<P: AsRef<std::path::Path>>(
     }
 }
 
+fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, n_queries: usize) {
+    group.sample_size(100);
+    group.throughput(criterion::Throughput::Elements(n_queries as u64));
+
+    let plot_config = criterion::PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
+    group.plot_config(plot_config);
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let datasets = [
         // For the paper
@@ -188,11 +194,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     // Set these parameters to control the runtime of the benchmarks
     let max_items = 10_000_000;
-    let max_queries = 100;
-    let ks = [10];
+    let max_queries = 10_000;
+    let ks = [10, 100];
 
     let base = base_dir().unwrap();
-    for dataset in &datasets[..3] {
+    for dataset in &datasets {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
         run_group(&mut group, dataset, &base, max_items, max_queries, shuffle, &ks);

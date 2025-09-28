@@ -108,14 +108,15 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                     .iter()
                     .map(|item| metric(&self.center.1, &item.1))
                     .collect::<Vec<_>>();
-                let arg_radius = radial_distances
+                let (arg_radius, radial_sum) = radial_distances
                     .iter()
                     .enumerate()
-                    .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
-                    .map_or(0, |(i, _)| i);
+                    .fold((0, T::zero()), |(max_i, sum), (i, &d)| {
+                        (if d > radial_distances[max_i] { i } else { max_i }, sum + d)
+                    });
                 self.radius = radial_distances[arg_radius];
                 self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
-                self.radial_sum = radial_distances.iter().copied().sum();
+                self.radial_sum = radial_sum;
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
@@ -318,14 +319,15 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     .par_iter()
                     .map(|item| metric(&self.center.1, &item.1))
                     .collect::<Vec<_>>();
-                let arg_radius = radial_distances
-                    .par_iter()
+                let (arg_radius, radial_sum) = radial_distances
+                    .iter()
                     .enumerate()
-                    .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
-                    .map_or(0, |(i, _)| i);
+                    .fold((0, T::zero()), |(max_i, sum), (i, &d)| {
+                        (if d > radial_distances[max_i] { i } else { max_i }, sum + d)
+                    });
                 self.radius = radial_distances[arg_radius];
                 self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
-                self.radial_sum = radial_distances.par_iter().copied().sum();
+                self.radial_sum = radial_sum;
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);

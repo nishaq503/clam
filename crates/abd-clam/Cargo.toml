@@ -48,7 +48,7 @@ profi = { workspace = true, default-features = false, features = ["rayon"] }
 [dev-dependencies]
 symagen = { workspace = true }
 test-case = { workspace = true }
-criterion = { workspace = true, features = ["html_reports"] }
+criterion = { workspace = true, features = ["html_reports", "csv_output"] }
 rand = { workspace = true }
 ndarray = { workspace = true }
 ndarray-npy = { workspace = true }
