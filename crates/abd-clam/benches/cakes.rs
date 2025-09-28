@@ -78,13 +78,14 @@ fn bench_for_ks<Id, I, T, A, M>(
 
         let algs = {
             let mut algs: Vec<Box<dyn ParSearch<_, _, _, _, _>>> = vec![Box::new(cakes::KnnDfs(k))];
+            algs.push(Box::new(cakes::KnnBranch(k)));
 
-            for n in [10, 20, 50, 100, 200, 500, 1000] {
-                algs.push(Box::new(cakes::approximate::KnnDfs(k, n, usize::MAX)));
-            }
-            for n in [1, 2, 5, 10, 20, 50, 100] {
-                algs.push(Box::new(cakes::approximate::KnnDfs(k, usize::MAX, n * 100)));
-            }
+            // for n in [10, 20, 50, 100, 200, 500, 1000] {
+            //     algs.push(Box::new(cakes::approximate::KnnDfs(k, n, usize::MAX)));
+            // }
+            // for n in [1, 2, 5, 10, 20, 50, 100] {
+            //     algs.push(Box::new(cakes::approximate::KnnDfs(k, usize::MAX, n * 100)));
+            // }
 
             // algs.push(Box::new(cakes::KnnBfs(k)));
             // algs.push(Box::new(cakes::KnnRrnn(k)));
@@ -259,13 +260,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand::rng();
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
-    let max_items = 100_000_000;
-    let max_queries = 10_000;
+    let max_items = 100_000;
+    let max_queries = 100;
     let ks = [10, 100];
-    let prune = true;
+    let prune = false;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets {
+    for dataset in &datasets[..1] {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
         run_group(

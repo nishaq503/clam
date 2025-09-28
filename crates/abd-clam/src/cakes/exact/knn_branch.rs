@@ -1,0 +1,91 @@
+//! K-nearest neighbors (KNN) search using the Greedy Branch algorithm.
+
+use std::cmp::Reverse;
+
+use crate::{
+    cakes::{d_max, d_min, ParSearch, RnnChess, Search},
+    utils::{MinItem, SizedHeap},
+    Cluster, DistanceValue,
+};
+
+/// K-nearest neighbors (KNN) search using the Greedy Branch algorithm.
+pub struct KnnBranch(pub usize);
+
+impl std::fmt::Display for KnnBranch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KnnBranch(k={})", self.0)
+    }
+}
+
+impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBranch {
+    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+        profi::prof!("KnnBranch::search");
+
+        if self.0 > root.cardinality() {
+            // If k is greater than the number of points in the tree, return all
+            // items with their distances.
+            return root.distances_to_all_items(query, metric);
+        }
+
+        let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
+
+        let d = metric(query, root.center());
+        candidate_radii.push((1, Reverse(d_min(root, d))));
+        candidate_radii.push((root.cardinality().half() + 1, Reverse(d)));
+        candidate_radii.push((root.cardinality(), Reverse(d_max(root, d))));
+
+        let mut latest = root;
+        while !latest.is_leaf() {
+            profi::prof!("KnnBranch::search::descend");
+
+            let [left, right] = latest
+                .children()
+                .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
+            let d_left = metric(query, left.center());
+            let d_right = metric(query, right.center());
+            if d_left < d_right {
+                latest = left;
+                candidate_radii.push((1, Reverse(d_min(left, d_left))));
+                candidate_radii.push((left.cardinality().half() + 1, Reverse(d_left)));
+                candidate_radii.push((left.cardinality(), Reverse(d_max(left, d_left))));
+            } else {
+                latest = right;
+                candidate_radii.push((1, Reverse(d_min(right, d_right))));
+                candidate_radii.push((right.cardinality().half() + 1, Reverse(d_right)));
+                candidate_radii.push((right.cardinality(), Reverse(d_max(right, d_right))));
+            }
+        }
+        // Remove the candidate radii that are zero.
+        let mut expected_hits = 0;
+        while candidate_radii.peek().is_some_and(|(&e, &Reverse(d))| {
+            expected_hits += e;
+            d.is_zero() && expected_hits <= self.0
+        }) {
+            candidate_radii.pop();
+        }
+
+        // Now, try CHESS with increasing candidate radii until we have k hits.
+        let mut hits = Vec::new();
+        while let Some((_, Reverse(d))) = candidate_radii.pop() {
+            profi::prof!("KnnBranch::search::rnn");
+
+            hits = RnnChess(d).search(root, metric, query);
+            if hits.len() >= self.0 {
+                hits.sort_by_key(|&(_, _, d)| MinItem((), d));
+                hits.truncate(self.0);
+                break;
+            }
+        }
+        hits
+    }
+}
+
+impl<
+        I: Send + Sync,
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        A: Send + Sync,
+    > ParSearch<Id, I, T, M, A> for KnnBranch
+{
+}

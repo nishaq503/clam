@@ -7,7 +7,7 @@ use crate::{Cluster, DistanceValue};
 pub mod approximate;
 mod exact;
 
-pub use exact::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
+pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A `Search` trait for defining how to search for nearest neighbors.
 pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Display {
@@ -60,6 +60,20 @@ pub trait ParSearch<
             .map(|query| self.par_search(root, metric, query))
             .collect()
     }
+}
+
+/// The minimum possible distance from the query to any item in the cluster.
+pub(crate) fn d_min<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
+    if d < cluster.radius() {
+        T::zero()
+    } else {
+        d - cluster.radius()
+    }
+}
+
+/// Returns the theoretical maximum distance from the query to a point in the cluster.
+pub(crate) fn d_max<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
+    cluster.radius() + d
 }
 
 /// Computes summary statistics about the quality of approximate nearest neighbor search results.

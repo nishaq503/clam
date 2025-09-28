@@ -3,7 +3,7 @@
 #![expect(clippy::type_complexity)]
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{d_max, ParSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -97,11 +97,6 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for KnnBfs
 {
-}
-
-/// Returns the theoretical maximum distance from the query to a point in the cluster.
-fn d_max<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
-    cluster.radius() + d
 }
 
 /// Returns those candidates that are needed to guarantee the k-nearest

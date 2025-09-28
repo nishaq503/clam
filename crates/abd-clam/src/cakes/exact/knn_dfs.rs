@@ -3,7 +3,7 @@
 use core::cmp::Reverse;
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{d_min, ParSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -64,15 +64,6 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for KnnDfs
 {
-}
-
-/// The minimum possible distance from the query to any item in the cluster.
-fn d_min<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
-    if d < cluster.radius() {
-        T::zero()
-    } else {
-        d - cluster.radius()
-    }
 }
 
 /// Pop candidates until the top candidate is a leaf. Then pop and return that
