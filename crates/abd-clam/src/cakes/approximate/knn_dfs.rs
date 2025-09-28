@@ -9,11 +9,19 @@ use crate::{
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
-pub struct KnnDfs(pub usize, pub usize); // (k, max_leaves_visited)
+pub struct KnnDfs(pub usize, pub usize, pub usize); // (k, max_leaves_visited, max_distance_computations)
 
 impl std::fmt::Display for KnnDfs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ApproxKnnDfs(k={},max_leaves_visited={})", self.0, self.1)
+        if self.1 == usize::MAX && self.2 == usize::MAX {
+            write!(f, "KnnDfs(k={})", self.0)
+        } else if self.2 == usize::MAX {
+            write!(f, "ApproxKnnDfs(k={},leaves<{})", self.0, self.1)
+        } else if self.1 == usize::MAX {
+            write!(f, "ApproxKnnDfs(k={},dist_comps<{})", self.0, self.2)
+        } else {
+            write!(f, "ApproxKnnDfs(k={},leaves<{},dist_comps<{})", self.0, self.1, self.2)
+        }
     }
 }
 
@@ -35,15 +43,18 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         candidates.push((root, Reverse((d_min(root, d), d))));
 
         let mut leaves_visited = 0;
+        let mut distance_computations = 1;
 
-        while !candidates.is_empty() && leaves_visited < self.1 {
+        while !hits.is_full() || !candidates.is_empty() && leaves_visited < self.1 && distance_computations < self.2 {
             profi::prof!("KnnDfs::search::loop");
             leaves_visited += 1;
 
             // Find the next leaf to process.
-            let (leaf, d) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
+            let (leaf, d, n) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
+            distance_computations += n;
+
             // Process the leaf and update hits.
-            leaf_into_hits(query, metric, &mut hits, leaf, d);
+            distance_computations += leaf_into_hits(query, metric, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates
@@ -89,9 +100,10 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     metric: &M,
     candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-) -> (&'a Cluster<Id, I, T, A>, T) {
+) -> (&'a Cluster<Id, I, T, A>, T, usize) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
+    let mut distance_computations = 0;
     while candidates.peek().map_or_else(
         || unreachable!("`candidates` is non-empty."),
         |(cluster, _)| !cluster.is_leaf(),
@@ -106,6 +118,7 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
 
                     let d_left = metric(query, left.center());
                     let d_right = metric(query, right.center());
+                    distance_computations += 2;
                     (d_left, d_right)
                 };
                 {
@@ -123,10 +136,12 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
         );
     }
 
-    candidates.pop().map_or_else(
+    let (leaf, d) = candidates.pop().map_or_else(
         || unreachable!("`candidates` is non-empty."),
         |(leaf, Reverse((_, d)))| (leaf, d),
-    )
+    );
+
+    (leaf, d, distance_computations)
 }
 
 /// Given a leaf cluster, compute the distance from the query to each item in
@@ -137,13 +152,14 @@ fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
     leaf: &'a Cluster<Id, I, T, A>,
     d: T,
-) {
+) -> usize {
     profi::prof!("KnnDfs::leaf_into_hits");
 
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are
         // exactly `d` from the query.
         hits.extend(leaf.subtree_items().into_iter().map(|(id, item)| ((id, item), d)));
+        0
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute
         // the distance from the query to each item in the leaf.
@@ -152,5 +168,6 @@ fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
                 .into_iter()
                 .map(|(id, item)| ((id, item), metric(query, item))),
         );
+        leaf.cardinality() - 1 // We already computed distance to center
     }
 }

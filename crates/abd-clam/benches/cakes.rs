@@ -2,6 +2,8 @@
 
 #![expect(missing_docs)]
 
+use std::usize;
+
 use abd_clam::{
     cakes::{self, ParSearch},
     Cluster, DistanceValue,
@@ -37,46 +39,51 @@ fn bench_for_ks<Id, I, T, A, M>(
     let pruned_str = if pruned { "pruned" } else { "unpruned" };
 
     for &k in ks {
-        let true_hits = cakes::KnnLinear(k).par_batch_search(&root, &metric, &queries);
-        let oracles = true_hits
-            .iter()
-            .map(|res| {
-                res.iter()
-                    .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
-                    .map(|&(_, _, radius)| cakes::RnnChess(radius))
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
+        // let true_hits = cakes::KnnLinear(k).par_batch_search(&root, &metric, &queries);
+        // let oracles = true_hits
+        //     .iter()
+        //     .map(|res| {
+        //         res.iter()
+        //             .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
+        //             .map(|&(_, _, radius)| cakes::RnnChess(radius))
+        //             .unwrap()
+        //     })
+        //     .collect::<Vec<_>>();
 
-        let id = BenchmarkId::new(format!("KnnOracle(k={k})-{pruned_str}"), multiplier);
-        group.bench_function(id, |b| {
-            b.iter_with_large_drop(|| {
-                oracles
-                    .par_iter()
-                    .zip(queries.par_iter())
-                    .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-                    .collect::<Vec<_>>()
-            })
-        });
+        // let id = BenchmarkId::new(format!("KnnOracle(k={k})-{pruned_str}"), multiplier);
+        // group.bench_function(id, |b| {
+        //     b.iter_with_large_drop(|| {
+        //         oracles
+        //             .par_iter()
+        //             .zip(queries.par_iter())
+        //             .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+        //             .collect::<Vec<_>>()
+        //     })
+        // });
 
-        let pred_hits = {
-            oracles
-                .par_iter()
-                .zip(queries.par_iter())
-                .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-                .collect::<Vec<_>>()
-        };
-        let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
-        println!("Recall stats for oracle-k{k}-{pruned_str}, multiplier {multiplier}:");
-        for (stat_name, stat_value) in recall_stats {
-            println!("    {stat_name}: {stat_value:.8}");
-        }
+        // let pred_hits = {
+        //     oracles
+        //         .par_iter()
+        //         .zip(queries.par_iter())
+        //         .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+        //         .collect::<Vec<_>>()
+        // };
+        // let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
+        // println!("Recall stats for oracle-k{k}-{pruned_str}, multiplier {multiplier}:");
+        // for (stat_name, stat_value) in recall_stats {
+        //     println!("    {stat_name}: {stat_value:.8}");
+        // }
+
+        let true_hits = cakes::KnnDfs(k).par_batch_search(&root, &metric, &queries);
 
         let algs = {
             let mut algs: Vec<Box<dyn ParSearch<_, _, _, _, _>>> = vec![Box::new(cakes::KnnDfs(k))];
 
-            for n in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000] {
-                algs.push(Box::new(cakes::approximate::KnnDfs(k, n)));
+            for n in [10, 20, 50, 100, 200, 500, 1000] {
+                algs.push(Box::new(cakes::approximate::KnnDfs(k, n, usize::MAX)));
+            }
+            for n in [1, 2, 5, 10, 20, 50, 100] {
+                algs.push(Box::new(cakes::approximate::KnnDfs(k, usize::MAX, n * 100)));
             }
 
             // algs.push(Box::new(cakes::KnnBfs(k)));
@@ -252,13 +259,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut rng = rand::rng();
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
-    let max_items = 100_000;
+    let max_items = 100_000_000;
     let max_queries = 10_000;
     let ks = [10, 100];
     let prune = true;
 
     let base = base_dir().unwrap();
-    for dataset in &datasets[..3] {
+    for dataset in &datasets {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
         run_group(
