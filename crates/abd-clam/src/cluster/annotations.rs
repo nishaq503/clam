@@ -1,5 +1,7 @@
 //! `Cluster`s can have arbitrary annotations associated with them.
 
+use rayon::prelude::*;
+
 use crate::DistanceValue;
 
 use super::{Cluster, Contents};
@@ -18,10 +20,13 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
-            Contents::Children([left, right]) => Contents::Children([
-                Box::new(left.change_annotation_type(post)),
-                Box::new(right.change_annotation_type(post)),
-            ]),
+            Contents::Children(children) => Contents::Children(
+                children
+                    .into_iter()
+                    .map(|child| child.change_annotation_type(post))
+                    .map(Box::new)
+                    .collect::<Vec<_>>(),
+            ),
         };
         let mut c = Cluster {
             cardinality: self.cardinality,
@@ -39,17 +44,19 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Annotates all clusters in the tree by applying the provided function in a pre-order traversal.
     pub fn annotate_pre_order<Pre: Fn(&Self) -> A>(&mut self, pre: &Pre) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_pre_order(pre);
-            right.annotate_pre_order(pre);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_pre_order(pre);
+            }
         }
     }
 
     /// Annotates all clusters in the tree by applying the provided function in a post-order traversal.
     pub fn annotate_post_order<Post: Fn(&Self) -> A>(&mut self, post: &Post) {
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_post_order(post);
-            right.annotate_post_order(post);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_post_order(post);
+            }
         }
         self.annotation = Some(post(self));
     }
@@ -58,9 +65,10 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// children, in a full traversal.
     pub fn annotate_pre_post<Pre: Fn(&Self) -> A, Post: Fn(&Self) -> A>(&mut self, pre: &Pre, post: &Post) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_pre_post(pre, post);
-            right.annotate_pre_post(pre, post);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_pre_post(pre, post);
+            }
         }
         self.annotation = Some(post(self));
     }
@@ -68,17 +76,19 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Same as [`annotate_pre_order`](Self::annotate_pre_order) but the function can mutate its internal state.
     pub fn annotate_pre_order_mut<Pre: FnMut(&Self) -> A>(&mut self, pre: &mut Pre) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_pre_order_mut(pre);
-            right.annotate_pre_order_mut(pre);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_pre_order_mut(pre);
+            }
         }
     }
 
     /// Same as [`annotate_post_order`](Self::annotate_post_order) but the function can mutate its internal state.
     pub fn annotate_post_order_mut<Post: FnMut(&Self) -> A>(&mut self, post: &mut Post) {
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_post_order_mut(post);
-            right.annotate_post_order_mut(post);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_post_order_mut(post);
+            }
         }
         self.annotation = Some(post(self));
     }
@@ -90,9 +100,10 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         post: &mut Post,
     ) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            left.annotate_pre_post_mut(pre, post);
-            right.annotate_pre_post_mut(pre, post);
+        if let Contents::Children(children) = &mut self.contents {
+            for child in children {
+                child.annotate_pre_post_mut(pre, post);
+            }
         }
         self.annotation = Some(post(self));
     }
@@ -114,13 +125,13 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     ) -> Cluster<Id, I, T, B> {
         let contents = match self.contents {
             Contents::Leaf(items) => Contents::Leaf(items),
-            Contents::Children([left, right]) => {
-                let (left, right) = rayon::join(
-                    || left.change_annotation_type(post),
-                    || right.change_annotation_type(post),
-                );
-                Contents::Children([Box::new(left), Box::new(right)])
-            }
+            Contents::Children(children) => Contents::Children(
+                children
+                    .into_par_iter()
+                    .map(|child| child.par_change_annotation_type(post))
+                    .map(Box::new)
+                    .collect::<Vec<_>>(),
+            ),
         };
         let mut c = Cluster {
             cardinality: self.cardinality,
@@ -138,21 +149,19 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     /// Parallel version of [`annotate_pre_order`](Self::annotate_pre_order).
     pub fn par_annotate_pre_order<Pre: Fn(&Self) -> A + Send + Sync>(&mut self, pre: &Pre) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(
-                || left.par_annotate_pre_order(pre),
-                || right.par_annotate_pre_order(pre),
-            );
+        if let Contents::Children(children) = &mut self.contents {
+            children
+                .par_iter_mut()
+                .for_each(|child| child.par_annotate_pre_order(pre));
         }
     }
 
     /// Parallel version of [`annotate_post_order`](Self::annotate_post_order).
     pub fn par_annotate_post_order<Post: Fn(&Self) -> A + Send + Sync>(&mut self, post: &Post) {
-        if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(
-                || left.par_annotate_post_order(post),
-                || right.par_annotate_post_order(post),
-            );
+        if let Contents::Children(children) = &mut self.contents {
+            children
+                .par_iter_mut()
+                .for_each(|child| child.par_annotate_post_order(post));
         }
         self.annotation = Some(post(self));
     }
@@ -164,11 +173,10 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         post: &Post,
     ) {
         self.annotation = Some(pre(self));
-        if let Contents::Children([left, right]) = &mut self.contents {
-            rayon::join(
-                || left.par_annotate_pre_post(pre, post),
-                || right.par_annotate_pre_post(pre, post),
-            );
+        if let Contents::Children(children) = &mut self.contents {
+            children
+                .par_iter_mut()
+                .for_each(|child| child.par_annotate_pre_post(pre, post));
         }
         self.annotation = Some(post(self));
     }

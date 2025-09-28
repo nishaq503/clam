@@ -40,7 +40,7 @@ pub(crate) enum Contents<Id, I, T: DistanceValue, A> {
     /// The cluster is a leaf and contains items directly.
     Leaf(Vec<(Id, I)>),
     /// The cluster is a parent and contains child clusters.
-    Children([Box<Cluster<Id, I, T, A>>; 2]),
+    Children(Vec<Box<Cluster<Id, I, T, A>>>),
 }
 
 impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Cluster<Id, I, T, A> {
@@ -155,10 +155,10 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     }
 
     /// The children of the cluster, if any.
-    pub fn children(&self) -> Option<[&Self; 2]> {
+    pub fn children(&self) -> Option<&[Box<Self>]> {
         match &self.contents {
             Contents::Leaf(_) => None,
-            Contents::Children([left, right]) => Some([left, right]),
+            Contents::Children(children) => Some(children.as_slice()),
         }
     }
 
@@ -166,9 +166,8 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     pub fn subtree(&self) -> Vec<&Self> {
         match &self.contents {
             Contents::Leaf(_) => vec![self],
-            Contents::Children([left, right]) => core::iter::once(self)
-                .chain(left.subtree())
-                .chain(right.subtree())
+            Contents::Children(children) => core::iter::once(self)
+                .chain(children.iter().flat_map(|child| child.subtree()))
                 .collect(),
         }
     }
@@ -178,7 +177,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     pub fn subtree_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
             Contents::Leaf(items) => items.iter().collect(),
-            Contents::Children([left, right]) => left.all_items().into_iter().chain(right.all_items()).collect(),
+            Contents::Children(children) => children.iter().flat_map(|child| child.all_items()).collect(),
         }
     }
 
@@ -193,9 +192,8 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     pub fn all_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
             Contents::Leaf(items) => core::iter::once(&self.center).chain(items.iter()).collect(),
-            Contents::Children([left, right]) => core::iter::once(&self.center)
-                .chain(left.all_items())
-                .chain(right.all_items())
+            Contents::Children(children) => core::iter::once(&self.center)
+                .chain(children.iter().flat_map(|child| child.all_items()))
                 .collect(),
         }
     }
@@ -216,10 +214,11 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         if predicate(self) {
             // The predicate is satisfied, so we convert this cluster to a leaf by collecting all items from its descendants.
             self.contents = Contents::Leaf(self.take_subtree_items());
-        } else if let Contents::Children([left, right]) = &mut self.contents {
+        } else if let Contents::Children(children) = &mut self.contents {
             // The predicate is not satisfied, so we continue checking children.
-            left.prune(predicate);
-            right.prune(predicate);
+            for child in children {
+                child.prune(predicate);
+            }
         }
     }
 }
@@ -242,9 +241,9 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         if predicate(self) {
             // The predicate is satisfied, so we convert this cluster to a leaf by collecting all items from its subtree.
             self.contents = Contents::Leaf(self.take_subtree_items());
-        } else if let Contents::Children([left, right]) = &mut self.contents {
+        } else if let Contents::Children(children) = &mut self.contents {
             // The predicate is not satisfied, so we continue checking children.
-            rayon::join(|| left.par_prune(predicate), || right.par_prune(predicate));
+            children.par_iter_mut().for_each(|child| child.par_prune(predicate));
         }
     }
 }

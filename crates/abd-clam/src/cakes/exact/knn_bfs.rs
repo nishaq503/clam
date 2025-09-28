@@ -63,22 +63,14 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
                     } else {
                         profi::prof!("KnnBfs::search::parent");
 
-                        // Not a leaf, so add children to candidates
-                        let [left, right] = cluster
+                        for child in cluster
                             .children()
-                            .unwrap_or_else(|| unreachable!("Cluster is a parent"));
-
-                        // Compute distances to child centers
-                        let left_d = metric(query, left.center());
-                        let right_d = metric(query, right.center());
-
-                        // Push child centers to hits
-                        hits.push(((left.center_id(), left.center()), left_d));
-                        hits.push(((right.center_id(), right.center()), right_d));
-
-                        // Add children to candidates with their theoretical max distances
-                        acc_candidates.push((left, d_max(left, left_d)));
-                        acc_candidates.push((right, d_max(right, right_d)));
+                            .unwrap_or_else(|| unreachable!("Cluster is a parent"))
+                        {
+                            let d = metric(query, child.center());
+                            hits.push(((child.center_id(), child.center()), d));
+                            acc_candidates.push((child, d_max(child, d)));
+                        }
                     }
                     acc_candidates
                 },

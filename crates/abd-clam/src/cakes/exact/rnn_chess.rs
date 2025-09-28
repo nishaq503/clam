@@ -160,19 +160,19 @@ where
     } else {
         Vec::new()
     };
+    let mut subsumed = Vec::new();
+    let mut straddlers = Vec::new();
 
     match cluster.children() {
         None => (centers, Vec::new(), vec![cluster]), // Leaf node
-        Some([left, right]) => {
+        Some(children) => {
             // Recurse into children
-            let (left_centers, mut subsumed, mut straddlers) = tree_search(left, metric, query, radius);
-            let (right_centers, right_subsumed, right_straddlers) = tree_search(right, metric, query, radius);
-
-            centers.extend(left_centers);
-            centers.extend(right_centers);
-            subsumed.extend(right_subsumed);
-            straddlers.extend(right_straddlers);
-
+            for child in children {
+                let (child_centers, child_subsumed, child_straddlers) = tree_search(child, metric, query, radius);
+                centers.extend(child_centers);
+                subsumed.extend(child_subsumed);
+                straddlers.extend(child_straddlers);
+            }
             (centers, subsumed, straddlers)
         }
     }
@@ -222,21 +222,23 @@ where
     } else {
         Vec::new()
     };
+    let mut subsumed = Vec::new();
+    let mut straddlers = Vec::new();
 
     match cluster.children() {
         None => (centers, Vec::new(), vec![cluster]), // Leaf node
-        Some([left, right]) => {
+        Some(children) => {
             // Recurse into children
-            let ((left_centers, mut subsumed, mut straddlers), (right_centers, right_subsumed, right_straddlers)) =
-                rayon::join(
-                    || par_tree_search(left, metric, query, radius),
-                    || par_tree_search(right, metric, query, radius),
-                );
+            let returns = children
+                .par_iter()
+                .map(|child| par_tree_search(child, metric, query, radius))
+                .collect::<Vec<_>>();
 
-            centers.extend(left_centers);
-            centers.extend(right_centers);
-            subsumed.extend(right_subsumed);
-            straddlers.extend(right_straddlers);
+            for (child_centers, child_subsumed, child_straddlers) in returns {
+                centers.extend(child_centers);
+                subsumed.extend(child_subsumed);
+                straddlers.extend(child_straddlers);
+            }
 
             (centers, subsumed, straddlers)
         }

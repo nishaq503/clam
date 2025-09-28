@@ -3,7 +3,7 @@
 use core::cmp::Reverse;
 
 use crate::{
-    cakes::{ParSearch, Search},
+    cakes::{d_min, leaf_into_hits, pop_till_leaf, ParSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -78,96 +78,4 @@ impl<
         A: Send + Sync,
     > ParSearch<Id, I, T, M, A> for KnnDfs
 {
-}
-
-/// The minimum possible distance from the query to any item in the cluster.
-fn d_min<Id, I, T: DistanceValue, A>(cluster: &Cluster<Id, I, T, A>, d: T) -> T {
-    if d < cluster.radius() {
-        T::zero()
-    } else {
-        d - cluster.radius()
-    }
-}
-
-/// Pop candidates until the top candidate is a leaf. Then pop and return that
-/// leaf along with its minimum distance from the query.
-///
-/// The user must ensure that `candidates` is non-empty before calling this
-/// function.
-#[allow(clippy::type_complexity)]
-fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
-    query: &I,
-    metric: &M,
-    candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>,
-    hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-) -> (&'a Cluster<Id, I, T, A>, T, usize) {
-    profi::prof!("KnnDfs::pop_till_leaf");
-
-    let mut distance_computations = 0;
-    while candidates.peek().map_or_else(
-        || unreachable!("`candidates` is non-empty."),
-        |(cluster, _)| !cluster.is_leaf(),
-    ) {
-        profi::prof!("pop-while-not-leaf");
-
-        candidates.pop().and_then(|(parent, _)| parent.children()).map_or_else(
-            || unreachable!("Top candidate is a parent."),
-            |[left, right]| {
-                let (d_left, d_right) = {
-                    profi::prof!("child-distances");
-
-                    let d_left = metric(query, left.center());
-                    let d_right = metric(query, right.center());
-                    distance_computations += 2;
-                    (d_left, d_right)
-                };
-                {
-                    profi::prof!("push-children");
-
-                    // Push the child centers onto hits.
-                    hits.push(((left.center_id(), left.center()), d_left));
-                    hits.push(((right.center_id(), right.center()), d_right));
-
-                    // Push the children onto candidates.
-                    candidates.push((left, Reverse((d_min(left, d_left), d_left))));
-                    candidates.push((right, Reverse((d_min(right, d_right), d_right))));
-                }
-            },
-        );
-    }
-
-    let (leaf, d) = candidates.pop().map_or_else(
-        || unreachable!("`candidates` is non-empty."),
-        |(leaf, Reverse((_, d)))| (leaf, d),
-    );
-
-    (leaf, d, distance_computations)
-}
-
-/// Given a leaf cluster, compute the distance from the query to each item in
-/// the leaf and push them onto `hits`.
-fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
-    query: &I,
-    metric: &M,
-    hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-    leaf: &'a Cluster<Id, I, T, A>,
-    d: T,
-) -> usize {
-    profi::prof!("KnnDfs::leaf_into_hits");
-
-    if leaf.is_singleton() {
-        // A singleton leaf has zero radius, so all items in the leaf are
-        // exactly `d` from the query.
-        hits.extend(leaf.subtree_items().into_iter().map(|(id, item)| ((id, item), d)));
-        0
-    } else {
-        // A non-singleton leaf may have non-zero radius, so we need to compute
-        // the distance from the query to each item in the leaf.
-        hits.extend(
-            leaf.subtree_items()
-                .into_iter()
-                .map(|(id, item)| ((id, item), metric(query, item))),
-        );
-        leaf.cardinality() - 1 // We already computed distance to center
-    }
 }

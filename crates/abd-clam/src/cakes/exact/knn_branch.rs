@@ -38,22 +38,19 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         while !latest.is_leaf() {
             profi::prof!("KnnBranch::search::descend");
 
-            let [left, right] = latest
+            let (child, d) = latest
                 .children()
+                .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
+                .iter()
+                .map(|c| (c, metric(query, c.center())))
+                .min_by_key(|&(_, d)| MinItem((), d))
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
-            let d_left = metric(query, left.center());
-            let d_right = metric(query, right.center());
-            if d_left < d_right {
-                latest = left;
-                candidate_radii.push((1, Reverse(d_min(left, d_left))));
-                candidate_radii.push((left.cardinality().half() + 1, Reverse(d_left)));
-                candidate_radii.push((left.cardinality(), Reverse(d_max(left, d_left))));
-            } else {
-                latest = right;
-                candidate_radii.push((1, Reverse(d_min(right, d_right))));
-                candidate_radii.push((right.cardinality().half() + 1, Reverse(d_right)));
-                candidate_radii.push((right.cardinality(), Reverse(d_max(right, d_right))));
-            }
+
+            candidate_radii.push((1, Reverse(d_min(child, d))));
+            candidate_radii.push((child.cardinality().half() + 1, Reverse(d)));
+            candidate_radii.push((child.cardinality(), Reverse(d_max(child, d))));
+
+            latest = child;
         }
         // Remove the candidate radii that are zero.
         let mut expected_hits = 0;

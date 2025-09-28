@@ -87,8 +87,8 @@ fn bench_for_ks<Id, I, T, A, M>(
             //     algs.push(Box::new(cakes::approximate::KnnDfs(k, usize::MAX, n * 100)));
             // }
 
-            // algs.push(Box::new(cakes::KnnBfs(k)));
-            // algs.push(Box::new(cakes::KnnRrnn(k)));
+            algs.push(Box::new(cakes::KnnBfs(k)));
+            algs.push(Box::new(cakes::KnnRrnn(k)));
 
             algs
         };

@@ -38,7 +38,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             profi::prof!("KnnDfs::search::loop");
 
             // Find the next leaf to process.
-            let (leaf, d) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
+            let (leaf, d, _) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
             // Process the leaf and update hits.
             leaf_into_hits(query, metric, &mut hits, leaf, d);
 
@@ -72,14 +72,15 @@ impl<
 /// The user must ensure that `candidates` is non-empty before calling this
 /// function.
 #[allow(clippy::type_complexity)]
-fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
+pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
     candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
-) -> (&'a Cluster<Id, I, T, A>, T) {
+) -> (&'a Cluster<Id, I, T, A>, T, usize) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
+    let mut distance_computations = 0;
     while candidates.peek().map_or_else(
         || unreachable!("`candidates` is non-empty."),
         |(cluster, _)| !cluster.is_leaf(),
@@ -88,50 +89,41 @@ fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
 
         candidates.pop().and_then(|(parent, _)| parent.children()).map_or_else(
             || unreachable!("Top candidate is a parent."),
-            |[left, right]| {
-                let (d_left, d_right) = {
-                    profi::prof!("child-distances");
+            |children| {
+                distance_computations += children.len();
 
-                    let d_left = metric(query, left.center());
-                    let d_right = metric(query, right.center());
-                    (d_left, d_right)
-                };
-                {
-                    profi::prof!("push-children");
-
-                    // Push the child centers onto hits.
-                    hits.push(((left.center_id(), left.center()), d_left));
-                    hits.push(((right.center_id(), right.center()), d_right));
-
-                    // Push the children onto candidates.
-                    candidates.push((left, Reverse((d_min(left, d_left), d_left))));
-                    candidates.push((right, Reverse((d_min(right, d_right), d_right))));
+                for child in children {
+                    let d = metric(query, child.center());
+                    hits.push(((child.center_id(), child.center()), d));
+                    candidates.push((child, Reverse((d_min(child, d), d))));
                 }
             },
         );
     }
 
-    candidates.pop().map_or_else(
+    let (leaf, d) = candidates.pop().map_or_else(
         || unreachable!("`candidates` is non-empty."),
         |(leaf, Reverse((_, d)))| (leaf, d),
-    )
+    );
+    (leaf, d, distance_computations)
 }
 
 /// Given a leaf cluster, compute the distance from the query to each item in
 /// the leaf and push them onto `hits`.
-fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
+pub fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
     leaf: &'a Cluster<Id, I, T, A>,
     d: T,
-) {
+) -> usize {
     profi::prof!("KnnDfs::leaf_into_hits");
 
     if leaf.is_singleton() {
         // A singleton leaf has zero radius, so all items in the leaf are
         // exactly `d` from the query.
         hits.extend(leaf.subtree_items().into_iter().map(|(id, item)| ((id, item), d)));
+        0
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute
         // the distance from the query to each item in the leaf.
@@ -140,5 +132,6 @@ fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
                 .into_iter()
                 .map(|(id, item)| ((id, item), metric(query, item))),
         );
+        leaf.cardinality() - 1 // We already knew the distance to the center.
     }
 }

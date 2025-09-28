@@ -173,7 +173,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                     .collect::<Vec<_>>();
 
                 // Recursively create children and set the contents to the new children.
-                self.contents = Contents::Children([
+                self.contents = Contents::Children(vec![
                     Box::new(Self::with_center_only(left_items, metric).partition(metric, criteria)),
                     Box::new(Self::with_center_only(right_items, metric).partition(metric, criteria)),
                 ]);
@@ -191,16 +191,19 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 // This is necessary because the user may have provided different criteria when the tree was last partitioned.
 
                 // Take ownership of the children for partitioning.
-                let [left, right] = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                let children = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
                     Contents::Children(children) => children,
                     Contents::Leaf(_) => unreachable!("We just replaced contents with children"),
                 };
 
                 // Recursively partition children and set the contents to the new children.
-                self.contents = Contents::Children([
-                    Box::new(left.partition(metric, criteria)),
-                    Box::new(right.partition(metric, criteria)),
-                ]);
+                self.contents = Contents::Children(
+                    children
+                        .into_iter()
+                        .map(|child| child.partition(metric, criteria))
+                        .map(Box::new)
+                        .collect(),
+                );
             }
         }
 
@@ -218,13 +221,12 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
         match contents {
             Contents::Leaf(items) => items,
-            Contents::Children([mut left, mut right]) => {
+            Contents::Children(children) => {
                 let mut items = Vec::with_capacity(self.cardinality - 1);
-                items.extend(left.take_subtree_items());
-                items.push(left.center);
-
-                items.extend(right.take_subtree_items());
-                items.push(right.center);
+                for mut child in children {
+                    items.extend(child.take_subtree_items());
+                    items.push(child.center);
+                }
 
                 items
             }
@@ -388,7 +390,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     || Self::par_with_center_only(left_items, metric).par_partition(metric, criteria),
                     || Self::par_with_center_only(right_items, metric).par_partition(metric, criteria),
                 );
-                self.contents = Contents::Children([Box::new(left), Box::new(right)]);
+                self.contents = Contents::Children(vec![Box::new(left), Box::new(right)]);
             }
             Contents::Children(children) => {
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
@@ -403,17 +405,18 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // This is necessary because the user may have provided different criteria when the tree was last partitioned.
 
                 // Take ownership of the children for partitioning.
-                let [left, right] = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                let children = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
                     Contents::Children(children) => children,
                     Contents::Leaf(_) => unreachable!("We just replaced contents with children"),
                 };
 
                 // Recursively partition children and set the contents to the new children.
-                let (left, right) = rayon::join(
-                    || left.par_partition(metric, criteria),
-                    || right.par_partition(metric, criteria),
-                );
-                self.contents = Contents::Children([Box::new(left), Box::new(right)]);
+                let children = children
+                    .into_par_iter()
+                    .map(|child| child.par_partition(metric, criteria))
+                    .map(Box::new)
+                    .collect::<Vec<_>>();
+                self.contents = Contents::Children(children);
             }
         }
 

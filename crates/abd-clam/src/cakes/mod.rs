@@ -7,6 +7,7 @@ use crate::{Cluster, DistanceValue};
 pub mod approximate;
 mod exact;
 
+pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A `Search` trait for defining how to search for nearest neighbors.

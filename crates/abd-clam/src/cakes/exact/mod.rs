@@ -15,3 +15,5 @@ pub use knn_linear::KnnLinear;
 pub use knn_rrnn::KnnRrnn;
 pub use rnn_chess::RnnChess;
 pub use rnn_linear::RnnLinear;
+
+pub use knn_dfs::{leaf_into_hits, pop_till_leaf};
