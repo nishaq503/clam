@@ -18,10 +18,14 @@ pub trait DistanceValue:
     + PartialOrd
     + Copy
 {
+    /// Returns half of the value.
+    #[must_use]
+    fn half(self) -> Self {
+        self / (Self::one() + Self::one())
+    }
 }
 
-/// Blanket implementation of `DistanceValue` for all types that satisfy the
-/// trait bounds.
+/// Blanket implementation of `DistanceValue` for all types that satisfy the trait bounds.
 impl<T> DistanceValue for T where
     T: num::Num
         + num::Bounded
@@ -34,15 +38,14 @@ impl<T> DistanceValue for T where
 {
 }
 
-/// A trait for types that can be used as floating-point distance values in
-/// clustering algorithms.
-pub trait FloatDistanceValue: DistanceValue + num::Float {}
+/// A trait for types that can be used as floating-point distance values in clustering algorithms.
+pub trait FloatDistanceValue: DistanceValue + num::Float + num::traits::FloatConst {}
 
-impl<T> FloatDistanceValue for T where T: DistanceValue + num::Float {}
+impl<T> FloatDistanceValue for T where T: DistanceValue + num::Float + num::traits::FloatConst {}
 
 // /// A trait for types that can be used as floating-point distance values in
 // /// clustering algorithms.
-// pub trait FloatDistanceValue: DistanceValue + num::Float {
+// pub trait FloatDistanceValue: DistanceValue + num::Float + num::traits::FloatConst {
 //     /// The gauss error function.
 //     ///
 //     /// The `libm` crate is used to provide the implementations for `f32` and `f64`.

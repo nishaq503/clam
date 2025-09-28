@@ -67,18 +67,17 @@ impl AnnDataset {
         self.subset_path(base, "Train")
     }
 
-    pub fn read_train<P: AsRef<Path>>(
+    pub fn read_train<P: AsRef<Path>, R: rand::Rng>(
         &self,
         base: &P,
-        shuffle: bool,
+        rng: Option<&mut R>,
     ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         let path = self.train_path(base)?;
         let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let mut vec = array2_to_vec_f32(&arr);
-        if shuffle {
-            let mut rng = rand::rng();
-            vec.shuffle(&mut rng);
+        if let Some(rng) = rng {
+            vec.shuffle(rng);
         }
         Ok(vec)
     }
@@ -87,18 +86,17 @@ impl AnnDataset {
         self.subset_path(base, "Test")
     }
 
-    pub fn read_test<P: AsRef<Path>>(
+    pub fn read_test<P: AsRef<Path>, R: rand::Rng>(
         &self,
         base: &P,
-        shuffle: bool,
+        rng: Option<&mut R>,
     ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         let path = self.test_path(base)?;
         let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let mut vec = array2_to_vec_f32(&arr);
-        if shuffle {
-            let mut rng = rand::rng();
-            vec.shuffle(&mut rng);
+        if let Some(rng) = rng {
+            vec.shuffle(rng);
         }
         Ok(vec)
     }

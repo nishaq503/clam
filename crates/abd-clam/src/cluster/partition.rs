@@ -13,7 +13,8 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// * `items`: The items to be clustered into a tree of clusters.
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`.
+    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`, which
+    ///   will partition clusters until all leaves are singletons, i.e., contain only one distinct item.
     ///
     /// # Errors
     ///
@@ -24,7 +25,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         criteria: &impl Fn(&Self) -> bool,
     ) -> Result<Self, String> {
         if items.is_empty() {
-            return Err("Cannot create a Cluster tree with no items".to_string());
+            return Err("Cannot create a tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
         Ok(Self::with_center_only(items, metric).partition(metric, &criteria))
@@ -34,7 +35,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// WARNING: This function does only sets the `center` and `cardinality` fields correctly. Other fields are placeholders and must be computed in
     /// `partition`.
-    fn with_center_only<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
+    pub(crate) fn with_center_only<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton cluster: `center` is the only item, `radius` is 0, `LFD` is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));
@@ -74,13 +75,16 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         }
     }
 
-    /// Partitions the cluster into two child clusters based on the provided `metric` and `criteria`, then recursively partitions the children until the criteria are
-    /// no longer satisfied.
+    /// Partitions the cluster into two child clusters based on the provided `metric` and `criteria`, then recursively partitions the children until the
+    /// criteria are no longer satisfied.
+    ///
+    /// This method can be called multiple times on the same cluster with different criteria to refine or coarsen the partitioning.
     ///
     /// # Parameters
     ///
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`.
+    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`, which
+    ///   will partition clusters until all leaves are singletons, i.e., contain only one distinct item.
     pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, criteria: &impl Fn(&Self) -> bool) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
@@ -204,11 +208,11 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         self
     }
 
-    /// Removes and returns all items from the cluster and its descendants, excluding the center of this cluster; the children are dropped in the process and this
-    /// cluster becomes a leaf with no items other than its center.
+    /// Removes and returns all items from the cluster and its descendants, excluding the center of this cluster; the children are dropped in the process and
+    /// this cluster becomes a leaf with no items other than its center.
     ///
-    /// WARNING: This function does not recompute any properties for the up to the root after removing the items. The caller must ensure that the properties are
-    /// still valid after this operation.
+    /// WARNING: This function does not recompute any properties for three the up to the root after removing the items. The caller must ensure that the
+    /// properties are still valid after this operation.
     pub(crate) fn take_subtree_items(&mut self) -> Vec<(Id, I)> {
         // Take ownership of the contents so we can recurse and drop children.
         let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
@@ -247,7 +251,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     }
 
     /// Parallel version of [`with_center_only`](Self::with_center_only).
-    fn par_with_center_only<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
+    pub(crate) fn par_with_center_only<M: Fn(&I, &I) -> T + Send + Sync>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
             // A singleton cluster: center is the only item, radius is 0, LFD is 1
             let center = items.pop().unwrap_or_else(|| unreachable!("Cardinality is 1"));

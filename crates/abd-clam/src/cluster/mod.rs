@@ -129,17 +129,17 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         self.radial_sum
     }
 
-    /// A reference to the annotations, if any.
+    /// A reference to the annotation, if any.
     pub const fn annotation(&self) -> Option<&A> {
         self.annotation.as_ref()
     }
 
-    /// A mutable reference to the annotations, if any.
+    /// A mutable reference to the annotation, if any.
     pub const fn annotation_mut(&mut self) -> Option<&mut A> {
         self.annotation.as_mut()
     }
 
-    /// Takes the annotations, leaving `None` in its place.
+    /// Takes ownership of the annotation, leaving `None` in its place.
     pub const fn take_annotation(&mut self) -> Option<A> {
         self.annotation.take()
     }
@@ -182,6 +182,13 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         }
     }
 
+    /// Takes ownership of all items in the subtree rooted at this cluster, and drops the subtree in the process.
+    pub fn take_all_items(mut self) -> Vec<(Id, I)> {
+        let mut subtree_items = self.take_subtree_items();
+        subtree_items.push(self.center);
+        subtree_items
+    }
+
     /// A vector of references to all items in the cluster, including the center, which is placed first.
     pub fn all_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
@@ -203,8 +210,8 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         self.all_items().iter().map(|(i, p)| (i, p, metric(item, p))).collect()
     }
 
-    /// Traverses the tree in pre-order, checking the provided predicate on each cluster, and converts clusters that satisfy the predicate into leaves by collecting
-    /// all items from their descendants and dropping the descendants in the process.
+    /// Traverses the tree in pre-order, checking the provided predicate on each cluster, and converts clusters that satisfy the predicate into leaves by
+    /// collecting all items from their descendants and dropping the descendants in the process.
     pub fn prune<P: Fn(&Self) -> bool>(&mut self, predicate: &P) {
         if predicate(self) {
             // The predicate is satisfied, so we convert this cluster to a leaf by collecting all items from its descendants.

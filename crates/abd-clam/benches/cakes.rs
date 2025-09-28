@@ -77,23 +77,41 @@ fn bench_for_ks<Id, I, T, A, M>(
     }
 }
 
-fn run_group<P: AsRef<std::path::Path>>(
+/// Run benchmarks for a given dataset, doubling the dataset size each iteration until `max_items` is reached.
+///
+/// # Parameters
+///
+/// * `group`: the benchmark group to add benchmarks to
+/// * `rng`: a random number generator for shuffling and data augmentation
+/// * `dataset`: the dataset to benchmark
+/// * `base`: the base directory where datasets are stored
+/// * `max_items`: the maximum number of items to allow in the augmented dataset
+/// * `max_queries`: the maximum number of queries to use from the dataset
+/// * `shuffle`: whether to shuffle the dataset before building the tree
+/// * `ks`: the values of k to benchmark for k-NN search
+/// * `prune`: whether to also benchmark on a pruned tree based on compression costs
+fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    rng: &mut R,
     dataset: &AnnDataset,
     base: &P,
     max_items: usize,
     max_queries: usize,
     shuffle: bool,
     ks: &[usize],
+    prune: bool,
 ) {
-    let items = dataset.read_train(base, shuffle).unwrap();
+    let mut items = dataset
+        .read_train(base, if shuffle { Some(rng) } else { None })
+        .unwrap();
     let metric = dataset.metric();
-    let queries = dataset.read_test(base, shuffle).unwrap();
+    let queries = dataset.read_test(base, if shuffle { Some(rng) } else { None }).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
 
     config_group(group, queries.len());
 
-    // Function to compute compression costs for a ball in a post-order traversal
+    // Closure to compute compression costs for a ball in a post-order traversal.
+    // This is a closure so it can capture `metric`.
     let compute_compression_costs = |ball: &Cluster<_, _, _, CompressionCosts<_>>| {
         if let Some([left, right]) = ball.children() {
             // INVARIANT: This function is called in post-order, so the children's costs are already computed.
@@ -125,45 +143,57 @@ fn run_group<P: AsRef<std::path::Path>>(
             })
     };
 
-    let augmentation_error = {
-        let n_items = items.len();
-        let root = Cluster::par_new_tree_minimal(items.clone(), &metric, &|b: _| b.cardinality() > n_items).unwrap();
-
-        // Baseline: linear scan with k=10 on the original data only
-        let id = BenchmarkId::new("knn-linear-k10", 1_usize);
-        group.bench_function(id, |b| {
-            b.iter_with_large_drop(|| abd_clam::cakes::KnnLinear(10).par_batch_search(&root, &metric, &queries))
-        });
-
-        // augmentation error: 0.1% of the radius of the root ball
-        root.radius() / 1000.0
-    };
-
+    // We will change this error value at the end of each iteration
+    let mut augmentation_error = 0.0;
     for multiplier in (0..).map(|p| 2_usize.pow(p)) {
         if multiplier > 1 && items.len() * multiplier > max_items {
             // Stop if augmentation would exceed max_items
             break;
         }
 
-        let augmented_items = if multiplier == 1 {
-            items.clone()
-        } else {
-            symagen::augmentation::augment_data(&items, multiplier, augmentation_error)
-        };
+        if multiplier > 1 {
+            // We have had at least one iteration, so we augment the data with small random noise
+            let dimensionality = items[0].len();
+            let dimensional_error = augmentation_error / (dimensionality as f32).sqrt();
+            let perturbations = symagen::random_data::random_tabular(
+                items.len(),
+                dimensionality,
+                1.0 - dimensional_error,
+                1.0 + dimensional_error,
+                rng,
+            );
+            items = items
+                .into_par_iter()
+                .zip(perturbations)
+                .flat_map(|(point, perturbation)| {
+                    let perturbed_point = point.iter().zip(perturbation).map(|(&x, y)| x + y).collect();
+                    [point, perturbed_point]
+                })
+                .collect();
+        }
 
         // Build a tree with no annotations and benchmark the search algorithms
-        let root = Cluster::par_new_tree_minimal(augmented_items, &metric, &|_| true).unwrap();
+        let root = Cluster::par_new_tree_minimal(items, &metric, &|_| true).unwrap();
         bench_for_ks(group, &root, &metric, &queries, false, multiplier, ks);
 
-        // We change the annotation type to CompressionCosts and compute them in post-order, in one pass over the tree
-        let post = |b: &_, _: _| Some(compute_compression_costs(b));
-        let mut root = root.change_annotation_type(&post);
-        // Now prune the tree based on the compression costs
-        root.prune(&to_prune_or_not_to_prune);
-        // Finally, we don't need the annotations anymore, so we clear them to save memory
-        let root = root.remove_annotations();
-        // Benchmark the search algorithms on the pruned tree
-        bench_for_ks(group, &root, &metric, &queries, true, multiplier, ks);
+        let root = if prune {
+            // We change the annotation type to CompressionCosts and compute them in post-order, in one pass over the tree
+            let post = |b: &_, _: _| Some(compute_compression_costs(b));
+            let mut root = root.change_annotation_type(&post);
+            // Now prune the tree based on the compression costs
+            root.prune(&to_prune_or_not_to_prune);
+            // Finally, we don't need the annotations anymore, so we clear them to save memory
+            let root = root.remove_annotations();
+            // Benchmark the search algorithms on the pruned tree
+            bench_for_ks(group, &root, &metric, &queries, true, multiplier, ks);
+            root
+        } else {
+            root
+        };
+
+        // Set the augmentation error to 0.1% of the radius of the root ball for the next iteration
+        augmentation_error = root.radius() / 1000.0;
+        items = root.take_all_items().into_iter().map(|(_, p)| p).collect();
     }
 }
 
@@ -192,17 +222,29 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     // Whether to shuffle the dataset before building the tree
     let shuffle = true;
+    let mut rng = rand::rng();
 
-    // Set these parameters to control the runtime of the benchmarks
-    let max_items = 10_000_000;
+    // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
+    let max_items = 100_000_000;
     let max_queries = 10_000;
     let ks = [10, 100];
+    let prune = true;
 
     let base = base_dir().unwrap();
     for dataset in &datasets {
         // For the paper, only use the first 3 datasets
         let mut group = c.benchmark_group(dataset.name());
-        run_group(&mut group, dataset, &base, max_items, max_queries, shuffle, &ks);
+        run_group(
+            &mut group,
+            &mut rng,
+            dataset,
+            &base,
+            max_items,
+            max_queries,
+            shuffle,
+            &ks,
+            prune,
+        );
         group.finish();
     }
 }

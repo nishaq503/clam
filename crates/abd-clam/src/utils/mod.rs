@@ -10,41 +10,25 @@ mod sized_heap;
 pub use ord_items::{MaxItem, MinItem};
 pub use sized_heap::SizedHeap;
 
-/// Estimates the Local Fractal Dimension (LFD) of a ball given the distances
-/// of its items from the center and the radius of the ball.
+/// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.
 ///
-/// This uses the formula `log2(N / n)`, where `N` is the total number of items
-/// in the ball, and `n` is the number of items within half the radius.
+/// This uses the formula `log2(N / n)`, where `N` is `distances.len() + 1` (the total number of items including the center), and `n` is the number of distances
+/// that are less than or equal to `radius / 2` plus one (to account for the center).
 ///
-/// If the radius is zero or if there are no items within half the radius,
-/// the LFD is defined to be 1.0.
+/// If the radius is zero or if there are no items within half the radius, the LFD is, by definition, `1.0`.
 #[expect(clippy::cast_precision_loss)]
 pub fn lfd_estimate<T: DistanceValue>(distances: &[T], radius: T) -> f64 {
-    let half_radius = radius.to_f64().unwrap_or(0.0) / 2.0;
-    if distances.is_empty() || distances.len() == 1 || half_radius <= f64::EPSILON {
+    let half_radius = radius.half();
+    if distances.len() < 2 || half_radius.is_zero() {
         // In all three of the following cases, we define LFD to be 1.0:
-        //   - No non-center items (singleton ball)
-        //   - One non-center item (ball with two items)
-        //   - Radius is zero or too small to be meaningful
+        //   - No non-center items (singleton cluster)
+        //   - One non-center item (cluster with two items)
+        //   - Radius is zero or too small to be represented as a non-zero value
         1.0
     } else {
-        // The ball has at least 2 non-center items, so LFD computation is
-        // meaningful.
-
-        // Count how many items are within half the radius.
-        // We use f64::MAX as a sentinel to exclude items whose distance
-        // could not be converted to f64.
-        let count = distances
-            .iter()
-            .map(|d| d.to_f64().unwrap_or(f64::MAX))
-            .filter(|&d| d <= half_radius)
-            .count()
-            + 1; // +1 to include the center
-
-        // Compute and return the LFD. This is well-defined because
-        // `distances.len() >= 2` and `count >= 1`, so the argument to log2
-        // is always >= 1.0
-        ((distances.len() as f64) / (count as f64)).log2()
+        // The cluster has at least 2 non-center items, so LFD computation is meaningful.
+        let half_count = distances.iter().filter(|&&d| d <= half_radius).count();
+        ((distances.len() + 1) as f64 / ((half_count + 1) as f64)).log2()
     }
 }
 
