@@ -19,8 +19,6 @@ impl std::fmt::Display for KnnBranch {
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBranch {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("KnnBranch::search");
-
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
@@ -36,8 +34,6 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
 
         let mut latest = root;
         while !latest.is_leaf() {
-            profi::prof!("KnnBranch::search::descend");
-
             let (child, d) = latest
                 .children()
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
@@ -64,8 +60,6 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         // Now, try CHESS with increasing candidate radii until we have k hits.
         let mut hits = Vec::new();
         while let Some((_, Reverse(d))) = candidate_radii.pop() {
-            profi::prof!("KnnBranch::search::rnn");
-
             hits = RnnChess(d).search(root, metric, query);
             if hits.len() >= self.0 {
                 hits.sort_by_key(|&(_, _, d)| MinItem((), d));
@@ -77,12 +71,12 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<
-        I: Send + Sync,
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        A: Send + Sync,
-    > ParSearch<Id, I, T, M, A> for KnnBranch
+impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnBranch
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
 }

@@ -35,59 +35,59 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         candidates.push((root, d_max(root, d)));
 
         while !candidates.is_empty() {
-            // TODO Najib: Break this massive fold into several smaller pieces for optimal profiling
-            candidates = filter_candidates(candidates, self.0).into_iter().fold(
-                Vec::new(),
-                |mut acc_candidates, (cluster, d)| {
-                    if (
-                        acc_candidates.len() <= self.0  // We still need more points to satisfy k, AND
-                        && (cluster.cardinality() < (self.0 - acc_candidates.len()))  // The cluster cannot provide enough points to get to k
-                    )  // OR
-                    || cluster.is_leaf()
-                    {
-                        profi::prof!("KnnBfs::search::leaf");
-                        // The cluster is a leaf, so we have to look at its points
-                        if cluster.is_singleton() {
-                            // It's a singleton, so just add non-center items with the precomputed distance
-                            hits.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
-                        } else {
-                            // Not a singleton, so compute distances to all non-center items
-                            // and add them to hits
-                            hits.extend(
-                                cluster
-                                    .subtree_items()
-                                    .iter()
-                                    .map(|(id, item)| ((id, item), metric(query, item))),
-                            );
-                        }
-                    } else {
-                        profi::prof!("KnnBfs::search::parent");
+            let mut next_candidates = Vec::new();
+            candidates = filter_candidates(candidates, self.0);
 
-                        for child in cluster
-                            .children()
-                            .unwrap_or_else(|| unreachable!("Cluster is a parent"))
-                        {
-                            let d = metric(query, child.center());
-                            hits.push(((child.center_id(), child.center()), d));
-                            acc_candidates.push((child, d_max(child, d)));
-                        }
+            for (cluster, d) in candidates {
+                if (
+                    next_candidates.len() <= self.0  // We still need more points to satisfy k, AND
+                    && (cluster.cardinality() < (self.0 - next_candidates.len()))  // The cluster cannot provide enough points to get to k
+                )  // OR
+                || cluster.is_leaf()
+                {
+                    profi::prof!("KnnBfs::search::leaf");
+                    // The cluster is a leaf, so we have to look at its points
+                    if cluster.is_singleton() {
+                        // It's a singleton, so just add non-center items with the precomputed distance
+                        hits.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+                    } else {
+                        // Not a singleton, so compute distances to all non-center items
+                        // and add them to hits
+                        hits.extend(
+                            cluster
+                                .subtree_items()
+                                .iter()
+                                .map(|(id, item)| ((id, item), metric(query, item))),
+                        );
                     }
-                    acc_candidates
-                },
-            );
+                } else {
+                    profi::prof!("KnnBfs::search::parent");
+
+                    for child in cluster
+                        .children()
+                        .unwrap_or_else(|| unreachable!("Cluster is a parent"))
+                    {
+                        let d = metric(query, child.center());
+                        hits.push(((child.center_id(), child.center()), d));
+                        next_candidates.push((child.as_ref(), d_max(child, d)));
+                    }
+                }
+            }
+
+            candidates = next_candidates;
         }
 
         hits.items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 
-impl<
-        I: Send + Sync,
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        A: Send + Sync,
-    > ParSearch<Id, I, T, M, A> for KnnBfs
+impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnBfs
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
 }
 

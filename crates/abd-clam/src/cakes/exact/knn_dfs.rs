@@ -19,8 +19,6 @@ impl std::fmt::Display for KnnDfs {
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnDfs {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("KnnDfs::search");
-
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
@@ -35,8 +33,6 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         candidates.push((root, Reverse((d_min(root, d), d))));
 
         while !candidates.is_empty() {
-            profi::prof!("KnnDfs::search::loop");
-
             // Find the next leaf to process.
             let (leaf, d, _) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
             // Process the leaf and update hits.
@@ -56,13 +52,13 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<
-        I: Send + Sync,
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        A: Send + Sync,
-    > ParSearch<Id, I, T, M, A> for KnnDfs
+impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnDfs
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
 }
 

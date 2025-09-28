@@ -1,14 +1,12 @@
 //! K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 
-use rayon::prelude::*;
-
 use crate::{
     cakes::{ParSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
 
-use super::rnn_chess::{par_tree_search, tree_search};
+use super::rnn_chess::tree_search;
 
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 pub struct KnnRrnn(pub usize);
@@ -21,8 +19,6 @@ impl std::fmt::Display for KnnRrnn {
 
 impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnRrnn {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("KnnRrnn::search");
-
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
@@ -33,22 +29,17 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         let mut radius = radius_for_k(root, self.0);
 
         // Perform the initial tree search.
-        let (mut centers, mut subsumed, mut straddlers) = {
-            profi::prof!("KnnRrnn::search::tree_search");
-            tree_search(
-                root,
-                metric,
-                query,
-                T::from_f64(radius)
-                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-            )
-        };
+        let (mut centers, mut subsumed, mut straddlers) = tree_search(
+            root,
+            metric,
+            query,
+            T::from_f64(radius)
+                .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+        );
 
         // Count the number of confirmed hits.
         let mut num_confirmed = count_hits(&centers, &subsumed);
         while num_confirmed < self.0 {
-            profi::prof!("KnnRrnn::search::while_loop");
-
             // While we don't have enough hits...
             let multiplier = if num_confirmed == 0 {
                 // If no hits, double the radius.
@@ -60,38 +51,32 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
 
             // Increase the radius and repeat the search.
             radius *= multiplier;
-            (centers, subsumed, straddlers) = {
-                profi::prof!("KnnRrnn::search::tree_search");
-                tree_search(
-                    root,
-                    metric,
-                    query,
-                    T::from_f64(radius)
-                        .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-                )
-            };
+            (centers, subsumed, straddlers) = tree_search(
+                root,
+                metric,
+                query,
+                T::from_f64(radius)
+                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+            );
             // Recount the number of confirmed hits.
             num_confirmed = count_hits(&centers, &subsumed);
         }
 
         // We now have at least k confirmed hits; collect them.
         let mut heap = SizedHeap::<(&Id, &I), T>::new(Some(self.0));
-        {
-            profi::prof!("KnnRrnn::search::leaf_search");
-            heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
+        heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
 
-            for cluster in subsumed.into_iter().chain(straddlers) {
-                if cluster.is_singleton() {
-                    let d = metric(query, cluster.center());
-                    heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
-                } else {
-                    heap.extend(
-                        cluster
-                            .subtree_items()
-                            .iter()
-                            .map(|(id, item)| ((id, item), metric(query, item))),
-                    );
-                }
+        for cluster in subsumed.into_iter().chain(straddlers) {
+            if cluster.is_singleton() {
+                let d = metric(query, cluster.center());
+                heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+            } else {
+                heap.extend(
+                    cluster
+                        .subtree_items()
+                        .iter()
+                        .map(|(id, item)| ((id, item), metric(query, item))),
+                );
             }
         }
 
@@ -99,91 +84,14 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        A: Send + Sync,
-    > ParSearch<Id, I, T, M, A> for KnnRrnn
+impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for KnnRrnn
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
-    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("KnnRrnn::search");
-
-        if self.0 > root.cardinality() {
-            // If k is greater than the number of points in the tree, return all
-            // items with their distances.
-            return root.par_distances_to_all_items(query, metric);
-        }
-
-        // Estimate an initial radius to cover k points.
-        let mut radius = radius_for_k(root, self.0);
-
-        // Perform the initial tree search.
-        let (mut centers, mut subsumed, mut straddlers) = {
-            profi::prof!("KnnRrnn::search::tree_search");
-            par_tree_search(
-                root,
-                metric,
-                query,
-                T::from_f64(radius)
-                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-            )
-        };
-
-        // Count the number of confirmed hits.
-        let mut num_confirmed = count_hits(&centers, &subsumed);
-        while num_confirmed < self.0 {
-            // While we don't have enough hits...
-            let multiplier = if num_confirmed == 0 {
-                // If no hits, double the radius.
-                2.0
-            } else {
-                // Otherwise, calculate a multiplier based on LFDs.
-                lfd_multiplier(&centers, &subsumed, &straddlers, self.0, num_confirmed)
-            };
-
-            // Increase the radius and repeat the search.
-            radius *= multiplier;
-            (centers, subsumed, straddlers) = {
-                profi::prof!("KnnRrnn::search::tree_search");
-                par_tree_search(
-                    root,
-                    metric,
-                    query,
-                    T::from_f64(radius)
-                        .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
-                )
-            };
-            // Recount the number of confirmed hits.
-            num_confirmed = count_hits(&centers, &subsumed);
-        }
-
-        // We now have at least k confirmed hits; collect them.
-        let mut heap = SizedHeap::<(&Id, &I), T>::new(Some(self.0));
-        {
-            profi::prof!("KnnRrnn::search::leaf_search");
-
-            heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
-
-            for cluster in subsumed.into_iter().chain(straddlers) {
-                if cluster.is_singleton() {
-                    let d = metric(query, cluster.center());
-                    heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
-                } else {
-                    heap.extend(
-                        cluster
-                            .subtree_items()
-                            .par_iter()
-                            .map(|(id, item)| ((id, item), metric(query, item)))
-                            .collect::<Vec<_>>(),
-                    );
-                }
-            }
-        }
-
-        heap.items().map(|((id, item), d)| (id, item, d)).collect()
-    }
 }
 
 /// Computes the radius needed to cover k points from the cluster center.

@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use abd_clam::{
-    cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
+    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
     utils::MaxItem,
     Cluster, DistanceValue,
 };
@@ -76,6 +76,11 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let dfs_hits = dfs_alg.search(&root, &metric, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let branch_alg = KnnBranch(k);
+        let branch_hits = branch_alg.search(&root, &metric, &query);
+        let branch_hits = sort_nondescending(branch_hits);
+        check_hits(&expected_hits, &branch_hits, format!("KnnBranch({k})"))?;
 
         let bfs_alg = KnnBfs(k);
         let bfs_hits = bfs_alg.search(&root, &metric, &query);
@@ -155,6 +160,11 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
         let dfs_hits = dfs_alg.par_search(&root, &metric, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
+
+        let branch_alg = KnnBranch(k);
+        let branch_hits = branch_alg.par_search(&root, &metric, &query);
+        let branch_hits = sort_nondescending(branch_hits);
+        check_hits(&expected_hits, &branch_hits, format!("KnnBranch({k})"))?;
 
         let bfs_alg = KnnBfs(k);
         let bfs_hits = bfs_alg.par_search(&root, &metric, &query);

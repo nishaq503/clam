@@ -45,61 +45,47 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<
-        I: Send + Sync,
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        A: Send + Sync,
-    > ParSearch<Id, I, T, M, A> for RnnChess<T>
+impl<Id, I, T, M, A> ParSearch<Id, I, T, M, A> for RnnChess<T>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    A: Send + Sync,
 {
     fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("RnnChess::search");
-
-        let (mut hits, subsumed, straddlers) = {
-            profi::prof!("RnnChess::search::tree_search");
-
-            par_tree_search(root, metric, query, self.0)
-        };
+        let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, query, self.0);
 
         // Add all items from fully subsumed clusters
-        {
-            profi::prof!("RnnChess::search::subsumed_leaves");
-
-            hits.extend(
-                subsumed
-                    .into_par_iter()
-                    .flat_map(|cluster| {
-                        cluster
-                            .subtree_items()
-                            .into_par_iter()
-                            .map(|(id, item)| (id, item, metric(item, query)))
-                    })
-                    .collect::<Vec<_>>(),
-            );
-        }
+        hits.extend(
+            subsumed
+                .into_par_iter()
+                .flat_map(|cluster| {
+                    cluster
+                        .subtree_items()
+                        .into_par_iter()
+                        .map(|(id, item)| (id, item, metric(item, query)))
+                })
+                .collect::<Vec<_>>(),
+        );
 
         // Check all items from straddling clusters
-        {
-            profi::prof!("RnnChess::search::straddler_leaves");
-
-            hits.extend(
-                straddlers
-                    .into_par_iter()
-                    .flat_map(|cluster| {
-                        cluster.subtree_items().into_par_iter().filter_map(|(id, item)| {
-                            let dist = metric(item, query);
-                            if dist <= self.0 {
-                                // Item is within the search radius so include it
-                                Some((id, item, dist))
-                            } else {
-                                None
-                            }
-                        })
+        hits.extend(
+            straddlers
+                .into_par_iter()
+                .flat_map(|cluster| {
+                    cluster.subtree_items().into_par_iter().filter_map(|(id, item)| {
+                        let dist = metric(item, query);
+                        if dist <= self.0 {
+                            // Item is within the search radius so include it
+                            Some((id, item, dist))
+                        } else {
+                            None
+                        }
                     })
-                    .collect::<Vec<_>>(),
-            );
-        }
+                })
+                .collect::<Vec<_>>(),
+        );
 
         hits
     }

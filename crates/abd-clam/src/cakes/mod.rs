@@ -35,7 +35,7 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Disp
     }
 }
 
-/// A parallel extension of the [`Search`](Search) trait.
+/// A `ParSearch` trait for defining how to search for nearest neighbors in parallel.
 pub trait ParSearch<
     Id: Send + Sync,
     I: Send + Sync,
@@ -45,12 +45,28 @@ pub trait ParSearch<
 >: Search<Id, I, T, M, A> + Send + Sync
 {
     /// Parallel version of [`Search::search`](Search::search).
+    ///
+    /// The default implementation offers no parallelism. This method should be overridden for algorithms that will actually benefit from parallelism when
+    /// searching for a single query.
     fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         self.search(root, metric, query)
     }
 
-    /// Parallel batched version of [`ParSearch::par_search`](ParSearch::par_search).
+    /// Parallel batched version of [`Search::search`](Search::search).
     fn par_batch_search<'a>(
+        &self,
+        root: &'a Cluster<Id, I, T, A>,
+        metric: &M,
+        queries: &[I],
+    ) -> Vec<Vec<(&'a Id, &'a I, T)>> {
+        queries
+            .par_iter()
+            .map(|query| self.search(root, metric, query))
+            .collect()
+    }
+
+    /// Parallel batched version of [`Search::par_search`](Search::par_search).
+    fn par_batch_par_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
         metric: &M,
