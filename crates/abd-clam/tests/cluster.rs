@@ -13,7 +13,7 @@ fn new() -> Result<(), String> {
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::default().with_predicate(|_| false);
+    let strategy = PartitionStrategy::new(|_| false);
     let root = Cluster::<_, _, _, ()>::new_tree(items.into_iter().enumerate().collect(), &metric, &strategy)?;
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
@@ -23,6 +23,7 @@ fn new() -> Result<(), String> {
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
     assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
 
+    // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
     let root = root.partition(&metric, &strategy);
 
@@ -51,7 +52,8 @@ fn par_new() -> Result<(), String> {
     let cardinality = items.len();
     let metric = common::metrics::manhattan;
 
-    let strategy = PartitionStrategy::default().with_predicate(|_| false);
+    // Don't partition in the root so we can run some tests.
+    let strategy = PartitionStrategy::new(|_| false);
     let root = Cluster::<_, _, _, ()>::par_new_tree(items.into_iter().enumerate().collect(), &metric, &strategy)?;
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
@@ -60,6 +62,7 @@ fn par_new() -> Result<(), String> {
     assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
+    // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
     let root = root.par_partition(&metric, &strategy);
 

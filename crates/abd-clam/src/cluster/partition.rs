@@ -19,9 +19,9 @@ use super::{Cluster, Contents};
 ///     the cluster until the span of each child would likely be small enough to satisfy the `span_reduction` factor.
 #[must_use]
 #[non_exhaustive]
-pub struct PartitionStrategy<Id, I, T: DistanceValue, A> {
+pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
-    predicate: fn(&Cluster<Id, I, T, A>) -> bool,
+    predicate: P,
     /// The branching factor of the cluster tree.If the predicate is satisfied, the non-center items in the cluster are partitioned into subsets until the desired `branching_factor` is reached.
     ///   - If the `branching_factor` is `Adaptive`, then the `span_reduction` factor is used to further partition the subsets until all child clusters will likely
     ///     have a span that is small enough to satisfy the span reduction criterion.
@@ -32,10 +32,12 @@ pub struct PartitionStrategy<Id, I, T: DistanceValue, A> {
     phantom: core::marker::PhantomData<(Id, I, T, A)>,
 }
 
-impl<Id, I, T: DistanceValue, A> Default for PartitionStrategy<Id, I, T, A> {
+impl<Id, I, T: DistanceValue, A> Default
+    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
+{
     fn default() -> Self {
         Self {
-            predicate: |b: &_| b.cardinality > 2,
+            predicate: Box::new(|b: &Cluster<Id, I, T, A>| b.cardinality > 2),
             branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
             phantom: core::marker::PhantomData,
@@ -43,11 +45,21 @@ impl<Id, I, T: DistanceValue, A> Default for PartitionStrategy<Id, I, T, A> {
     }
 }
 
-impl<Id, I, T: DistanceValue, A> PartitionStrategy<Id, I, T, A> {
+impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> PartitionStrategy<Id, I, T, A, P> {
+    /// Creates a new `PartitionStrategy` with the given predicate.
+    pub fn new(predicate: P) -> Self {
+        Self {
+            predicate,
+            branching_factor: BranchingFactor::default(),
+            span_reduction: SpanReductionFactor::default(),
+            phantom: core::marker::PhantomData,
+        }
+    }
+
     /// Sets the predicate that determines whether a cluster should be partitioned into child clusters.
     ///
     /// The default predicate will allow partitioning of any cluster with more than two or more non-center items.
-    pub fn with_predicate(mut self, predicate: fn(&Cluster<Id, I, T, A>) -> bool) -> Self {
+    pub fn with_predicate(mut self, predicate: P) -> Self {
         self.predicate = predicate;
         self
     }
@@ -189,10 +201,10 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// # Errors
     ///
     /// - If `items` is empty.
-    pub fn new_tree<M: Fn(&I, &I) -> T>(
+    pub fn new_tree<M: Fn(&I, &I) -> T, P: Fn(&Self) -> bool>(
         items: Vec<(Id, I)>,
         metric: &M,
-        strategy: &PartitionStrategy<Id, I, T, A>,
+        strategy: &PartitionStrategy<Id, I, T, A, P>,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a tree with no items".to_string());
@@ -257,7 +269,11 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// * `metric`: A function that computes the distance between two items.
     /// * `strategy`: The `PartitionStrategy` that controls how the tree is constructed.
-    pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, strategy: &PartitionStrategy<Id, I, T, A>) -> Self {
+    pub fn partition<M: Fn(&I, &I) -> T, P: Fn(&Self) -> bool>(
+        mut self,
+        metric: &M,
+        strategy: &PartitionStrategy<Id, I, T, A, P>,
+    ) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
                 if items.is_empty() {
@@ -425,10 +441,10 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     /// # Errors
     ///
     /// - See [`new_tree`](Self::new_tree) for details.
-    pub fn par_new_tree<M: Fn(&I, &I) -> T + Send + Sync>(
+    pub fn par_new_tree<M: Fn(&I, &I) -> T + Send + Sync, P: Fn(&Self) -> bool + Send + Sync>(
         items: Vec<(Id, I)>,
         metric: &M,
-        strategy: &PartitionStrategy<Id, I, T, A>,
+        strategy: &PartitionStrategy<Id, I, T, A, P>,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a Cluster tree with no items".to_string());
@@ -480,10 +496,10 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     }
 
     /// Parallel version of [`partition`](Self::partition).
-    pub fn par_partition<M: Fn(&I, &I) -> T + Send + Sync>(
+    pub fn par_partition<M: Fn(&I, &I) -> T + Send + Sync, P: Fn(&Self) -> bool + Send + Sync>(
         mut self,
         metric: &M,
-        strategy: &PartitionStrategy<Id, I, T, A>,
+        strategy: &PartitionStrategy<Id, I, T, A, P>,
     ) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
