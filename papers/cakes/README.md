@@ -10,4 +10,6 @@ cargo run --release --package paper-cakes -- --help
 
 For the `Python` component:
 
-TODO
+```sh
+uv run paper-cakes --help
+```
