@@ -157,27 +157,38 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     Ok(())
 }
 
-#[test]
+#[test_case(2 ; "k=2")]
+// #[test_case(4 ; "k=4")]
+// #[test_case(8 ; "k=8")]
+// #[test_case(10 ; "k=10")]
+// #[test_case(16 ; "k=16")]
+// #[test_case(32 ; "k=32")]
+// #[test_case(64 ; "k=64")]
+// #[test_case(100 ; "k=100")]
 #[ignore = "This is just to gather some statistics about the number of clusters created in a binary tree"]
-fn counting_clusters() {
-    let max_n = 1_000_001;
-    let mut memo = vec![0; max_n];
+fn counting_clusters(k: usize) {
+    let max_n = 1_000_000; // Max number of items
+    let mut memo = vec![0; max_n + 1];
 
+    // Recursive formula:
+    // g(n) = 1 for n <= k
+    // g(1 + i + kn) = 1 + i * g(n + 1) + (k - i) * g(n) for i in 0..k-1
+
+    memo[0] = 1;
     memo[1] = 1;
-    memo[2] = 1;
-    for n in 3..max_n {
-        let (q, r) = n.div_rem(&2);
-        memo[n] = if r == 1 {
-            1 + 2 * memo[q]
-        } else {
-            1 + memo[q] + memo[q - 1]
-        };
+    for n in 2..=k {
+        memo[n] = n - 1;
+    }
+    for kn_i_1 in (k + 1)..=max_n {
+        let (q, r) = (kn_i_1 - 1).div_rem(&k);
+        memo[kn_i_1] = 1 + r * memo[q + 1] + (k - r) * memo[q];
     }
 
+    let noisy_n = 1023; // Skip small n where the ratio is very noisy
     let values = memo
         .into_iter()
         .enumerate()
-        .skip(1023) // Skip small n where the ratio is very noisy
+        .skip(noisy_n)
         .map(|(i, v)| ((i, v), v as f64 / i as f64))
         .collect::<Vec<_>>();
 
@@ -186,14 +197,14 @@ fn counting_clusters() {
         .min_by_key(|&&((i, _), r)| abd_clam::utils::MinItem(i, r))
         .map(|&((i, _), _)| i)
         .unwrap();
-    let ((min_i, min_v), min_r) = values[min_i];
+    let ((min_i, min_v), min_r) = values[min_i - noisy_n];
 
     let max_i = values
         .iter()
         .max_by_key(|&&((i, _), r)| abd_clam::utils::MaxItem(i, r))
         .map(|&((i, _), _)| i)
         .unwrap();
-    let ((max_i, max_v), max_r) = values[max_i];
+    let ((max_i, max_v), max_r) = values[max_i - noisy_n];
 
     let mean_r = values.iter().map(|&(_, r)| r).sum::<f64>() / (values.len() as f64);
     let var_r = values.iter().map(|&(_, r)| (r - mean_r).powi(2)).sum::<f64>() / (values.len() as f64);
@@ -201,10 +212,10 @@ fn counting_clusters() {
 
     let ((last_i, last_v), last_r) = values.last().copied().unwrap();
 
-    let min_line = format!("n with min ratio: {min_i}, num clusters: {min_v}, ratio: {min_r:.6}");
-    let max_line = format!("n with max ratio: {max_i}, num clusters: {max_v}, ratio: {max_r:.6}");
-    let mean_line = format!("mean ratio: {mean_r:.6}, std: {std_r:.6}");
-    let last_line = format!("final n = {last_i}, num clusters: {last_v}, ratio: {last_r:.6}");
+    let min_line = format!("  n with min ratio: {min_i}, num clusters: {min_v}, ratio: {min_r:.6}");
+    let max_line = format!("  n with max ratio: {max_i}, num clusters: {max_v}, ratio: {max_r:.6}");
+    let mean_line = format!("  mean ratio: {mean_r:.6}, std: {std_r:.6}");
+    let last_line = format!("  final n = {last_i}, num clusters: {last_v}, ratio: {last_r:.6}");
     let output = format!("{min_line}\n{max_line}\n{mean_line}\n{last_line}");
 
     assert!(max_n == 0, "{output}"); // Always fails, just to print the output
