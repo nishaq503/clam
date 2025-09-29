@@ -140,14 +140,18 @@ impl BranchingFactor {
 /// half the span of its parent.
 #[non_exhaustive]
 pub enum SpanReductionFactor {
-    /// Use a fixed SRF value. This must be in the range (1.0, 2.0). If the value is outside this range, the SRF defaults to `Sqrt2`.
+    /// Use a fixed SRF value. This must be in the range (1, ∞). If the value is outside this range, the SRF defaults to `√2`.
     Fixed(f64),
-    /// The SRF is `1 / sqrt(2)`.
+    /// The SRF is `√2`.
     Sqrt2,
-    /// The SRF is `1 / 2`.
+    /// The SRF is `2`.
     Two,
-    /// The SRF is `1 / e`.
+    /// The SRF is `e`.
     E,
+    /// The SRF is `π`.
+    Pi,
+    /// The SRF is the golden ratio `φ = (1 + √5) / 2`.
+    Phi,
 }
 
 impl Default for SpanReductionFactor {
@@ -165,8 +169,33 @@ impl From<f64> for SpanReductionFactor {
             Self::Two
         } else if (value - core::f64::consts::E).abs() < f64::EPSILON.sqrt() {
             Self::E
-        } else if 1.0 < value && value < 2.0 {
+        } else if (value - core::f64::consts::PI).abs() < f64::EPSILON.sqrt() {
+            Self::Pi
+        } else if (value - crate::utils::PHI_F64).abs() < f64::EPSILON.sqrt() {
+            Self::Phi
+        } else if 1.0 < value && value.is_finite() {
             Self::Fixed(value)
+        } else {
+            Self::Sqrt2 // Default to Sqrt2 if out of range
+        }
+    }
+}
+
+impl From<f32> for SpanReductionFactor {
+    fn from(value: f32) -> Self {
+        // We allow more tolerance when setting the SRF to common constants.
+        if (value - core::f32::consts::SQRT_2).abs() < f32::EPSILON.sqrt() {
+            Self::Sqrt2
+        } else if (value - 2.0).abs() < f32::EPSILON.sqrt() {
+            Self::Two
+        } else if (value - core::f32::consts::E).abs() < f32::EPSILON.sqrt() {
+            Self::E
+        } else if (value - core::f32::consts::PI).abs() < f32::EPSILON.sqrt() {
+            Self::Pi
+        } else if (value - crate::utils::PHI_F32).abs() < f32::EPSILON.sqrt() {
+            Self::Phi
+        } else if 1.0 < value && value.is_finite() {
+            Self::Fixed(f64::from(value))
         } else {
             Self::Sqrt2 // Default to Sqrt2 if out of range
         }
@@ -177,10 +206,12 @@ impl SpanReductionFactor {
     /// Returns the maximum allowed child span for a given span from the parent cluster.
     fn max_child_span_for<T: DistanceValue>(&self, span: T) -> T {
         let factor = match self {
-            Self::Fixed(srf) => *srf,
+            Self::Fixed(srf) => srf.recip(),
             Self::Sqrt2 => core::f64::consts::FRAC_1_SQRT_2,
             Self::Two => 0.5,
             Self::E => core::f64::consts::E.recip(),
+            Self::Pi => core::f64::consts::FRAC_1_PI,
+            Self::Phi => crate::utils::PHI_F64.recip(),
         };
         let span = span
             .to_f64()
@@ -214,7 +245,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 
     /// Private constructor for `Cluster`.
     ///
-    /// WARNING: This function does only sets the `center` and `cardinality` fields correctly. Other fields are placeholders and must be computed in
+    /// WARNING: This function does only sets the `center` and `cardinality` fields correctly. Other fields are assigned placeholders and must be computed in
     /// `partition`.
     pub(crate) fn with_center_only<M: Fn(&I, &I) -> T>(mut items: Vec<(Id, I)>, metric: &M) -> Self {
         if items.len() == 1 {
