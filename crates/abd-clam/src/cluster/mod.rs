@@ -9,6 +9,8 @@ use crate::DistanceValue;
 pub mod annotations;
 pub mod partition;
 
+pub use partition::{BranchingFactor, PartitionStrategy, SpanReductionFactor};
+
 /// A `Cluster` is a collection of items in a dataset that are within a `radius` from a `center` item.
 ///
 /// # Type Parameters
@@ -29,6 +31,8 @@ pub struct Cluster<Id, I, T: DistanceValue, A> {
     pub(crate) lfd: f64,
     /// The sum of all radial distances from the center to all items in the cluster.
     pub(crate) radial_sum: T,
+    /// The span of the cluster, defined as the maximum distance between the poles of the cluster.
+    pub(crate) span: T,
     /// The `Contents` of the cluster.
     pub(crate) contents: Contents<Id, I, T, A>,
     /// Arbitrary annotation for the cluster.
@@ -71,32 +75,14 @@ impl<I, T: DistanceValue> Cluster<usize, I, T, ()> {
     ///
     /// * `Id = usize` (the original index of the item in the input vector)
     /// * `A = ()` (no annotations)
+    /// * The default `PartitionStrategy`.
     ///
     /// # Errors
     ///
     /// - See [`new_tree`](Self::new_tree) for details.
-    pub fn new_tree_minimal<M: Fn(&I, &I) -> T>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &impl Fn(&Self) -> bool,
-        branching_factor: usize,
-    ) -> Result<Self, String> {
+    pub fn new_tree_minimal<M: Fn(&I, &I) -> T>(items: Vec<I>, metric: &M) -> Result<Self, String> {
         let indexed_items = items.into_iter().enumerate().collect();
-        Self::new_tree(indexed_items, metric, criteria, branching_factor)
-    }
-
-    /// Same as [`new_tree_minimal`](Self::new_tree_minimal) but for a binary tree (i.e., branching factor of 2).
-    ///
-    /// # Errors
-    ///
-    /// See [`new_tree`](Self::new_tree) for details.
-    pub fn new_binary_tree_minimal<M: Fn(&I, &I) -> T>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &impl Fn(&Self) -> bool,
-    ) -> Result<Self, String> {
-        let indexed_items = items.into_iter().enumerate().collect();
-        Self::new_tree(indexed_items, metric, criteria, 2)
+        Self::new_tree(indexed_items, metric, &PartitionStrategy::default())
     }
 }
 
@@ -106,28 +92,9 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Cluster<usize, I, T, ()> {
     /// # Errors
     ///
     /// - See [`new_tree`](Self::new_tree) for details.
-    pub fn par_new_tree_minimal<M: Fn(&I, &I) -> T + Send + Sync>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
-        branching_factor: usize,
-    ) -> Result<Self, String> {
+    pub fn par_new_tree_minimal<M: Fn(&I, &I) -> T + Send + Sync>(items: Vec<I>, metric: &M) -> Result<Self, String> {
         let indexed_items = items.into_iter().enumerate().collect();
-        Self::par_new_tree(indexed_items, metric, criteria, branching_factor)
-    }
-
-    /// Same as [`par_new_tree_minimal`](Self::par_new_tree_minimal) but for a binary tree (i.e., branching factor of 2).
-    ///
-    /// # Errors
-    ///
-    /// See [`new_tree`](Self::new_tree) for details.
-    pub fn par_new_binary_tree_minimal<M: Fn(&I, &I) -> T + Send + Sync>(
-        items: Vec<I>,
-        metric: &M,
-        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
-    ) -> Result<Self, String> {
-        let indexed_items = items.into_iter().enumerate().collect();
-        Self::par_new_tree(indexed_items, metric, criteria, 2)
+        Self::par_new_tree(indexed_items, metric, &PartitionStrategy::default())
     }
 }
 

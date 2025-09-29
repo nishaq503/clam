@@ -7,7 +7,8 @@ use std::usize;
 use rand::prelude::*;
 
 use abd_clam::{
-    cakes::{self, BatchedSearch},
+    cakes::{self, BatchedSearch, Search},
+    cluster::PartitionStrategy,
     Cluster, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
@@ -42,84 +43,84 @@ fn bench_for_ks<Id, I, T, A, M>(
 
     for &k in ks {
         let true_hits = cakes::KnnLinear(k).par_batch_search(&root, &metric, &queries);
-        // let oracles = true_hits
-        //     .iter()
-        //     .map(|res| {
-        //         res.iter()
-        //             .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
-        //             .map(|&(_, _, radius)| cakes::RnnChess(radius))
-        //             .unwrap()
-        //     })
-        //     .collect::<Vec<_>>();
+        let oracles = true_hits
+            .iter()
+            .map(|res| {
+                res.iter()
+                    .max_by_key(|&(_, _, d)| abd_clam::utils::MaxItem((), d))
+                    .map(|&(_, _, radius)| cakes::RnnChess(radius))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
 
-        // let id = BenchmarkId::new(format!("KnnOracle(k={k})-{pruned_str}"), multiplier);
-        // group.bench_function(id, |b| {
-        //     b.iter_with_large_drop(|| {
-        //         oracles
-        //             .par_iter()
-        //             .zip(queries.par_iter())
-        //             .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-        //             .collect::<Vec<_>>()
-        //     })
-        // });
+        let id = BenchmarkId::new(format!("KnnOracle(k={k})-{pruned_str}"), multiplier);
+        group.bench_function(id, |b| {
+            b.iter_with_large_drop(|| {
+                oracles
+                    .par_iter()
+                    .zip(queries.par_iter())
+                    .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+                    .collect::<Vec<_>>()
+            })
+        });
 
-        // let pred_hits = {
-        //     oracles
-        //         .par_iter()
-        //         .zip(queries.par_iter())
-        //         .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
-        //         .collect::<Vec<_>>()
-        // };
-        // let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
-        // println!("Recall stats for oracle-k{k}-{pruned_str}, multiplier {multiplier}:");
-        // for (stat_name, stat_value) in recall_stats {
-        //     println!("    {stat_name}: {stat_value:.8}");
-        // }
+        let pred_hits = {
+            oracles
+                .par_iter()
+                .zip(queries.par_iter())
+                .map(|(oracle, query)| oracle.par_search(&root, &metric, query))
+                .collect::<Vec<_>>()
+        };
+        let recall_stats = cakes::search_quality_stats(&true_hits, &pred_hits);
+        println!("Recall stats for oracle-k{k}-{pruned_str}, multiplier {multiplier}:");
+        for (stat_name, stat_value) in recall_stats {
+            println!("    {stat_name}: {stat_value:.8}");
+        }
 
         // Benchmark the exact algorithms
-        // bench_one_alg(
-        //     group,
-        //     &cakes::KnnDfs(k),
-        //     root,
-        //     metric,
-        //     queries,
-        //     &true_hits,
-        //     pruned_str,
-        //     multiplier,
-        // );
-        // bench_one_alg(
-        //     group,
-        //     &cakes::KnnBranch(k),
-        //     root,
-        //     metric,
-        //     queries,
-        //     &true_hits,
-        //     pruned_str,
-        //     multiplier,
-        // );
-        // bench_one_alg(
-        //     group,
-        //     &cakes::KnnBfs(k),
-        //     root,
-        //     metric,
-        //     queries,
-        //     &true_hits,
-        //     pruned_str,
-        //     multiplier,
-        // );
-        // bench_one_alg(
-        //     group,
-        //     &cakes::KnnRrnn(k),
-        //     root,
-        //     metric,
-        //     queries,
-        //     &true_hits,
-        //     pruned_str,
-        //     multiplier,
-        // );
+        bench_one_alg(
+            group,
+            &cakes::KnnDfs(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnBranch(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnBfs(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
+        bench_one_alg(
+            group,
+            &cakes::KnnRrnn(k),
+            root,
+            metric,
+            queries,
+            &true_hits,
+            pruned_str,
+            multiplier,
+        );
 
         // Benchmark the approximate algorithms
-        for n in [10, 20, 50, 100, 200, 500, 1000, 5000, 10_000] {
+        for n in [10, 20, 50, 100, 200, 500, 1000] {
             // Varying number of leaves explored
             bench_one_alg(
                 group,
@@ -132,7 +133,7 @@ fn bench_for_ks<Id, I, T, A, M>(
                 multiplier,
             );
         }
-        for n in [1, 2, 5, 10, 20, 50, 100, 200, 500] {
+        for n in [1, 2, 5, 10, 20, 50, 100] {
             // Varying number of distance computations performed
             bench_one_alg(
                 group,
@@ -285,7 +286,9 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
             if shuffle {
                 items.shuffle(rng);
             }
-            let root = Cluster::par_new_tree_minimal(items, &metric, &|_| true, branching_factor).unwrap();
+            let indexed_items = items.into_iter().enumerate().collect();
+            let strategy = PartitionStrategy::default().with_branching_factor(branching_factor.into());
+            let root = Cluster::par_new_tree(indexed_items, &metric, &strategy).unwrap();
             bench_for_ks(&mut group, &root, &metric, &queries, false, multiplier, ks);
 
             let root = if prune {
@@ -348,7 +351,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let base = base_dir().unwrap();
     for dataset in &datasets {
-        if !matches!(dataset, AnnDataset::Glove25) {
+        if !matches!(dataset, AnnDataset::FashionMnist) {
             continue; // Targeting dataset for hyperparameter tuning
         }
         // For the paper, only use the first 3 datasets

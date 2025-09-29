@@ -2,9 +2,180 @@
 
 use rayon::prelude::*;
 
-use crate::DistanceValue;
+use crate::{
+    utils::{MaxItem, SizedHeap},
+    DistanceValue,
+};
 
 use super::{Cluster, Contents};
+
+/// Strategy for partitioning a `Cluster` into child clusters.
+///
+/// Our implementation of the heiarchical may evolve over time. For now the this strategy is used as follows:
+///   - The `partition` method (and its variants) will first check the `predicate` to see if the cluster should be partitioned. If the `predicate` is satisfied,
+///     we proceed to partition the cluster; otherwise, we leave the cluster as a leaf.
+///   - If the `branching_factor` not `Adaptive`, we will partition the cluster into at most `branching_factor` children.
+///   - If the `branching_factor` is `Adaptive`, we will use the `span_reduction` factor to determine how many children to create. We will continue partitioning
+///     the cluster until the span of each child would likely be small enough to satisfy the `span_reduction` factor.
+#[must_use]
+#[non_exhaustive]
+pub struct PartitionStrategy<Id, I, T: DistanceValue, A> {
+    /// The predicate that determines whether a cluster should be partitioned into child clusters.
+    predicate: fn(&Cluster<Id, I, T, A>) -> bool,
+    /// The branching factor of the cluster tree.If the predicate is satisfied, the non-center items in the cluster are partitioned into subsets until the desired `branching_factor` is reached.
+    ///   - If the `branching_factor` is `Adaptive`, then the `span_reduction` factor is used to further partition the subsets until all child clusters will likely
+    ///     have a span that is small enough to satisfy the span reduction criterion.
+    branching_factor: BranchingFactor,
+    /// Span reduction factor.
+    span_reduction: SpanReductionFactor,
+    /// Ghost in the machine.
+    phantom: core::marker::PhantomData<(Id, I, T, A)>,
+}
+
+impl<Id, I, T: DistanceValue, A> Default for PartitionStrategy<Id, I, T, A> {
+    fn default() -> Self {
+        Self {
+            predicate: |b: &_| b.cardinality > 2,
+            branching_factor: BranchingFactor::default(),
+            span_reduction: SpanReductionFactor::default(),
+            phantom: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<Id, I, T: DistanceValue, A> PartitionStrategy<Id, I, T, A> {
+    /// Sets the predicate that determines whether a cluster should be partitioned into child clusters.
+    ///
+    /// The default predicate will allow partitioning of any cluster with more than two or more non-center items.
+    pub fn with_predicate(mut self, predicate: fn(&Cluster<Id, I, T, A>) -> bool) -> Self {
+        self.predicate = predicate;
+        self
+    }
+
+    /// Sets the branching factor of the cluster tree.
+    ///
+    /// The default branching factor is `Adaptive`.
+    pub fn with_branching_factor(mut self, branching_factor: BranchingFactor) -> Self {
+        self.branching_factor = if let BranchingFactor::Fixed(n) = branching_factor {
+            BranchingFactor::Fixed(n.max(2))
+        } else {
+            branching_factor
+        };
+        self
+    }
+
+    /// Sets the span reduction factor (SRF).
+    ///
+    /// The default SRF is `Sqrt2`.
+    pub fn with_span_reduction(mut self, span_reduction: SpanReductionFactor) -> Self {
+        self.span_reduction = if let SpanReductionFactor::Fixed(srf) = span_reduction {
+            srf.into()
+        } else {
+            span_reduction
+        };
+        self
+    }
+}
+
+/// The branching factor of a `Cluster` controls how many child clusters a parent cluster can have.
+#[non_exhaustive]
+pub enum BranchingFactor {
+    /// Each cluster can have up to `n` children. If `n < 2`, it is treated as 2.
+    Fixed(usize),
+    /// A cluster with `n` non-center items can have up to `O(log n)` children.
+    Logarithmic,
+    /// The branching factor is chosen adaptively based on the SRF used for partitioning.
+    Adaptive,
+}
+
+impl Default for BranchingFactor {
+    fn default() -> Self {
+        Self::Adaptive
+    }
+}
+
+impl From<usize> for BranchingFactor {
+    fn from(value: usize) -> Self {
+        Self::Fixed(value.max(2))
+    }
+}
+
+impl BranchingFactor {
+    /// Returns the branching factor for a cluster with the given the cardinality of the cluster.
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    fn for_cardinality(&self, cardinality: usize) -> Option<usize> {
+        match self {
+            Self::Fixed(n) => Some(*n),
+            Self::Logarithmic => {
+                // Use a branching factor of O(log n), where n is the number of non-center items in the cluster.
+                // Since `cardinality > 2`, this is at least 2.
+                Some(((cardinality - 1) as f64).log2().ceil() as usize)
+            }
+            Self::Adaptive => None, // Effectively no limit on branching factor; SRF will control the actual branching factor
+        }
+    }
+}
+
+/// The Span Reduction Factor (SRF) of a `Cluster` controls how much the span of child clusters should be reduced compared to their parent cluster.
+///
+/// The `span` of a cluster is the distance between any two of its extremal items, e.g. the distance between poles used for partitioning in a binary tree. This
+/// can be thought of as an analog to the diameter of a cluster in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of child
+/// clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at most
+/// half the span of its parent.
+#[non_exhaustive]
+pub enum SpanReductionFactor {
+    /// Use a fixed SRF value. This must be in the range (1.0, 2.0). If the value is outside this range, the SRF defaults to `Sqrt2`.
+    Fixed(f64),
+    /// The SRF is `1 / sqrt(2)`.
+    Sqrt2,
+    /// The SRF is `1 / 2`.
+    Two,
+    /// The SRF is `1 / e`.
+    E,
+}
+
+impl Default for SpanReductionFactor {
+    fn default() -> Self {
+        Self::Sqrt2
+    }
+}
+
+impl From<f64> for SpanReductionFactor {
+    fn from(value: f64) -> Self {
+        // We allow more tolerance when setting the SRF to common constants.
+        if (value - core::f64::consts::SQRT_2).abs() < f64::EPSILON.sqrt() {
+            Self::Sqrt2
+        } else if (value - 2.0).abs() < f64::EPSILON.sqrt() {
+            Self::Two
+        } else if (value - core::f64::consts::E).abs() < f64::EPSILON.sqrt() {
+            Self::E
+        } else if 1.0 < value && value < 2.0 {
+            Self::Fixed(value)
+        } else {
+            Self::Sqrt2 // Default to Sqrt2 if out of range
+        }
+    }
+}
+
+impl SpanReductionFactor {
+    /// Returns the maximum allowed child span for a given span from the parent cluster.
+    fn max_child_span_for<T: DistanceValue>(&self, span: T) -> T {
+        let factor = match self {
+            Self::Fixed(srf) => *srf,
+            Self::Sqrt2 => core::f64::consts::FRAC_1_SQRT_2,
+            Self::Two => 0.5,
+            Self::E => core::f64::consts::E.recip(),
+        };
+        let span = span
+            .to_f64()
+            .unwrap_or_else(|| unreachable!("DistanceValue must be convertible to f64"));
+        T::from_f64(span * factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
+    }
+}
 
 impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Creates a new tree of `Cluster`s.
@@ -13,8 +184,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// * `items`: The items to be clustered into a tree of clusters.
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`, which
-    ///   will partition clusters until all leaves are singletons, i.e., contain only one distinct item.
+    /// * `strategy`: The `PartitionStrategy` that controls how the tree is constructed.
     ///
     /// # Errors
     ///
@@ -22,14 +192,12 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     pub fn new_tree<M: Fn(&I, &I) -> T>(
         items: Vec<(Id, I)>,
         metric: &M,
-        criteria: &impl Fn(&Self) -> bool,
-        branching_factor: usize,
+        strategy: &PartitionStrategy<Id, I, T, A>,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a tree with no items".to_string());
         }
-        let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::with_center_only(items, metric).partition(metric, &criteria, branching_factor))
+        Ok(Self::with_center_only(items, metric).partition(metric, strategy))
     }
 
     /// Private constructor for `Cluster`.
@@ -46,6 +214,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 radius: T::zero(),
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
                 radial_sum: T::zero(),
+                span: T::zero(),
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
             }
@@ -70,32 +239,25 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 radius: T::max_value(), // Placeholder; to be computed in `partition`
                 lfd: f64::MAX,          // Placeholder; to be computed in `partition`
                 radial_sum: T::zero(),  // Placeholder; to be computed in `partition`
+                span: T::max_value(),   // Placeholder; to be computed in `partition`
                 contents: Contents::Leaf(items),
                 annotation: None,
             }
         }
     }
 
-    /// Partitions the cluster into two child clusters based on the provided `metric` and `criteria`, then recursively partitions the children until the
-    /// criteria are no longer satisfied.
+    /// Partitions the cluster into two child clusters based on the provided `metric` and `strategy`, then recursively partitions the children.
     ///
-    /// This method can be called multiple times on the same cluster with different criteria to refine or coarsen the partitioning.
+    /// This method can be called multiple times on the same cluster with different strategys to refine or coarsen the partitioning.
     ///
-    /// Calling this method with different branching factors will only change the branching factor of clusters that get re-partitioned; clusters that do not
-    /// satisfy the criteria will remain unchanged.
+    /// Calling this method with different `BranchingFactor`s will only change the branching factor of clusters that get re-partitioned; clusters that do not
+    /// satisfy the predicate in the strategy will remain unchanged.
     ///
     /// # Parameters
     ///
     /// * `metric`: A function that computes the distance between two items.
-    /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`, which
-    ///   will partition clusters until all leaves are singletons, i.e., contain only one distinct item.
-    /// * `branching_factor`: The maximum number of children a cluster can have. If less than 2, it is treated as 2.
-    pub fn partition<M: Fn(&I, &I) -> T>(
-        mut self,
-        metric: &M,
-        criteria: &impl Fn(&Self) -> bool,
-        branching_factor: usize,
-    ) -> Self {
+    /// * `strategy`: The `PartitionStrategy` that controls how the tree is constructed.
+    pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, strategy: &PartitionStrategy<Id, I, T, A>) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
                 if items.is_empty() {
@@ -135,7 +297,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
 
-                if !criteria(&self) {
+                if !(strategy.predicate)(&self) {
                     // Criteria not satisfied; do not partition.
                     return self;
                 }
@@ -149,32 +311,54 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 };
 
                 // Split items into two groups based on their distances to two poles.
-                let [left, right] = split_by_poles(items, metric, Some(arg_radius));
+                let ([left, right], span) = split_by_poles(items, metric, Some(arg_radius));
+                self.span = span;
+
                 let mut splits = vec![left, right];
-                while splits.len() < branching_factor.max(2) {
+                if let Some(branching_factor) = strategy.branching_factor.for_cardinality(self.cardinality) {
                     // Further split the largest partition until we reach the desired branching factor.
-                    let (largest_partition_index, _) = splits
-                        .iter()
-                        .enumerate()
-                        .max_by_key(|&(_, partition)| partition.len())
-                        .unwrap_or_else(|| unreachable!("splits is non-empty"));
-                    let largest_partition = splits.swap_remove(largest_partition_index);
-                    if largest_partition.len() <= 2 {
-                        // Cannot split further.
-                        splits.push(largest_partition);
-                        break;
+                    while splits.len() < branching_factor {
+                        let (largest_partition_index, _) = splits
+                            .iter()
+                            .enumerate()
+                            .max_by_key(|&(_, (items, _))| items.len())
+                            .unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        let (items, span) = splits.swap_remove(largest_partition_index);
+                        if items.len() <= 2 {
+                            // Cannot split further.
+                            splits.push((items, span));
+                            break;
+                        }
+                        let (split, _) = split_by_poles(items, metric, None);
+                        splits.extend(split);
                     }
-                    let [left, right] = split_by_poles(largest_partition, metric, None);
-                    splits.push(left);
-                    splits.push(right);
+                } else {
+                    // Use the SRF to continue splitting until the span reduction criterion is met.
+                    let max_child_span = strategy.span_reduction.max_child_span_for(self.span);
+                    let mut splits_heap = SizedHeap::from_iter(splits);
+                    while splits_heap.peek().map_or_else(
+                        || unreachable!("splits is non-empty"),
+                        |(_, &span)| span > max_child_span,
+                    ) {
+                        // Further split the largest partition until all partitions meet the span reduction criterion.
+                        let (items, span) = splits_heap.pop().unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        if items.len() <= 2 {
+                            // Cannot split further.
+                            splits_heap.push((items, span));
+                            break;
+                        }
+                        let (split, _) = split_by_poles(items, metric, None);
+                        splits_heap.extend(split);
+                    }
+                    splits = splits_heap.take_items().collect();
                 }
 
                 // Recursively create children and set the contents to the new children.
                 self.contents = Contents::Children(
                     splits
                         .into_iter()
-                        .map(|child_items| Self::with_center_only(child_items, metric))
-                        .map(|child| child.partition(metric, criteria, branching_factor))
+                        .map(|(child_items, _)| Self::with_center_only(child_items, metric))
+                        .map(|child| child.partition(metric, strategy))
                         .map(Box::new)
                         .collect(),
                 );
@@ -183,7 +367,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Children(children);
 
-                if !criteria(&self) {
+                if !(strategy.predicate)(&self) {
                     // Criteria not satisfied; convert back to a leaf by collecting all items from subtree.
                     self.contents = Contents::Leaf(self.take_subtree_items());
                 }
@@ -201,7 +385,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 self.contents = Contents::Children(
                     children
                         .into_iter()
-                        .map(|child| child.partition(metric, criteria, branching_factor))
+                        .map(|child| child.partition(metric, strategy))
                         .map(Box::new)
                         .collect(),
                 );
@@ -244,14 +428,12 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     pub fn par_new_tree<M: Fn(&I, &I) -> T + Send + Sync>(
         items: Vec<(Id, I)>,
         metric: &M,
-        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
-        branching_factor: usize,
+        strategy: &PartitionStrategy<Id, I, T, A>,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a Cluster tree with no items".to_string());
         }
-        let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria, branching_factor))
+        Ok(Self::par_with_center_only(items, metric).par_partition(metric, strategy))
     }
 
     /// Parallel version of [`with_center_only`](Self::with_center_only).
@@ -265,6 +447,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 radius: T::zero(),
                 lfd: 1.0, // LFD of a singleton is _defined_ as 1
                 radial_sum: T::zero(),
+                span: T::zero(),
                 contents: Contents::Leaf(Vec::new()),
                 annotation: None,
             }
@@ -289,6 +472,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 radius: T::max_value(), // Placeholder; to be computed in partition
                 lfd: f64::MAX,          // Placeholder; to be computed in partition
                 radial_sum: T::zero(),  // Placeholder; to be computed in partition
+                span: T::max_value(),   // Placeholder; to be computed in partition
                 contents: Contents::Leaf(items),
                 annotation: None,
             }
@@ -299,8 +483,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     pub fn par_partition<M: Fn(&I, &I) -> T + Send + Sync>(
         mut self,
         metric: &M,
-        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
-        branching_factor: usize,
+        strategy: &PartitionStrategy<Id, I, T, A>,
     ) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
@@ -341,7 +524,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
 
-                if !criteria(&self) {
+                if !(strategy.predicate)(&self) {
                     // Criteria not satisfied; do not partition.
                     return self;
                 }
@@ -355,32 +538,54 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 };
 
                 // Split items into two groups based on their distances to two poles.
-                let [left, right] = par_split_by_poles(items, metric, Some(arg_radius));
+                let ([left, right], span) = par_split_by_poles(items, metric, Some(arg_radius));
+                self.span = span;
+
                 let mut splits = vec![left, right];
-                while splits.len() < branching_factor.max(2) {
+                if let Some(branching_factor) = strategy.branching_factor.for_cardinality(self.cardinality) {
                     // Further split the largest partition until we reach the desired branching factor.
-                    let (largest_partition_index, _) = splits
-                        .iter()
-                        .enumerate()
-                        .max_by_key(|&(_, partition)| partition.len())
-                        .unwrap_or_else(|| unreachable!("splits is non-empty"));
-                    let largest_partition = splits.swap_remove(largest_partition_index);
-                    if largest_partition.len() <= 2 {
-                        // Cannot split further.
-                        splits.push(largest_partition);
-                        break;
+                    while splits.len() < branching_factor {
+                        let (largest_partition_index, _) = splits
+                            .iter()
+                            .enumerate()
+                            .max_by_key(|&(_, (items, _))| items.len())
+                            .unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        let (items, span) = splits.swap_remove(largest_partition_index);
+                        if items.len() <= 2 {
+                            // Cannot split further.
+                            splits.push((items, span));
+                            break;
+                        }
+                        let (split, _) = par_split_by_poles(items, metric, None);
+                        splits.extend(split);
                     }
-                    let [left, right] = par_split_by_poles(largest_partition, metric, None);
-                    splits.push(left);
-                    splits.push(right);
+                } else {
+                    // Use the SRF to continue splitting until the span reduction criterion is met.
+                    let max_child_span = strategy.span_reduction.max_child_span_for(self.span);
+                    let mut splits_heap = SizedHeap::from_iter(splits);
+                    while splits_heap.peek().map_or_else(
+                        || unreachable!("splits is non-empty"),
+                        |(_, &span)| span > max_child_span,
+                    ) {
+                        // Further split the largest partition until all partitions meet the span reduction criterion.
+                        let (items, span) = splits_heap.pop().unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        if items.len() <= 2 {
+                            // Cannot split further.
+                            splits_heap.push((items, span));
+                            break;
+                        }
+                        let (split, _) = par_split_by_poles(items, metric, None);
+                        splits_heap.extend(split);
+                    }
+                    splits = splits_heap.take_items().collect();
                 }
 
                 // Recursively create children and set the contents to the new children.
                 self.contents = Contents::Children(
                     splits
                         .into_par_iter()
-                        .map(|child_items| Self::par_with_center_only(child_items, metric))
-                        .map(|child| child.par_partition(metric, criteria, branching_factor))
+                        .map(|(child_items, _)| Self::par_with_center_only(child_items, metric))
+                        .map(|child| child.par_partition(metric, strategy))
                         .map(Box::new)
                         .collect(),
                 );
@@ -389,7 +594,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Children(children);
 
-                if !criteria(&self) {
+                if !(strategy.predicate)(&self) {
                     // Criteria not satisfied; convert back to a leaf by collecting all items from subtree.
                     self.contents = Contents::Leaf(self.take_subtree_items());
                 }
@@ -406,7 +611,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // Recursively partition children and set the contents to the new children.
                 let children = children
                     .into_par_iter()
-                    .map(|child| child.par_partition(metric, criteria, branching_factor))
+                    .map(|child| child.par_partition(metric, strategy))
                     .map(Box::new)
                     .collect::<Vec<_>>();
                 self.contents = Contents::Children(children);
@@ -455,11 +660,21 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
 /// * `items` - A vector of items to be split.
 /// * `metric` - A function that computes the distance between two items.
 /// * `arg_left` - Optional index of the left pole in `items`. If `None`, this function will find one.
+///
+/// # Returns
+///
+/// The `([(left_items, left_span), (right_items, right_span)], span)` where:
+///   - `left_items` are items closer to the left pole (including the left pole itself),
+///   - `right_items` are items closer to the right pole (including the right pole itself),
+///   - `left_span` is the distance from the left pole to the farthest item in `left_items`,
+///   - `right_span` is the distance from the right pole to the farthest item in `right_items`.
+///   - `span` is the distance between the two poles.
+#[expect(clippy::type_complexity)]
 fn split_by_poles<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
     mut items: Vec<(Id, I)>,
     metric: &M,
     arg_left: Option<usize>,
-) -> [Vec<(Id, I)>; 2] {
+) -> ([(Vec<(Id, I)>, T); 2], T) {
     let left_pole = if let Some(arg_left) = arg_left {
         items.swap_remove(arg_left)
     } else {
@@ -489,11 +704,11 @@ fn split_by_poles<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
         .collect::<Vec<_>>();
 
     // The right pole is the farthest item from the left pole
-    let arg_right = left_distances
+    let (arg_right, &(span, _)) = left_distances
         .iter()
         .enumerate()
         .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
-        .map_or(0, |(i, _)| i);
+        .unwrap_or_else(|| unreachable!("left_distances is non-empty"));
     // Remove it from the items list.
     let right_pole = left_distances.swap_remove(arg_right).1;
 
@@ -506,17 +721,27 @@ fn split_by_poles<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
         .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
 
     // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-    let left_items = core::iter::once(left_pole)
-        .chain(left_assigned.into_iter().map(|(_, _, item)| item))
-        .collect::<Vec<_>>();
-    let right_items = core::iter::once(right_pole)
-        .chain(right_assigned.into_iter().map(|(_, _, item)| item))
-        .collect::<Vec<_>>();
+    let (left_items, left_distances): (Vec<_>, Vec<_>) = core::iter::once((left_pole, T::zero()))
+        .chain(left_assigned.into_iter().map(|(l, _, item)| (item, l)))
+        .unzip();
+    let (right_items, right_distances): (Vec<_>, Vec<_>) = core::iter::once((right_pole, T::zero()))
+        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
+        .unzip();
 
-    [left_items, right_items]
+    let left_span = left_distances
+        .into_iter()
+        .max_by_key(|&d| MaxItem(0, d))
+        .unwrap_or_else(|| unreachable!("left_items is non-empty"));
+    let right_span = right_distances
+        .into_iter()
+        .max_by_key(|&d| MaxItem(0, d))
+        .unwrap_or_else(|| unreachable!("right_items is non-empty"));
+
+    ([(left_items, left_span), (right_items, right_span)], span)
 }
 
 /// Parallel version of [`split_by_poles`](split_by_poles).
+#[expect(clippy::type_complexity)]
 fn par_split_by_poles<
     Id: Send + Sync,
     I: Send + Sync,
@@ -526,7 +751,7 @@ fn par_split_by_poles<
     mut items: Vec<(Id, I)>,
     metric: &M,
     arg_left: Option<usize>,
-) -> [Vec<(Id, I)>; 2] {
+) -> ([(Vec<(Id, I)>, T); 2], T) {
     let left_pole = if let Some(arg_left) = arg_left {
         items.swap_remove(arg_left)
     } else {
@@ -556,29 +781,38 @@ fn par_split_by_poles<
         .collect::<Vec<_>>();
 
     // The right pole is the farthest item from the left pole
-    let arg_right = left_distances
+    let (arg_right, &(span, _)) = left_distances
         .par_iter()
         .enumerate()
         .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
-        .map_or(0, |(i, _)| i);
+        .unwrap_or_else(|| unreachable!("left_distances is non-empty"));
     // Remove it from the items list.
     let right_pole = left_distances.swap_remove(arg_right).1;
 
     // At this point, we have two poles, and an item list which does not contain the poles.
 
     // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
-    let (left_assigned, right_assigned) = left_distances
-        .into_iter()
+    let (left_assigned, right_assigned): (Vec<_>, Vec<_>) = left_distances
+        .into_par_iter()
         .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
-        .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
+        .partition(|&(l, r, _)| l <= r);
 
     // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-    let left_items = core::iter::once(left_pole)
-        .chain(left_assigned.into_iter().map(|(_, _, item)| item))
-        .collect::<Vec<_>>();
-    let right_items = core::iter::once(right_pole)
-        .chain(right_assigned.into_iter().map(|(_, _, item)| item))
-        .collect::<Vec<_>>();
+    let (left_items, left_distances): (Vec<_>, Vec<_>) = core::iter::once((left_pole, T::zero()))
+        .chain(left_assigned.into_iter().map(|(l, _, item)| (item, l)))
+        .unzip();
+    let (right_items, right_distances): (Vec<_>, Vec<_>) = core::iter::once((right_pole, T::zero()))
+        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
+        .unzip();
 
-    [left_items, right_items]
+    let left_span = left_distances
+        .into_iter()
+        .max_by_key(|&d| MaxItem(0, d))
+        .unwrap_or_else(|| unreachable!("left_items is non-empty"));
+    let right_span = right_distances
+        .into_iter()
+        .max_by_key(|&d| MaxItem(0, d))
+        .unwrap_or_else(|| unreachable!("right_items is non-empty"));
+
+    ([(left_items, left_span), (right_items, right_span)], span)
 }

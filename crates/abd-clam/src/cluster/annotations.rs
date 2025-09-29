@@ -34,6 +34,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
             radius: self.radius,
             lfd: self.lfd,
             radial_sum: self.radial_sum,
+            span: self.span,
             contents,
             annotation: None,
         };
@@ -139,6 +140,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             radius: self.radius,
             lfd: self.lfd,
             radial_sum: self.radial_sum,
+            span: self.span,
             contents,
             annotation: None,
         };

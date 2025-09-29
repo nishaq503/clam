@@ -52,7 +52,7 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
 }
 
 fn build_ball(items: Vec<Vec<f32>>) -> Result<Cluster<usize, Vec<f32>, f32, ()>, String> {
-    Cluster::par_new_binary_tree_minimal(items, &build_metric, &|_| true)
+    Cluster::par_new_tree_minimal(items, &build_metric)
 }
 
 fn search_ball<'a>(root: &'a Cluster<usize, Vec<f32>, f32, ()>, queries: &[Vec<f32>], k: usize) {
