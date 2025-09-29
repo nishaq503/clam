@@ -23,12 +23,13 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         items: Vec<(Id, I)>,
         metric: &M,
         criteria: &impl Fn(&Self) -> bool,
+        branching_factor: usize,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::with_center_only(items, metric).partition(metric, &criteria))
+        Ok(Self::with_center_only(items, metric).partition(metric, &criteria, branching_factor))
     }
 
     /// Private constructor for `Cluster`.
@@ -80,12 +81,21 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// This method can be called multiple times on the same cluster with different criteria to refine or coarsen the partitioning.
     ///
+    /// Calling this method with different branching factors will only change the branching factor of clusters that get re-partitioned; clusters that do not
+    /// satisfy the criteria will remain unchanged.
+    ///
     /// # Parameters
     ///
     /// * `metric`: A function that computes the distance between two items.
     /// * `criteria`: A function that determines whether a cluster should be partitioned into child clusters. As a default, the user can use `&|_| true`, which
     ///   will partition clusters until all leaves are singletons, i.e., contain only one distinct item.
-    pub fn partition<M: Fn(&I, &I) -> T>(mut self, metric: &M, criteria: &impl Fn(&Self) -> bool) -> Self {
+    /// * `branching_factor`: The maximum number of children a cluster can have. If less than 2, it is treated as 2.
+    pub fn partition<M: Fn(&I, &I) -> T>(
+        mut self,
+        metric: &M,
+        criteria: &impl Fn(&Self) -> bool,
+        branching_factor: usize,
+    ) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
                 if items.is_empty() {
@@ -133,50 +143,41 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 // Criteria are satisfied, so we partition the cluster.
 
                 // Take ownership of the items for partitioning.
-                let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                let items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
                     Contents::Leaf(items) => items,
                     Contents::Children(_) => unreachable!("We just replaced contents with a leaf"),
                 };
 
-                // The left pole is the farthest item from the center. Remove it from the items list.
-                let left_pole = items.swap_remove(arg_radius);
-
-                // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
-                let mut left_distances = items
-                    .into_iter()
-                    .map(|item| (metric(&left_pole.1, &item.1), item))
-                    .collect::<Vec<_>>();
-
-                // The right pole is the farthest item from the left pole
-                let arg_right = left_distances
-                    .iter()
-                    .enumerate()
-                    .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
-                    .map_or(0, |(i, _)| i);
-                // Remove it from the items list.
-                let right_pole = left_distances.swap_remove(arg_right).1;
-
-                // At this point, we have two poles, and an item list which does not contain the poles.
-
-                // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
-                let (left_assigned, right_assigned) = left_distances
-                    .into_iter()
-                    .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
-                    .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
-
-                // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-                let left_items = core::iter::once(left_pole)
-                    .chain(left_assigned.into_iter().map(|(_, _, item)| item))
-                    .collect::<Vec<_>>();
-                let right_items = core::iter::once(right_pole)
-                    .chain(right_assigned.into_iter().map(|(_, _, item)| item))
-                    .collect::<Vec<_>>();
+                // Split items into two groups based on their distances to two poles.
+                let [left, right] = split_by_poles(items, metric, Some(arg_radius));
+                let mut splits = vec![left, right];
+                while splits.len() < branching_factor.max(2) {
+                    // Further split the largest partition until we reach the desired branching factor.
+                    let (largest_partition_index, _) = splits
+                        .iter()
+                        .enumerate()
+                        .max_by_key(|&(_, partition)| partition.len())
+                        .unwrap_or_else(|| unreachable!("splits is non-empty"));
+                    let largest_partition = splits.swap_remove(largest_partition_index);
+                    if largest_partition.len() <= 2 {
+                        // Cannot split further.
+                        splits.push(largest_partition);
+                        break;
+                    }
+                    let [left, right] = split_by_poles(largest_partition, metric, None);
+                    splits.push(left);
+                    splits.push(right);
+                }
 
                 // Recursively create children and set the contents to the new children.
-                self.contents = Contents::Children(vec![
-                    Box::new(Self::with_center_only(left_items, metric).partition(metric, criteria)),
-                    Box::new(Self::with_center_only(right_items, metric).partition(metric, criteria)),
-                ]);
+                self.contents = Contents::Children(
+                    splits
+                        .into_iter()
+                        .map(|child_items| Self::with_center_only(child_items, metric))
+                        .map(|child| child.partition(metric, criteria, branching_factor))
+                        .map(Box::new)
+                        .collect(),
+                );
             }
             Contents::Children(children) => {
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
@@ -200,7 +201,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                 self.contents = Contents::Children(
                     children
                         .into_iter()
-                        .map(|child| child.partition(metric, criteria))
+                        .map(|child| child.partition(metric, criteria, branching_factor))
                         .map(Box::new)
                         .collect(),
                 );
@@ -244,12 +245,13 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         items: Vec<(Id, I)>,
         metric: &M,
         criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+        branching_factor: usize,
     ) -> Result<Self, String> {
         if items.is_empty() {
             return Err("Cannot create a Cluster tree with no items".to_string());
         }
         let criteria = |b: &Self| !b.is_singleton() && criteria(b);
-        Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria))
+        Ok(Self::par_with_center_only(items, metric).par_partition(metric, &criteria, branching_factor))
     }
 
     /// Parallel version of [`with_center_only`](Self::with_center_only).
@@ -298,6 +300,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
         mut self,
         metric: &M,
         criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+        branching_factor: usize,
     ) -> Self {
         match self.contents {
             Contents::Leaf(items) => {
@@ -346,51 +349,41 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // Criteria are satisfied, so we partition the cluster.
 
                 // Take ownership of the items for partitioning.
-                let mut items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
+                let items = match core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new())) {
                     Contents::Leaf(items) => items,
                     Contents::Children(_) => unreachable!("We just replaced contents with a leaf"),
                 };
 
-                // The left pole is the farthest item from the center. Remove it from the items list.
-                let left_pole = items.swap_remove(arg_radius);
-
-                // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
-                let mut left_distances = items
-                    .into_par_iter()
-                    .map(|item| (metric(&left_pole.1, &item.1), item))
-                    .collect::<Vec<_>>();
-
-                // The right pole is the farthest item from the left pole
-                let arg_right = left_distances
-                    .par_iter()
-                    .enumerate()
-                    .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
-                    .map_or(0, |(i, _)| i);
-                // Remove it from the items list.
-                let right_pole = left_distances.swap_remove(arg_right).1;
-
-                // At this point, we have two poles, and an item list which does not contain the poles.
-
-                // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
-                let (left_assigned, right_assigned): (Vec<_>, Vec<_>) = left_distances
-                    .into_par_iter()
-                    .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
-                    .partition(|&(l, r, _)| l <= r);
-
-                // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-                let left_items = core::iter::once(left_pole)
-                    .chain(left_assigned.into_iter().map(|(_, _, item)| item))
-                    .collect::<Vec<_>>();
-                let right_items = core::iter::once(right_pole)
-                    .chain(right_assigned.into_iter().map(|(_, _, item)| item))
-                    .collect::<Vec<_>>();
+                // Split items into two groups based on their distances to two poles.
+                let [left, right] = par_split_by_poles(items, metric, Some(arg_radius));
+                let mut splits = vec![left, right];
+                while splits.len() < branching_factor.max(2) {
+                    // Further split the largest partition until we reach the desired branching factor.
+                    let (largest_partition_index, _) = splits
+                        .iter()
+                        .enumerate()
+                        .max_by_key(|&(_, partition)| partition.len())
+                        .unwrap_or_else(|| unreachable!("splits is non-empty"));
+                    let largest_partition = splits.swap_remove(largest_partition_index);
+                    if largest_partition.len() <= 2 {
+                        // Cannot split further.
+                        splits.push(largest_partition);
+                        break;
+                    }
+                    let [left, right] = par_split_by_poles(largest_partition, metric, None);
+                    splits.push(left);
+                    splits.push(right);
+                }
 
                 // Recursively create children and set the contents to the new children.
-                let (left, right) = rayon::join(
-                    || Self::par_with_center_only(left_items, metric).par_partition(metric, criteria),
-                    || Self::par_with_center_only(right_items, metric).par_partition(metric, criteria),
+                self.contents = Contents::Children(
+                    splits
+                        .into_par_iter()
+                        .map(|child_items| Self::par_with_center_only(child_items, metric))
+                        .map(|child| child.par_partition(metric, criteria, branching_factor))
+                        .map(Box::new)
+                        .collect(),
                 );
-                self.contents = Contents::Children(vec![Box::new(left), Box::new(right)]);
             }
             Contents::Children(children) => {
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
@@ -413,7 +406,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                 // Recursively partition children and set the contents to the new children.
                 let children = children
                     .into_par_iter()
-                    .map(|child| child.par_partition(metric, criteria))
+                    .map(|child| child.par_partition(metric, criteria, branching_factor))
                     .map(Box::new)
                     .collect::<Vec<_>>();
                 self.contents = Contents::Children(children);
@@ -451,4 +444,141 @@ pub fn num_samples(population_size: usize, sqrt_thresh: usize, log2_thresh: usiz
                 (log2_thresh as f64).sqrt() + ((population_size - sqrt_thresh - log2_thresh) as f64).log2()
             } as usize
     }
+}
+
+/// Splits items into two groups based on their distances to two poles.
+///
+/// The caller is responsible for ensuring that `items` has at least two elements.
+///
+/// # Arguments
+///
+/// * `items` - A vector of items to be split.
+/// * `metric` - A function that computes the distance between two items.
+/// * `arg_left` - Optional index of the left pole in `items`. If `None`, this function will find one.
+fn split_by_poles<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
+    mut items: Vec<(Id, I)>,
+    metric: &M,
+    arg_left: Option<usize>,
+) -> [Vec<(Id, I)>; 2] {
+    let left_pole = if let Some(arg_left) = arg_left {
+        items.swap_remove(arg_left)
+    } else {
+        let maybe_pole = items.pop().unwrap_or_else(|| unreachable!("items is non-empty"));
+
+        let mut maybe_distances = items
+            .into_iter()
+            .map(|item| (metric(&maybe_pole.1, &item.1), item))
+            .collect::<Vec<_>>();
+
+        let arg_left = maybe_distances
+            .iter()
+            .enumerate()
+            .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
+            .map_or(0, |(i, _)| i);
+        let (_, left_pole) = maybe_distances.swap_remove(arg_left);
+
+        items = maybe_distances.into_iter().map(|(_, item)| item).collect();
+        items.push(maybe_pole);
+        left_pole
+    };
+
+    // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
+    let mut left_distances = items
+        .into_iter()
+        .map(|item| (metric(&left_pole.1, &item.1), item))
+        .collect::<Vec<_>>();
+
+    // The right pole is the farthest item from the left pole
+    let arg_right = left_distances
+        .iter()
+        .enumerate()
+        .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
+        .map_or(0, |(i, _)| i);
+    // Remove it from the items list.
+    let right_pole = left_distances.swap_remove(arg_right).1;
+
+    // At this point, we have two poles, and an item list which does not contain the poles.
+
+    // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
+    let (left_assigned, right_assigned) = left_distances
+        .into_iter()
+        .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
+        .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
+
+    // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
+    let left_items = core::iter::once(left_pole)
+        .chain(left_assigned.into_iter().map(|(_, _, item)| item))
+        .collect::<Vec<_>>();
+    let right_items = core::iter::once(right_pole)
+        .chain(right_assigned.into_iter().map(|(_, _, item)| item))
+        .collect::<Vec<_>>();
+
+    [left_items, right_items]
+}
+
+/// Parallel version of [`split_by_poles`](split_by_poles).
+fn par_split_by_poles<
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+>(
+    mut items: Vec<(Id, I)>,
+    metric: &M,
+    arg_left: Option<usize>,
+) -> [Vec<(Id, I)>; 2] {
+    let left_pole = if let Some(arg_left) = arg_left {
+        items.swap_remove(arg_left)
+    } else {
+        let maybe_pole = items.pop().unwrap_or_else(|| unreachable!("items is non-empty"));
+
+        let mut maybe_distances = items
+            .into_par_iter()
+            .map(|item| (metric(&maybe_pole.1, &item.1), item))
+            .collect::<Vec<_>>();
+
+        let arg_left = maybe_distances
+            .par_iter()
+            .enumerate()
+            .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
+            .map_or(0, |(i, _)| i);
+        let (_, left_pole) = maybe_distances.swap_remove(arg_left);
+
+        items = maybe_distances.into_iter().map(|(_, item)| item).collect();
+        items.push(maybe_pole);
+        left_pole
+    };
+
+    // Compute distances from left pole to all other items, and keep the distances with their respective items for later.
+    let mut left_distances = items
+        .into_par_iter()
+        .map(|item| (metric(&left_pole.1, &item.1), item))
+        .collect::<Vec<_>>();
+
+    // The right pole is the farthest item from the left pole
+    let arg_right = left_distances
+        .par_iter()
+        .enumerate()
+        .max_by_key(|&(i, &(d, _))| crate::utils::MaxItem(i, d))
+        .map_or(0, |(i, _)| i);
+    // Remove it from the items list.
+    let right_pole = left_distances.swap_remove(arg_right).1;
+
+    // At this point, we have two poles, and an item list which does not contain the poles.
+
+    // Compute distances from right pole to all items and partition items based on which pole they are closer to. Ties go to the left pole.
+    let (left_assigned, right_assigned) = left_distances
+        .into_iter()
+        .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
+        .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
+
+    // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
+    let left_items = core::iter::once(left_pole)
+        .chain(left_assigned.into_iter().map(|(_, _, item)| item))
+        .collect::<Vec<_>>();
+    let right_items = core::iter::once(right_pole)
+        .chain(right_assigned.into_iter().map(|(_, _, item)| item))
+        .collect::<Vec<_>>();
+
+    [left_items, right_items]
 }

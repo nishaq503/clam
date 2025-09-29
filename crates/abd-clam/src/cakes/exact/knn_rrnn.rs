@@ -80,7 +80,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             }
         }
 
-        heap.items().map(|((id, item), d)| (id, item, d)).collect()
+        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 

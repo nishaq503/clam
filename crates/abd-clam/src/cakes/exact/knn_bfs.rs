@@ -77,7 +77,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             candidates = next_candidates;
         }
 
-        hits.items().map(|((id, item), d)| (id, item, d)).collect()
+        hits.take_items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 

@@ -67,7 +67,10 @@ impl<Id, I, T: DistanceValue + Debug, A: Debug> Debug for Contents<Id, I, T, A> 
 }
 
 impl<I, T: DistanceValue> Cluster<usize, I, T, ()> {
-    /// Create a new tree of `Cluster`s with `usize` indices as item metadata, the `()` type for annotations.
+    /// Create a new tree of `Cluster`s with sensible defaults for the type parameters. These are:
+    ///
+    /// * `Id = usize` (the original index of the item in the input vector)
+    /// * `A = ()` (no annotations)
     ///
     /// # Errors
     ///
@@ -76,9 +79,24 @@ impl<I, T: DistanceValue> Cluster<usize, I, T, ()> {
         items: Vec<I>,
         metric: &M,
         criteria: &impl Fn(&Self) -> bool,
+        branching_factor: usize,
     ) -> Result<Self, String> {
         let indexed_items = items.into_iter().enumerate().collect();
-        Self::new_tree(indexed_items, metric, criteria)
+        Self::new_tree(indexed_items, metric, criteria, branching_factor)
+    }
+
+    /// Same as [`new_tree_minimal`](Self::new_tree_minimal) but for a binary tree (i.e., branching factor of 2).
+    ///
+    /// # Errors
+    ///
+    /// See [`new_tree`](Self::new_tree) for details.
+    pub fn new_binary_tree_minimal<M: Fn(&I, &I) -> T>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &impl Fn(&Self) -> bool,
+    ) -> Result<Self, String> {
+        let indexed_items = items.into_iter().enumerate().collect();
+        Self::new_tree(indexed_items, metric, criteria, 2)
     }
 }
 
@@ -92,9 +110,24 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Cluster<usize, I, T, ()> {
         items: Vec<I>,
         metric: &M,
         criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+        branching_factor: usize,
     ) -> Result<Self, String> {
         let indexed_items = items.into_iter().enumerate().collect();
-        Self::par_new_tree(indexed_items, metric, criteria)
+        Self::par_new_tree(indexed_items, metric, criteria, branching_factor)
+    }
+
+    /// Same as [`par_new_tree_minimal`](Self::par_new_tree_minimal) but for a binary tree (i.e., branching factor of 2).
+    ///
+    /// # Errors
+    ///
+    /// See [`new_tree`](Self::new_tree) for details.
+    pub fn par_new_binary_tree_minimal<M: Fn(&I, &I) -> T + Send + Sync>(
+        items: Vec<I>,
+        metric: &M,
+        criteria: &(impl Fn(&Self) -> bool + Send + Sync),
+    ) -> Result<Self, String> {
+        let indexed_items = items.into_iter().enumerate().collect();
+        Self::par_new_tree(indexed_items, metric, criteria, 2)
     }
 }
 

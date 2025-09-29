@@ -12,7 +12,7 @@ pub struct RnnLinear<T: DistanceValue>(pub T);
 
 impl<T: DistanceValue> std::fmt::Display for RnnLinear<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RnnLinear(radius={})", self.0.to_f64().unwrap_or(f64::NAN))
+        write!(f, "RnnLinear(radius={})", self.0)
     }
 }
 

@@ -27,15 +27,15 @@ pub enum AnnDataset {
 impl AnnDataset {
     pub fn name(&self) -> &'static str {
         match self {
-            Self::FashionMnist => "fmnist-784-euclidean",
-            Self::Mnist => "mnist-784-euclidean",
-            Self::Sift => "sift-128-euclidean",
-            Self::Gist => "gist-960-euclidean",
-            Self::Glove25 => "glove-25-cosine",
-            Self::Glove50 => "glove-50-cosine",
-            Self::Glove100 => "glove-100-cosine",
-            Self::Glove200 => "glove-200-cosine",
-            Self::DeepImage => "deepimage-96-cosine",
+            Self::FashionMnist => "fmnist-784",
+            Self::Mnist => "mnist-784",
+            Self::Sift => "sift-128",
+            Self::Gist => "gist-960",
+            Self::Glove25 => "glove-25",
+            Self::Glove50 => "glove-50",
+            Self::Glove100 => "glove-100",
+            Self::Glove200 => "glove-200",
+            Self::DeepImage => "deepimage-96",
         }
     }
 

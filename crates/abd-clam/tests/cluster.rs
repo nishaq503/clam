@@ -14,7 +14,7 @@ fn new() -> Result<(), String> {
 
     let car = items.len();
     let criteria = |b: &Cluster<_, _, _, _>| b.cardinality() < car;
-    let root = Cluster::new_tree_minimal(items, &metric, &criteria)?;
+    let root = Cluster::new_binary_tree_minimal(items, &metric, &criteria)?;
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
@@ -24,7 +24,7 @@ fn new() -> Result<(), String> {
     assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
 
     let criteria = |b: &Cluster<_, _, _, _>| b.cardinality() > 1;
-    let root = root.partition(&metric, &criteria);
+    let root = root.partition(&metric, &criteria, 2);
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
@@ -53,7 +53,7 @@ fn par_new() -> Result<(), String> {
 
     let car = items.len();
     let criteria = |b: &Cluster<_, _, _, _>| b.cardinality() < car;
-    let root = Cluster::par_new_tree_minimal(items, &metric, &criteria)?;
+    let root = Cluster::par_new_binary_tree_minimal(items, &metric, &criteria)?;
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
@@ -62,7 +62,7 @@ fn par_new() -> Result<(), String> {
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     let criteria = |b: &Cluster<_, _, _, _>| b.cardinality() > 1;
-    let root = root.par_partition(&metric, &criteria);
+    let root = root.par_partition(&metric, &criteria, 2);
 
     assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
@@ -95,7 +95,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Cluster::par_new_tree_minimal(data, &metric, &|_| true)?;
+        let root = Cluster::par_new_binary_tree_minimal(data, &metric, &|_| true)?;
 
         let n_clusters = root.subtree().len();
 
@@ -130,7 +130,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Cluster::par_new_tree_minimal(data, &metric, &|_| true)?;
+        let root = Cluster::par_new_binary_tree_minimal(data, &metric, &|_| true)?;
 
         let n_clusters = root.subtree().len();
 

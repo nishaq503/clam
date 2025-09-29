@@ -3,7 +3,7 @@
 use core::cmp::Reverse;
 
 use crate::{
-    cakes::{d_min, BatchedSearch, Search},
+    cakes::{d_max, d_min, BatchedSearch, Search},
     utils::SizedHeap,
     Cluster, DistanceValue,
 };
@@ -25,12 +25,12 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             return root.distances_to_all_items(query, metric);
         }
 
-        let mut candidates = SizedHeap::<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>::new(None);
+        let mut candidates = SizedHeap::<&'a Cluster<Id, I, T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
 
         let d = metric(query, root.center());
         hits.push(((root.center_id(), root.center()), d));
-        candidates.push((root, Reverse((d_min(root, d), d))));
+        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
@@ -41,14 +41,14 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates
                 .peek()
-                .map_or_else(T::min_value, |(_, &Reverse((d_min, _)))| d_min);
+                .map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
             if hits.is_full() && max_h < min_c {
                 // The closest candidate cannot improve our hits, so we can stop.
                 break;
             }
         }
 
-        hits.items().map(|((id, item), d)| (id, item, d)).collect()
+        hits.take_items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 
@@ -63,7 +63,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
 pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
     query: &I,
     metric: &M,
-    candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T)>>,
+    candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,
 ) -> (&'a Cluster<Id, I, T, A>, T, usize) {
     profi::prof!("KnnDfs::pop_till_leaf");
@@ -83,7 +83,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
                 for child in children {
                     let d = metric(query, child.center());
                     hits.push(((child.center_id(), child.center()), d));
-                    candidates.push((child, Reverse((d_min(child, d), d))));
+                    candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
                 }
             },
         );
@@ -91,7 +91,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
 
     let (leaf, d) = candidates.pop().map_or_else(
         || unreachable!("`candidates` is non-empty."),
-        |(leaf, Reverse((_, d)))| (leaf, d),
+        |(leaf, Reverse((_, _, d)))| (leaf, d),
     );
     (leaf, d, distance_computations)
 }

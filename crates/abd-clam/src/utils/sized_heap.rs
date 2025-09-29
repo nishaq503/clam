@@ -68,6 +68,15 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
         }
     }
 
+    /// Returns the sum of the items in the heap.
+    #[must_use]
+    pub fn sum(&self) -> T
+    where
+        T: std::iter::Sum + Copy,
+    {
+        self.heap.iter().map(|MinItem(_, x)| *x).sum()
+    }
+
     /// Peeks at the top item in the heap.
     #[must_use]
     pub fn peek(&self) -> Option<(&A, &T)> {
@@ -80,7 +89,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     }
 
     /// Consumes the `SizedHeap` and returns the items in an iterator.
-    pub fn items(self) -> impl Iterator<Item = (A, T)> {
+    pub fn take_items(self) -> impl Iterator<Item = (A, T)> {
         self.heap.into_iter().map(|MinItem(a, x)| (a, x))
     }
 
@@ -104,7 +113,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
 
     /// Merge two heaps into one.
     pub fn merge(&mut self, other: Self) {
-        self.extend(other.items());
+        self.extend(other.take_items());
     }
 
     /// Retains only the elements that satisfy the predicate.

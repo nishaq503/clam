@@ -21,7 +21,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(root.all_items().into_iter().map(|item| (item, metric(query, &item.1))));
-        heap.items().map(|((id, item), d)| (id, item, d)).collect()
+        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
     }
 
     fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>
@@ -40,7 +40,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
                 .map(|item| (item, metric(query, &item.1)))
                 .collect::<Vec<_>>(),
         );
-        heap.items().map(|((id, item), d)| (id, item, d)).collect()
+        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
     }
 }
 
@@ -57,7 +57,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
             .map(|query| {
                 let mut heap = SizedHeap::new(Some(self.0));
                 heap.extend(all_items.iter().map(|item| (item, metric(query, &item.1))));
-                heap.items().map(|((id, item), d)| (id, item, d)).collect()
+                heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
             })
             .collect()
     }
@@ -87,7 +87,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
                         .map(|item| (item, metric(query, &item.1)))
                         .collect::<Vec<_>>(),
                 );
-                heap.items().map(|((id, item), d)| (id, item, d)).collect()
+                heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
             })
             .collect()
     }

@@ -5,6 +5,8 @@ pub mod cakes;
 pub mod cluster;
 pub mod utils; // Intended for private use, but made public for testing purposes
 
+use std::fmt::{Debug, Display};
+
 pub use cluster::Cluster;
 
 /// A trait for types that can be used as distance values in clustering algorithms.
@@ -17,6 +19,8 @@ pub trait DistanceValue:
     + std::iter::Sum
     + PartialOrd
     + Copy
+    + Display
+    + Debug
 {
     /// Returns half of the value.
     #[must_use]
@@ -35,6 +39,8 @@ impl<T> DistanceValue for T where
         + std::iter::Sum
         + PartialOrd
         + Copy
+        + Display
+        + Debug
 {
 }
 
