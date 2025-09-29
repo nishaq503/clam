@@ -8,6 +8,7 @@ use symagen::random_data;
 
 use distances::simd;
 
+use distances::blas::{cosine_f32, cosine_f64};
 use distances::vectors::cosine as cosine_generic;
 
 fn simd_f32(c: &mut Criterion) {
@@ -33,6 +34,11 @@ fn simd_f32(c: &mut Criterion) {
         let id = BenchmarkId::new("Cosine-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
             b.iter(|| black_box(simd::cosine_f32(&vecs[0], &vecs[1])))
+        });
+
+        let id = BenchmarkId::new("Cosine-blas", dimensionality);
+        group.bench_with_input(id, &dimensionality, |b, _| {
+            b.iter(|| black_box(cosine_f32(&vecs[0], &vecs[1])))
         });
     }
     group.finish();
@@ -61,6 +67,11 @@ fn simd_f64(c: &mut Criterion) {
         let id = BenchmarkId::new("Cosine-simd", dimensionality);
         group.bench_with_input(id, &dimensionality, |b, _| {
             b.iter(|| black_box(simd::cosine_f64(&vecs[0], &vecs[1])))
+        });
+
+        let id = BenchmarkId::new("Cosine-blas", dimensionality);
+        group.bench_with_input(id, &dimensionality, |b, _| {
+            b.iter(|| black_box(cosine_f64(&vecs[0], &vecs[1])))
         });
     }
     group.finish();
