@@ -9,6 +9,8 @@ use crate::{
 };
 
 /// K-nearest neighbors (KNN) search using the Greedy Branch algorithm.
+///
+/// The field is the number of nearest neighbors to find (k).
 pub struct KnnBranch(pub usize);
 
 impl std::fmt::Display for KnnBranch {

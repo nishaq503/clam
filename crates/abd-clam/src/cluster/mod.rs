@@ -2,12 +2,12 @@
 
 use core::fmt::Debug;
 
-pub use rayon::prelude::*;
+use rayon::prelude::*;
 
 use crate::DistanceValue;
 
-pub mod annotations;
-pub mod partition;
+mod annotations;
+mod partition;
 mod partition_strategy;
 
 pub use partition_strategy::{expected_num_clusters, BranchingFactor, PartitionStrategy, SpanReductionFactor};
@@ -233,7 +233,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 }
 
 impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + Sync> Cluster<Id, I, T, A> {
-    /// Parallel version of [`distance_to_all`](Self::distances_to_all).
+    /// Parallel version of [`distance_to_all_items`](Self::distances_to_all_items).
     pub fn par_distances_to_all_items<M: Fn(&I, &I) -> T + Send + Sync>(
         &self,
         item: &I,

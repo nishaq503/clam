@@ -1,4 +1,4 @@
-//! Approximate Nearest Neighbor (ANN) search algorithms.
+//! Approximate search algorithms in CAKES.
 
 mod knn_dfs;
 

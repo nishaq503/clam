@@ -24,7 +24,7 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Disp
     /// A vector of tuples containing the index and distance of the nearest neighbors.
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>;
 
-    /// Parallel version of [`Search::search`](Search::search).
+    /// Parallel version of [`Search::search`].
     ///
     /// The default implementation offers no parallelism. This method should be overridden for algorithms that will actually benefit from parallelism when
     /// searching for a single query.
@@ -43,7 +43,7 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Disp
 
 /// A `BatchedSearch` trait for defining how to search for nearest neighbors for a batch of queries.
 pub trait BatchedSearch<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: Search<Id, I, T, M, A> {
-    /// Batched version of [`Search::search`](Search::search).
+    /// Batched version of [`Search::search`].
     fn batch_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
@@ -53,7 +53,7 @@ pub trait BatchedSearch<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: Search<
         queries.iter().map(|query| self.search(root, metric, query)).collect()
     }
 
-    /// Parallel batched version of [`Search::search`](Search::search).
+    /// Parallel batched version of [`Search::search`].
     fn par_batch_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
@@ -74,7 +74,7 @@ pub trait BatchedSearch<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: Search<
             .collect()
     }
 
-    /// Parallel batched version of [`Search::par_search`](Search::par_search).
+    /// Parallel batched version of [`Search::par_search`].
     fn par_batch_par_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,

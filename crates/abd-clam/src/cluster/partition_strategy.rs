@@ -8,14 +8,14 @@ use super::Cluster;
 
 /// Strategy for partitioning a `Cluster` into child clusters.
 ///
-/// Our implementation of the heiarchical may evolve over time. For now the this strategy is used as follows:
+/// Our implementation of the hierarchical clustering algorithm may evolve over time. For now the strategy is used as follows:
 ///   - The `partition` method (and its variants) will first check the `predicate` to see if the cluster should be partitioned. If the `predicate` is satisfied,
 ///     we proceed to partition the cluster; otherwise, we leave the cluster as a leaf.
-///   - If the `branching_factor` not `Adaptive`, we will partition the cluster into at most `branching_factor` children.
-///   - If the `branching_factor` is `Adaptive`, we will use the `span_reduction` factor to determine how many children to create. We will continue partitioning
-///     the cluster until the span of each child would likely be small enough to satisfy the `span_reduction` factor.
+///   - If the `branching_factor` not `SRF`, we use the approach described in the [`BranchingFactor`] enum to determine how many children to create.
+///   - If the `branching_factor` is `SRF`, we will use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
+///
+/// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
 #[must_use]
-#[non_exhaustive]
 pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
     pub(crate) predicate: P,
@@ -67,7 +67,7 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
 
     /// Sets the predicate that determines whether a cluster should be partitioned into child clusters.
     ///
-    /// The default predicate will allow partitioning of any cluster with more than two or more non-center items.
+    /// The default predicate will allow partitioning of any cluster with more than one non-center item.
     pub fn with_predicate(mut self, predicate: P) -> Self {
         self.predicate = predicate;
         self
@@ -75,7 +75,7 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
 
     /// Sets the branching factor of the cluster tree.
     ///
-    /// The default branching factor is `Adaptive(32)`.
+    /// The default branching factor is `SRF`.
     pub fn with_branching_factor(mut self, branching_factor: BranchingFactor) -> Self {
         self.branching_factor = if let BranchingFactor::Fixed(n) = branching_factor {
             BranchingFactor::Fixed(n.max(2))
@@ -100,13 +100,13 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
     }
 }
 
-/// The branching factor of a `Cluster` controls how many child clusters a parent cluster can have.
+/// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the `SpanReductionFactor`).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BranchingFactor {
     /// Each cluster can have zero or `n` children. If `n < 2`, it is treated as 2.
     Fixed(usize),
-    /// A cluster with `n` non-center items can have up to `O(log n)` children.
+    /// A cluster with `n` non-center items can have between 2 and `ceil(log n)` children.
     Logarithmic,
     /// The branching factor is adaptively chosen (with a minimum of 2 and a maximum of the given value) to minimize the expected ratio of the size of the
     /// subtree to the cardinality of the cluster.
@@ -127,7 +127,7 @@ impl std::fmt::Display for BranchingFactor {
 }
 
 impl BranchingFactor {
-    /// Returns the branching factor for a cluster with the given the cardinality of the cluster.
+    /// Returns the branching factor for a cluster with the given the cardinality of the cluster, if not `SRF`.
     #[expect(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -167,9 +167,9 @@ impl From<usize> for BranchingFactor {
 /// The Span Reduction Factor (SRF) of a `Cluster` controls how much the span of child clusters should be reduced compared to their parent cluster.
 ///
 /// The `span` of a cluster is the distance between any two of its extremal items, e.g. the distance between poles used for partitioning in a binary tree. This
-/// can be thought of as an analog to the diameter of a cluster in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of child
-/// clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at most
-/// half the span of its parent.
+/// can be thought of as an analog to the diameter of a covering sphere in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of
+/// child clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at
+/// most half the span of its parent.
 #[non_exhaustive]
 pub enum SpanReductionFactor {
     /// Use a fixed SRF value. This must be in the range (1, ∞). If the value is outside this range, the SRF defaults to `√2`.
@@ -265,12 +265,15 @@ impl From<f32> for SpanReductionFactor {
     }
 }
 
-/// Recursively finds the expected number of clusters in a balanced tree with the given branching factor.
+/// Recursively finds the number of clusters in a balanced tree with the given branching factor.
 ///
 /// This implements the following recurrence relation:
-///   - `R(1) = 1` and `R(2) = 1`, the leaf clusters
-///   - `R(n) = n - 1`, for `3 <= n <= k + 1`, the parents of leaf clusters
-///   - `R(1 + i + k * n) = 1 + i * R(n + 1) + (k - i) * R(n)`, for `n > k + 1` and `0 <= i < k`
+///   - `R(1) = 1` and `R(2) = 1`, the leaf clusters.
+///   - `R(n) = n - 1`, for `3 <= n <= k + 1`, the parents of leaf clusters.
+///   - `R(1 + i + k * n) = 1 + i * R(n + 1) + (k - i) * R(n)`, for `n > k + 1` and `0 <= i < k`.
+///
+/// This function is used to determine the number of children to create when the [`BranchingFactor`] is `Adaptive`. The chosen branching factor is the value of
+/// `k` that minimizes the expected ratio of the size of the subtree to the cardinality of the cluster.
 ///
 /// # Arguments
 ///

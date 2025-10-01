@@ -8,6 +8,8 @@ use crate::{
 };
 
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
+///
+/// The field is the radius of the query ball to search within.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
 impl<T: DistanceValue> std::fmt::Display for RnnLinear<T> {

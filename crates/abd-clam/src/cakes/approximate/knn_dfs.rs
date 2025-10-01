@@ -9,6 +9,14 @@ use crate::{
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
+///
+/// The fields are:
+///   1. `k`: The number of nearest neighbors to find.
+///   2. `max_leaves`: The maximum number of leaf nodes to visit (`usize::MAX` for no limit).
+///   3. `max_dist_comps`: The maximum number of distance computations to perform (`usize::MAX` for no limit).
+///
+/// If both `max_leaves` and `max_dist_comps` are set to `usize::MAX`, the search is exact and will have the same asymptotic behavior as the
+/// [`exact variant`](crate::cakes::KnnDfs) of this algorithm.
 pub struct KnnDfs(pub usize, pub usize, pub usize);
 
 impl std::fmt::Display for KnnDfs {

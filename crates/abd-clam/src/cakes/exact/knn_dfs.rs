@@ -9,6 +9,8 @@ use crate::{
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
+///
+/// The field is the number of nearest neighbors to find (k).
 pub struct KnnDfs(pub usize);
 
 impl std::fmt::Display for KnnDfs {

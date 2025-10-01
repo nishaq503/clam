@@ -8,6 +8,8 @@ use crate::{
 };
 
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
+///
+/// The field is the radius of the query ball to search within.
 pub struct RnnChess<T: DistanceValue>(pub T);
 
 impl<T: DistanceValue> std::fmt::Display for RnnChess<T> {

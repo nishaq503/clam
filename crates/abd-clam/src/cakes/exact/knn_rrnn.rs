@@ -9,6 +9,8 @@ use crate::{
 use super::rnn_chess::tree_search;
 
 /// K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
+///
+/// The field is the number of nearest neighbors to find (k).
 pub struct KnnRrnn(pub usize);
 
 impl std::fmt::Display for KnnRrnn {

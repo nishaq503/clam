@@ -9,6 +9,8 @@ use crate::{
 };
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
+///
+/// The field is the number of nearest neighbors to find (k).
 pub struct KnnLinear(pub usize);
 
 impl std::fmt::Display for KnnLinear {

@@ -69,7 +69,7 @@ pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(I
         .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }
 
-/// Parallel version of [`geometric_median`](geometric_median).
+/// Parallel version of [`geometric_median`].
 pub fn par_geometric_median<
     Id: Send + Sync,
     I: Send + Sync,
