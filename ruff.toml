@@ -53,3 +53,9 @@ convention = "google"
 "pypi/distances/**/*.pyi" = [
   "PYI021", # Docstrings should not be included in stubs
 ]
+"**/notebooks/*.ipynb" = [ # Ignore more lints in Jupyter notebooks.
+  "T201", # Use of `print` function.
+  "EM102", # Use of f-string in exceptions.
+  "TRY003", # Long message in exception class.
+  "PD002", # `inplace=True` in dataframe method.
+]
