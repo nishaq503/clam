@@ -12,7 +12,22 @@ mod partition_strategy;
 
 pub use partition_strategy::{expected_num_clusters, BranchingFactor, PartitionStrategy, SpanReductionFactor};
 
-/// A `Cluster` is a collection of items in a dataset that are within a `radius` from a `center` item.
+/// A `Cluster` is a collection of similar items in a dataset that are within some radius of a center.
+///
+/// A `Cluster` owns its own center item, as well as a collection of items (if it is a leaf) or a collection of child `Cluster`s (if it is a parent).
+///
+/// A `Cluster` has the following properties:
+///   - `depth`: The depth of the cluster in the tree. The root cluster has depth 0.
+///   - `cardinality`: The number of items in the cluster, including the center.
+///   - `center`: The center item of the cluster. This is the geometric median of the items (or a sample thereof) in the cluster.
+///   - `radius`: The radius of the cluster. This is the maximum distance from the center to any other item in the cluster.
+///   - `lfd`: The Local Fractal Dimension (LFD) of the cluster. This is a measure of how densely packed the items in the cluster are.
+///   - `radial_sum`: The sum of all radial distances from the center to all other items in the cluster.
+///   - `span`: The span of the cluster, which is the distance between two of the most mutually distant items in the cluster. This is an approximation computed
+///     during the partitioning process, and can be treated as an upper bound on the diameter of a min-volume covering sphere for the items in the cluster.
+///   - `contents`: The contents of the cluster, which can either be a collection of items (if it is a leaf) or a collection of child `Cluster`s.
+///   - `annotation`: An optional arbitrary annotation associated with the cluster. These can be used to store additional information about the cluster, as
+///     determined by the user.
 ///
 /// # Type Parameters
 ///
@@ -34,7 +49,7 @@ pub struct Cluster<Id, I, T: DistanceValue, A> {
     pub(crate) lfd: f64,
     /// The sum of all radial distances from the center to all items in the cluster.
     pub(crate) radial_sum: T,
-    /// The span of the cluster, defined as the maximum distance between the poles of the cluster.
+    /// The span of the cluster.
     pub(crate) span: T,
     /// The `Contents` of the cluster.
     pub(crate) contents: Contents<Id, I, T, A>,

@@ -7,7 +7,7 @@ pub mod cakes;
 pub mod cluster;
 pub mod utils; // Intended for private use, but made public for testing purposes
 
-pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor};
+pub use cluster::Cluster;
 
 /// A trait for types that can be used as distance values in clustering algorithms.
 pub trait DistanceValue:

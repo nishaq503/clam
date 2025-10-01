@@ -8,8 +8,8 @@ use rand::prelude::*;
 
 use abd_clam::{
     cakes::{self, BatchedSearch},
-    cluster::PartitionStrategy,
-    BranchingFactor, Cluster, DistanceValue, SpanReductionFactor,
+    cluster::{BranchingFactor, PartitionStrategy, SpanReductionFactor},
+    Cluster, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::prelude::*;
