@@ -29,6 +29,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
             ),
         };
         let mut c = Cluster {
+            depth: self.depth,
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,
@@ -135,6 +136,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
             ),
         };
         let mut c = Cluster {
+            depth: self.depth,
             cardinality: self.cardinality,
             center: self.center,
             radius: self.radius,

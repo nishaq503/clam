@@ -9,7 +9,7 @@ use rand::prelude::*;
 use abd_clam::{
     cakes::{self, BatchedSearch},
     cluster::PartitionStrategy,
-    Cluster, DistanceValue,
+    BranchingFactor, Cluster, DistanceValue, SpanReductionFactor,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::prelude::*;
@@ -120,7 +120,7 @@ fn bench_for_ks<Id, I, T, A, M>(
         // );
 
         // Benchmark the approximate algorithms
-        for n in [10, 20, 50, 100, 200, 500, 1000] {
+        for n in [10, 100, 1000] {
             // Varying number of leaves explored
             bench_one_alg(
                 group,
@@ -132,8 +132,6 @@ fn bench_for_ks<Id, I, T, A, M>(
                 pruned_str,
                 multiplier,
             );
-        }
-        for n in [1, 2, 5, 10, 20, 50, 100] {
             // Varying number of distance computations performed
             bench_one_alg(
                 group,
@@ -171,12 +169,32 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
         b.iter_with_large_drop(|| alg.par_batch_search(&root, &metric, &queries))
     });
 
+    let all_clusters = root.subtree();
+    let size_of_tree = all_clusters.len();
+    let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
+
+    let all_leaves = all_clusters.iter().filter(|c| c.is_leaf()).copied().collect::<Vec<_>>();
+    let leaf_fraction = all_leaves.len() as f64 / size_of_tree as f64;
+    let mean_leaf_cardinality =
+        all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
+
+    let singleton_fraction = all_leaves.iter().filter(|c| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
+
+    println!(
+        "Tree stats for {pruned_str} tree with dataset cardinality {} after multiplier {multiplier}:",
+        root.cardinality()
+    );
+    println!(
+        "    Number of clusters: {size_of_tree}, Ratio: {:.8}",
+        size_of_tree as f64 / root.cardinality() as f64
+    );
+    println!("    Max depth: {max_depth}");
+    println!("    Leaf fraction of clusters: {leaf_fraction:.8}, mean leaf cardinality: {mean_leaf_cardinality:.8}");
+    println!("    Singleton fraction of leaves: {singleton_fraction:.8}");
+
     let pred_hits = alg.par_batch_search(&root, &metric, &queries);
     let recall_stats = cakes::search_quality_stats(true_hits, &pred_hits);
-    println!(
-        "Search quality of {} with {pruned_str} tree and dataset multiplier {multiplier}:",
-        alg.to_string()
-    );
+    println!("Search quality of {}:", alg.to_string());
     for (stat_name, stat_value) in recall_stats {
         println!("    {stat_name}: {stat_value:.8}");
     }
@@ -243,6 +261,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     };
     // Predicate to decide whether to prune a ball based on its compression costs
     let to_prune_or_not_to_prune = |b: &Cluster<_, _, _, _>| {
+        b.depth() > 4 && // Don't prune too close to the leaves
         b.annotation()
             .map_or(false, |&CompressionCosts { unitary, recursive, .. }| {
                 unitary <= recursive
@@ -278,8 +297,30 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 .collect();
         }
 
-        for &branching_factor in branching_factors {
-            let mut group = c.benchmark_group(format!("CAKES-{}-bf{branching_factor}", dataset.name()));
+        let strategies = {
+            let mut strategies = vec![];
+
+            for &bf in branching_factors {
+                strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
+            }
+            for &bf in branching_factors {
+                if bf > 2 {
+                    strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(bf)));
+                }
+            }
+            strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic));
+
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Two));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::E));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Pi));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Phi));
+
+            strategies
+        };
+
+        for strategy in &strategies {
+            let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
             config_group(&mut group, queries.len());
 
             // Build a tree with no annotations and benchmark the search algorithms
@@ -287,8 +328,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 items.shuffle(rng);
             }
             let indexed_items = items.into_iter().enumerate().collect();
-            let strategy = PartitionStrategy::default().with_branching_factor(branching_factor.into());
-            let root = Cluster::par_new_tree(indexed_items, &metric, &strategy).unwrap();
+            let root = Cluster::par_new_tree(indexed_items, &metric, strategy).unwrap();
             bench_for_ks(&mut group, &root, &metric, &queries, false, multiplier, ks);
 
             let root = if prune {
@@ -339,19 +379,19 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     // Whether to shuffle the dataset before building the tree
-    let shuffle = true;
+    let shuffle = false;
     let mut rng = rand::rng();
 
     // Set these parameters to control the runtime of the benchmarks. These settings go all out and will take a long time.
     let max_items = 100_000;
-    let max_queries = 1000;
+    let max_queries = 100;
     let branching_factors = [2, 10, 100];
-    let ks = [10, 100];
-    let prune = true;
+    let ks = [10];
+    let prune = false;
 
     let base = base_dir().unwrap();
     for dataset in &datasets {
-        if !matches!(dataset, AnnDataset::Glove25) {
+        if !matches!(dataset, AnnDataset::FashionMnist) {
             continue; // Targeting dataset for hyperparameter tuning
         }
         // For the paper, only use the first 3 datasets

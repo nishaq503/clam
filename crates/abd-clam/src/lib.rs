@@ -1,13 +1,13 @@
 //! Redesign of CLAM
 // #![doc = include_str!("../README.md")]
 
+use std::fmt::{Debug, Display};
+
 pub mod cakes;
 pub mod cluster;
 pub mod utils; // Intended for private use, but made public for testing purposes
 
-use std::fmt::{Debug, Display};
-
-pub use cluster::Cluster;
+pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor};
 
 /// A trait for types that can be used as distance values in clustering algorithms.
 pub trait DistanceValue:

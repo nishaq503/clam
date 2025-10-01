@@ -8,8 +8,9 @@ use crate::DistanceValue;
 
 pub mod annotations;
 pub mod partition;
+mod partition_strategy;
 
-pub use partition::{BranchingFactor, PartitionStrategy, SpanReductionFactor};
+pub use partition_strategy::{expected_num_clusters, BranchingFactor, PartitionStrategy, SpanReductionFactor};
 
 /// A `Cluster` is a collection of items in a dataset that are within a `radius` from a `center` item.
 ///
@@ -21,6 +22,8 @@ pub use partition::{BranchingFactor, PartitionStrategy, SpanReductionFactor};
 /// * `A`: The type of arbitrary annotations associated with each cluster.
 #[must_use]
 pub struct Cluster<Id, I, T: DistanceValue, A> {
+    /// The depth of the cluster in the tree. The root cluster has depth 0.
+    pub(crate) depth: usize,
     /// The number of items in the cluster, including the center.
     pub(crate) cardinality: usize,
     /// The center item of the cluster.
@@ -50,6 +53,7 @@ pub(crate) enum Contents<Id, I, T: DistanceValue, A> {
 impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Cluster<Id, I, T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cluster")
+            .field("depth", &self.depth)
             .field("cardinality", &self.cardinality)
             .field("center", &self.center)
             .field("radius", &self.radius)
@@ -99,6 +103,11 @@ impl<I: Send + Sync, T: DistanceValue + Send + Sync> Cluster<usize, I, T, ()> {
 }
 
 impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
+    /// The depth of the cluster in the tree. The root cluster has depth 0.
+    pub const fn depth(&self) -> usize {
+        self.depth
+    }
+
     /// The number of items in the cluster, including the center.
     pub const fn cardinality(&self) -> usize {
         self.cardinality
