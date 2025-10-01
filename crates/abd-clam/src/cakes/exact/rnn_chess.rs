@@ -18,7 +18,7 @@ impl<T: DistanceValue> std::fmt::Display for RnnChess<T> {
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for RnnChess<T> {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for RnnChess<T> {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let (mut hits, subsumed, straddlers) = tree_search(root, metric, query, self.0);
 
@@ -52,8 +52,8 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         Id: Send + Sync,
         I: Send + Sync,
         T: Send + Sync,
-        M: Send + Sync,
         A: Send + Sync,
+        M: Send + Sync,
     {
         let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, query, self.0);
 
@@ -92,7 +92,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for RnnChess<T> {}
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for RnnChess<T> {}
 
 /// Perform coarse-grained tree search.
 ///
@@ -110,7 +110,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
 ///   - clusters that are fully subsumed by the query cluster.
 ///   - clusters that have overlapping volume with the query cluster but are not fully subsumed.
 #[allow(clippy::type_complexity)]
-pub fn tree_search<'a, Id, I, T, M, A>(
+pub fn tree_search<'a, Id, I, T, A, M>(
     cluster: &'a Cluster<Id, I, T, A>,
     metric: &M,
     query: &I,
@@ -169,7 +169,7 @@ where
 
 /// Parallel version of [`tree_search`](tree_search).
 #[allow(clippy::type_complexity)]
-pub fn par_tree_search<'a, Id, I, T, M, A>(
+pub fn par_tree_search<'a, Id, I, T, A, M>(
     cluster: &'a Cluster<Id, I, T, A>,
     metric: &M,
     query: &I,

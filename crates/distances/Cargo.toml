@@ -24,8 +24,8 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 libm = { workspace = true }
 num-integer = { workspace = true }
-openblas-src = "0.10.13"
-rust-blas = "0.2.0"
+openblas-src = { workspace = true }
+rust-blas = { workspace = true }
 
 [dev-dependencies]
 symagen = { workspace = true }

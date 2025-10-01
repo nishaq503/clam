@@ -19,7 +19,7 @@ impl std::fmt::Display for KnnRrnn {
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnRrnn {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnRrnn {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
@@ -86,15 +86,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T, M, A> BatchedSearch<Id, I, T, M, A> for KnnRrnn
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-    A: Send + Sync,
-{
-}
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnRrnn {}
 
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]

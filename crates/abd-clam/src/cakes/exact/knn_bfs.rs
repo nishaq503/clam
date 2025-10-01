@@ -19,7 +19,7 @@ impl std::fmt::Display for KnnBfs {
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnBfs {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBfs {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         profi::prof!("KnnBfs::search");
 
@@ -83,7 +83,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnBfs {}
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnBfs {}
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.

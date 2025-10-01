@@ -19,7 +19,7 @@ impl std::fmt::Display for KnnDfs {
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnDfs {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         if self.0 > root.cardinality() {
             // If k is greater than the number of points in the tree, return all
@@ -54,7 +54,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnDfs {}
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnDfs {}
 
 /// Pop candidates until the top candidate is a leaf. Then pop and return that
 /// leaf along with its minimum distance from the query.
@@ -62,7 +62,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
 /// The user must ensure that `candidates` is non-empty before calling this
 /// function.
 #[allow(clippy::type_complexity)]
-pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
+pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
     metric: &M,
     candidates: &mut SizedHeap<&'a Cluster<Id, I, T, A>, Reverse<(T, T, T)>>,
@@ -100,7 +100,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
 
 /// Given a leaf cluster, compute the distance from the query to each item in
 /// the leaf and push them onto `hits`.
-pub fn leaf_into_hits<'a, Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>(
+pub fn leaf_into_hits<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
     metric: &M,
     hits: &mut SizedHeap<(&'a Id, &'a I), T>,

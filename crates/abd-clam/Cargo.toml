@@ -32,6 +32,7 @@ workspace = true
 num = { workspace = true }
 rayon = { workspace = true }
 profi = { workspace = true, default-features = false, features = ["rayon"] }
+rand.workspace = true
 
 # For:
 #  - CHAODA

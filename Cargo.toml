@@ -49,6 +49,10 @@ pyo3 = "0.25"
 test-case = "3.2.1"
 criterion = "0.7.0"
 profi = { version = "0.1.2", default-features = false }
+openblas-src = "0.10.13"
+rust-blas = "0.2.0"
+clap = "4.5.48"
+abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
 
 [profile.test]
 opt-level = 3

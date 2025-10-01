@@ -162,7 +162,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: BatchedSearch<Id, I, T, M, A> + Send + Sync,
+    Alg: BatchedSearch<Id, I, T, A, M> + Send + Sync,
 {
     let id = BenchmarkId::new(format!("{}-{pruned_str}", alg.to_string()), multiplier);
     group.bench_function(id, |b| {

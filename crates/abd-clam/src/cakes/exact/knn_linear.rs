@@ -19,7 +19,7 @@ impl std::fmt::Display for KnnLinear {
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for KnnLinear {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnLinear {
     fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(root.all_items().into_iter().map(|item| (item, metric(query, &item.1))));
@@ -32,8 +32,8 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
         Id: Send + Sync,
         I: Send + Sync,
         T: Send + Sync,
-        M: Send + Sync,
         A: Send + Sync,
+        M: Send + Sync,
     {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(
@@ -46,7 +46,7 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> Search<Id, I, T, M, A> for 
     }
 }
 
-impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, A> for KnnLinear {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnLinear {
     fn batch_search<'a>(
         &self,
         root: &'a Cluster<Id, I, T, A>,
@@ -75,8 +75,8 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
         Id: Send + Sync,
         I: Send + Sync,
         T: Send + Sync,
-        M: Send + Sync,
         A: Send + Sync,
+        M: Send + Sync,
     {
         let all_items = root.all_items();
         queries
@@ -105,8 +105,8 @@ impl<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A> BatchedSearch<Id, I, T, M, 
         Id: Send + Sync,
         I: Send + Sync,
         T: Send + Sync,
-        M: Send + Sync,
         A: Send + Sync,
+        M: Send + Sync,
     {
         self.par_batch_search(root, metric, queries)
     }

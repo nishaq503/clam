@@ -6,12 +6,13 @@ use crate::{Cluster, DistanceValue};
 
 pub mod approximate;
 mod exact;
+pub mod selection;
 
 pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A `Search` trait for defining how to search for nearest neighbors of a single query.
-pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Display {
+pub trait Search<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>: std::fmt::Display {
     /// Search for the nearest neighbors of a given query item.
     ///
     /// # Arguments
@@ -42,7 +43,7 @@ pub trait Search<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: std::fmt::Disp
 }
 
 /// A `BatchedSearch` trait for defining how to search for nearest neighbors for a batch of queries.
-pub trait BatchedSearch<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T, A>: Search<Id, I, T, M, A> {
+pub trait BatchedSearch<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>: Search<Id, I, T, A, M> {
     /// Batched version of [`Search::search`].
     fn batch_search<'a>(
         &self,
