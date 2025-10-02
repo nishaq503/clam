@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use rand::prelude::*;
 
 /// Supported datasets from ANN-Benchmarks.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[allow(clippy::missing_docs_in_private_items)]
 pub enum AnnDataset {
     // Euclidean
@@ -21,6 +21,8 @@ pub enum AnnDataset {
     Glove100,
     Glove200,
     DeepImage,
+    NYTimes,
+    LastFM,
 }
 
 impl AnnDataset {
@@ -36,27 +38,34 @@ impl AnnDataset {
             Self::Glove100 => "Glove100",
             Self::Glove200 => "Glove200",
             Self::DeepImage => "DeepImage",
+            Self::NYTimes => "NYTimes",
+            Self::LastFM => "LastFM",
         }
     }
 
-    /// Returns true if the dataset was used in our CAKES paper.
-    pub const fn used_in_paper(&self) -> bool {
-        matches!(self, Self::FashionMnist | Self::Glove25 | Self::Sift)
+    /// Returns the metric used by the dataset, assuming the data points are represented as `(inner-product, vec)` tuples.
+    #[allow(clippy::type_complexity)]
+    pub const fn metric_by_ip(&self) -> fn(&(f32, Vec<f32>), &(f32, Vec<f32>)) -> f32 {
+        match self {
+            Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => crate::utils::euc_by_ip,
+            _ => crate::utils::cos_by_ip,
+        }
     }
 
-    /// Returns the datasets that use Euclidean distance.
-    pub fn euclidean_datasets() -> Vec<Self> {
-        vec![Self::FashionMnist, Self::Mnist, Self::Sift, Self::Gist]
-    }
-
-    /// Returns the datasets that use Cosine distance.
-    pub fn cosine_datasets() -> Vec<Self> {
+    /// Returns all the supported datasets.
+    pub fn all_datasets() -> Vec<Self> {
         vec![
+            Self::FashionMnist,
             Self::Glove25,
-            Self::Glove50,
+            Self::Sift,
             Self::Glove100,
+            Self::NYTimes,
+            Self::Mnist,
+            Self::Glove50,
             Self::Glove200,
             Self::DeepImage,
+            Self::LastFM,
+            Self::Gist,
         ]
     }
 
@@ -72,6 +81,8 @@ impl AnnDataset {
             Self::Glove100 => "glove-100",
             Self::Glove200 => "glove-200",
             Self::DeepImage => "deep-image",
+            Self::NYTimes => "nytimes",
+            Self::LastFM => "lastfm",
         }
     }
 

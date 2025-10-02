@@ -136,8 +136,8 @@ where
     let algorithms: Vec<Box<dyn BatchedSearch<Id, I, T, A, M> + Send + Sync>> = vec![
         Box::new(crate::cakes::KnnDfs(k)),
         Box::new(crate::cakes::KnnBfs(k)),
-        Box::new(crate::cakes::KnnRrnn(k)),
-        Box::new(crate::cakes::KnnBranch(k)),
+        // Box::new(crate::cakes::KnnRrnn(k)),
+        // Box::new(crate::cakes::KnnBranch(k)),
     ];
 
     let algs_throughputs = algorithms

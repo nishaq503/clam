@@ -25,7 +25,7 @@ struct Args {
     log_dir: Option<PathBuf>,
 
     /// The random seed to use.
-    #[arg(short('s'), long, default_value = "42")]
+    #[arg(short('s'), long, default_value = None)]
     seed: Option<u64>,
 
     /// The number of neighbors to search for.
@@ -95,23 +95,27 @@ fn main() -> Result<(), String> {
     println!("Logging to {}", log_path.display());
 
     let mut rng = args.seed.map(rand::rngs::StdRng::seed_from_u64);
+    // let subset = [
+    //     data::AnnDataset::FashionMnist,
+    // ];
+    let subset = data::AnnDataset::all_datasets();
 
-    for dataset in data::AnnDataset::euclidean_datasets() {
-        if !dataset.used_in_paper() {
+    for dataset in data::AnnDataset::all_datasets() {
+        if !subset.contains(&dataset) {
             // Just for quicker development iterations.
             continue;
         }
+        let metric = dataset.metric_by_ip();
 
         ftlog::info!("Reading dataset '{}'", dataset.name());
         let items = dataset.read_train(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
         let items = utils::par_precompute_ips(items);
 
         ftlog::info!("Building CAKES index for dataset '{}'", dataset.name());
-        let root = Cluster::par_new_tree_minimal(items, &utils::euc_by_ip)?;
+        let root = Cluster::par_new_tree_minimal(items, &metric)?;
 
         ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
-        let (best_alg, expected_throughput) =
-            selection::par_select_fastest_algorithm(&root, &utils::euc_by_ip, 100, args.k, 5.0);
+        let (best_alg, expected_throughput) = selection::par_select_fastest_algorithm(&root, &metric, 100, args.k, 5.0);
         ftlog::info!("Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec");
 
         let queries = dataset.read_test(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
@@ -121,49 +125,13 @@ fn main() -> Result<(), String> {
         let start = std::time::Instant::now();
         let mut total_queries = 0;
         while start.elapsed().as_secs_f64() < 10.0 {
-            let _results = best_alg.par_batch_search(&root, &utils::euc_by_ip, &queries);
+            let _results = best_alg.par_batch_search(&root, &metric, &queries);
             total_queries += queries.len();
         }
         let throughput = total_queries as f64 / start.elapsed().as_secs_f64();
         ftlog::info!(
             "Measured throughput for dataset '{}' is {throughput:.8} queries/sec",
             dataset.name()
-        );
-    }
-
-    for dataset in data::AnnDataset::cosine_datasets() {
-        if !dataset.used_in_paper() {
-            // Just for quicker development iterations.
-            continue;
-        }
-
-        ftlog::info!("Reading dataset '{}'", dataset.name());
-        let items = dataset.read_train(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
-        let items = utils::par_precompute_ips(items);
-
-        ftlog::info!("Building CAKES index for dataset '{}'", dataset.name());
-        let root = Cluster::par_new_tree_minimal(items, &utils::cos_by_ip)?;
-
-        ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
-        let (best_alg, expected_throughput) =
-            selection::par_select_fastest_algorithm(&root, &utils::cos_by_ip, 100, args.k, 5.0);
-        ftlog::info!("Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec");
-
-        let queries = dataset.read_test(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
-        let queries = utils::par_precompute_ips(queries);
-        ftlog::info!("Measuring throughput for dataset '{}'", dataset.name());
-
-        let start = std::time::Instant::now();
-        let mut total_queries = 0;
-        while start.elapsed().as_secs_f64() < 10.0 {
-            let _results = best_alg.par_batch_search(&root, &utils::cos_by_ip, &queries);
-            total_queries += queries.len();
-        }
-        let throughput = total_queries as f64 / start.elapsed().as_secs_f64();
-        ftlog::info!(
-            "Measured throughput for dataset '{}' is {:.8} queries/sec",
-            dataset.name(),
-            throughput
         );
     }
 
