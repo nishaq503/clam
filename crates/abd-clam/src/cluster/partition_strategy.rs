@@ -2,7 +2,7 @@
 
 use num::Integer;
 
-use crate::{utils::MinItem, DistanceValue};
+use crate::DistanceValue;
 
 use super::Cluster;
 
@@ -143,8 +143,9 @@ impl BranchingFactor {
                 Some(((cardinality - 1) as f64).log2().ceil() as usize)
             }
             Self::Adaptive(max_k) => (2..=*max_k)
-                .map(|k| (k, expected_num_clusters(cardinality, k)))
-                .min_by_key(|&(_, r)| MinItem((), r as f64 / cardinality as f64))
+                .map(|k| (k, expected_num_clusters(cardinality, k) as f64 / cardinality as f64))
+                .filter(|&(_, r)| r < 0.6)
+                .min_by_key(|&(k, _)| k)
                 .map(|(k, _)| k)
                 .or(Some(2)),
             Self::SRF => None, // Effectively no limit on branching factor; SRF will control the actual branching factor

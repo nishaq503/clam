@@ -564,22 +564,34 @@ fn split_by_poles<Id, I, T: DistanceValue, M: Fn(&I, &I) -> T>(
         .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
         .partition::<Vec<_>, _>(|&(l, r, _)| l <= r);
 
-    // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-    let (left_items, left_distances): (Vec<_>, Vec<_>) = core::iter::once((left_pole, T::zero()))
+    // Collect items assigned to each pole, placing the poles first, though their order does not matter.
+    let left_items = core::iter::once((left_pole, T::zero()))
         .chain(left_assigned.into_iter().map(|(l, _, item)| (item, l)))
-        .unzip();
-    let (right_items, right_distances): (Vec<_>, Vec<_>) = core::iter::once((right_pole, T::zero()))
-        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
-        .unzip();
+        .collect::<Vec<_>>();
+    let lr_item = left_items
+        .iter()
+        .max_by_key(|&(_, d)| MaxItem(0, *d))
+        .map_or_else(|| unreachable!("left_items is non-empty"), |(i, _)| i);
+    let left_span = left_items
+        .iter()
+        .map(|(i, _)| (i, metric(&lr_item.1, &i.1)))
+        .max_by_key(|&(_, d)| MaxItem(0, d))
+        .map_or_else(|| unreachable!("left_items is non-empty"), |(_, d)| d);
+    let left_items = left_items.into_iter().map(|(item, _)| item).collect::<Vec<_>>();
 
-    let left_span = left_distances
-        .into_iter()
-        .max_by_key(|&d| MaxItem(0, d))
-        .unwrap_or_else(|| unreachable!("left_items is non-empty"));
-    let right_span = right_distances
-        .into_iter()
-        .max_by_key(|&d| MaxItem(0, d))
-        .unwrap_or_else(|| unreachable!("right_items is non-empty"));
+    let right_items = core::iter::once((right_pole, T::zero()))
+        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
+        .collect::<Vec<_>>();
+    let rl_item = right_items
+        .iter()
+        .max_by_key(|&(_, d)| MaxItem(0, *d))
+        .map_or_else(|| unreachable!("right_items is non-empty"), |(i, _)| i);
+    let right_span = right_items
+        .iter()
+        .map(|(i, _)| (i, metric(&rl_item.1, &i.1)))
+        .max_by_key(|&(_, d)| MaxItem(0, d))
+        .map_or_else(|| unreachable!("right_items is non-empty"), |(_, d)| d);
+    let right_items = right_items.into_iter().map(|(item, _)| item).collect::<Vec<_>>();
 
     ([(left_items, left_span), (right_items, right_span)], span)
 }
@@ -641,22 +653,34 @@ fn par_split_by_poles<
         .map(|(l, item)| (l, metric(&right_pole.1, &item.1), item))
         .partition(|&(l, r, _)| l <= r);
 
-    // Collect items assigned to each pole, lacing the poles first, though their order does not matter.
-    let (left_items, left_distances): (Vec<_>, Vec<_>) = core::iter::once((left_pole, T::zero()))
+    // Collect items assigned to each pole, placing the poles first, though their order does not matter.
+    let left_items = core::iter::once((left_pole, T::zero()))
         .chain(left_assigned.into_iter().map(|(l, _, item)| (item, l)))
-        .unzip();
-    let (right_items, right_distances): (Vec<_>, Vec<_>) = core::iter::once((right_pole, T::zero()))
-        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
-        .unzip();
+        .collect::<Vec<_>>();
+    let lr_item = left_items
+        .iter()
+        .max_by_key(|&(_, d)| MaxItem(0, *d))
+        .map_or_else(|| unreachable!("left_items is non-empty"), |(i, _)| i);
+    let left_span = left_items
+        .par_iter()
+        .map(|(i, _)| (i, metric(&lr_item.1, &i.1)))
+        .max_by_key(|&(_, d)| MaxItem(0, d))
+        .map_or_else(|| unreachable!("left_items is non-empty"), |(_, d)| d);
+    let left_items = left_items.into_iter().map(|(item, _)| item).collect::<Vec<_>>();
 
-    let left_span = left_distances
-        .into_iter()
-        .max_by_key(|&d| MaxItem(0, d))
-        .unwrap_or_else(|| unreachable!("left_items is non-empty"));
-    let right_span = right_distances
-        .into_iter()
-        .max_by_key(|&d| MaxItem(0, d))
-        .unwrap_or_else(|| unreachable!("right_items is non-empty"));
+    let right_items = core::iter::once((right_pole, T::zero()))
+        .chain(right_assigned.into_iter().map(|(_, r, item)| (item, r)))
+        .collect::<Vec<_>>();
+    let rl_item = right_items
+        .iter()
+        .max_by_key(|&(_, d)| MaxItem(0, *d))
+        .map_or_else(|| unreachable!("right_items is non-empty"), |(i, _)| i);
+    let right_span = right_items
+        .par_iter()
+        .map(|(i, _)| (i, metric(&rl_item.1, &i.1)))
+        .max_by_key(|&(_, d)| MaxItem(0, d))
+        .map_or_else(|| unreachable!("right_items is non-empty"), |(_, d)| d);
+    let right_items = right_items.into_iter().map(|(item, _)| item).collect::<Vec<_>>();
 
     ([(left_items, left_span), (right_items, right_span)], span)
 }

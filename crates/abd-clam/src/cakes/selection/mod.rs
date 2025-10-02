@@ -24,7 +24,8 @@ where
 {
     let start = std::time::Instant::now();
     let mut total_queries = 0;
-    while start.elapsed().as_secs_f64() < min_time_secs {
+    let min_time = std::time::Duration::from_secs_f64(min_time_secs);
+    while start.elapsed() < min_time {
         let _results = queries
             .iter()
             .map(|&query| alg.search(root, metric, query))
@@ -34,7 +35,7 @@ where
     total_queries as f64 / start.elapsed().as_secs_f64()
 }
 
-/// Parallel version of [`measure_throughput`](measure_throughput).
+/// Parallel version of [`measure_throughput`].
 #[allow(clippy::cast_precision_loss, clippy::while_float)]
 pub fn par_measure_throughput<Id, I, T, A, M, Alg>(
     root: &Cluster<Id, I, T, A>,
@@ -53,7 +54,8 @@ where
 {
     let start = std::time::Instant::now();
     let mut total_queries = 0;
-    while start.elapsed().as_secs_f64() < min_time_secs {
+    let min_time = std::time::Duration::from_secs_f64(min_time_secs);
+    while start.elapsed() < min_time {
         let _results = queries
             .par_iter()
             .map(|&query| alg.search(root, metric, query))
@@ -89,8 +91,8 @@ where
     let algorithms: Vec<Box<dyn BatchedSearch<Id, I, T, A, M>>> = vec![
         Box::new(crate::cakes::KnnDfs(k)),
         Box::new(crate::cakes::KnnBfs(k)),
-        Box::new(crate::cakes::KnnRrnn(k)),
-        Box::new(crate::cakes::KnnBranch(k)),
+        // Box::new(crate::cakes::KnnRrnn(k)),
+        // Box::new(crate::cakes::KnnBranch(k)),
     ];
 
     let algs_throughputs = algorithms
@@ -107,7 +109,7 @@ where
         .unwrap_or_else(|| unreachable!("We created more than zero algorithms"))
 }
 
-/// Parallel version of [`select_fastest_algorithm`](select_fastest_algorithm).
+/// Parallel version of [`select_fastest_algorithm`](.
 #[allow(clippy::type_complexity)]
 pub fn par_select_fastest_algorithm<Id, I, T, A, M>(
     root: &Cluster<Id, I, T, A>,

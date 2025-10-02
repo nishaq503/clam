@@ -2,7 +2,11 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{Cluster, cakes::selection};
+use abd_clam::{
+    Cluster,
+    cakes::selection,
+    cluster::{BranchingFactor, PartitionStrategy, SpanReductionFactor},
+};
 use clap::Parser;
 use rand::prelude::*;
 
@@ -31,6 +35,18 @@ struct Args {
     /// The number of neighbors to search for.
     #[arg(short('k'), long, default_value = "10")]
     k: usize,
+
+    /// The number of queries to use for algorithm selection. These will be randomly chosen from the training set.
+    #[arg(short('q'), long, default_value = "100")]
+    q: usize,
+
+    /// The minimum time in seconds to run each throughput measurement during algorithm selection.
+    #[arg(short('t'), long, default_value = "5.0")]
+    selection_time: f64,
+
+    /// The minimum time in seconds to run the final throughput measurement.
+    #[arg(short('T'), long, default_value = "10.0")]
+    measurement_time: f64,
 }
 
 /// A placeholder main function.
@@ -95,10 +111,11 @@ fn main() -> Result<(), String> {
     println!("Logging to {}", log_path.display());
 
     let mut rng = args.seed.map(rand::rngs::StdRng::seed_from_u64);
-    // let subset = [
-    //     data::AnnDataset::FashionMnist,
-    // ];
     let subset = data::AnnDataset::all_datasets();
+
+    let strategy = PartitionStrategy::default()
+        .with_branching_factor(BranchingFactor::SRF)
+        .with_span_reduction(SpanReductionFactor::Phi);
 
     for dataset in data::AnnDataset::all_datasets() {
         if !subset.contains(&dataset) {
@@ -110,12 +127,14 @@ fn main() -> Result<(), String> {
         ftlog::info!("Reading dataset '{}'", dataset.name());
         let items = dataset.read_train(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
         let items = utils::par_precompute_ips(items);
+        let items = items.into_iter().enumerate().collect::<Vec<_>>();
 
         ftlog::info!("Building CAKES index for dataset '{}'", dataset.name());
-        let root = Cluster::par_new_tree_minimal(items, &metric)?;
+        let root = Cluster::<_, _, _, ()>::par_new_tree(items, &metric, &strategy)?;
 
         ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
-        let (best_alg, expected_throughput) = selection::par_select_fastest_algorithm(&root, &metric, 100, args.k, 5.0);
+        let (best_alg, expected_throughput) =
+            selection::par_select_fastest_algorithm(&root, &metric, args.q, args.k, args.selection_time);
         ftlog::info!("Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec");
 
         let queries = dataset.read_test(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
@@ -124,7 +143,8 @@ fn main() -> Result<(), String> {
 
         let start = std::time::Instant::now();
         let mut total_queries = 0;
-        while start.elapsed().as_secs_f64() < 10.0 {
+        let min_duration = std::time::Duration::from_secs_f64(args.measurement_time);
+        while start.elapsed() < min_duration {
             let _results = best_alg.par_batch_search(&root, &metric, &queries);
             total_queries += queries.len();
         }
