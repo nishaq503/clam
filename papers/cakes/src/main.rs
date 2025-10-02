@@ -160,7 +160,8 @@ fn main() -> Result<(), String> {
             results = best_alg.par_batch_search(&root, &metric, &queries);
             total_queries += queries.len();
         }
-        let throughput = total_queries as f64 / start.elapsed().as_secs_f64();
+        let time_taken = start.elapsed().as_secs_f64();
+        let throughput = total_queries as f64 / time_taken;
         ftlog::info!(
             "Measured throughput for dataset '{}' is {throughput:.8} queries/sec",
             dataset.name()
@@ -176,25 +177,26 @@ fn main() -> Result<(), String> {
             .into_iter()
             .map(|row| row.into_iter().map(|(&i, _, d)| (i as u64, d)).unzip())
             .unzip();
-        let neighbors_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-neighbors.npy");
+        let neighbors_path =
+            data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-neighbors.npy");
         let neighbors_arr = nested_vec_to_arr(neighbors)?;
         ndarray_npy::write_npy(&neighbors_path, &neighbors_arr).map_err(|e| e.to_string())?;
         ftlog::info!("Wrote neighbors to '{}'", neighbors_path.display());
 
-        let distances_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-distances.npy");
+        let distances_path =
+            data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-distances.npy");
         let distances_arr = nested_vec_to_arr(distances)?;
         ndarray_npy::write_npy(&distances_path, &distances_arr).map_err(|e| e.to_string())?;
         ftlog::info!("Wrote distances to '{}'", distances_path.display());
 
-        let performance_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-performance.json");
+        let performance_path =
+            data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-performance.json");
         let performance = serde_json::json!({
-            "selected_algorithm": best_alg.to_string(),
-            "expected_throughput": expected_throughput,
-            "measured_throughput": throughput,
-            "k": args.k,
-            "num_queries": total_queries,
-            "total_time_seconds": start.elapsed().as_secs_f64(),
+            "num_queries": queries.len(),
+            "total_time_seconds": time_taken,
+            "throughput": throughput,
             "recall": 1.0,  // TODO: compute actual recall
+            "rd_err": 0.0,    // TODO: compute actual relative distance error
         });
         std::fs::write(
             &performance_path,
