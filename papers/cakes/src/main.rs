@@ -111,10 +111,10 @@ fn main() -> Result<(), String> {
     println!("Logging to {}", log_path.display());
 
     let mut rng = args.seed.map(rand::rngs::StdRng::seed_from_u64);
-    let subset = data::AnnDataset::all_datasets();
+    let subset = [data::AnnDataset::FashionMnist];
 
     let strategy = PartitionStrategy::default()
-        .with_branching_factor(BranchingFactor::Unbounded)
+        .with_branching_factor(BranchingFactor::Fixed(2))
         .with_span_reduction(SpanReductionFactor::Phi);
 
     for dataset in data::AnnDataset::all_datasets() {
@@ -122,6 +122,16 @@ fn main() -> Result<(), String> {
             // Just for quicker development iterations.
             continue;
         }
+        let data_out_dir = out_dir.join(dataset.file_name_prefix());
+        if !data_out_dir.exists() {
+            std::fs::create_dir_all(&data_out_dir).map_err(|e| {
+                format!(
+                    "Failed to create data output directory '{}': {e}",
+                    data_out_dir.display()
+                )
+            })?;
+        }
+
         let metric = dataset.metric_by_ip();
 
         ftlog::info!("Reading dataset '{}'", dataset.name());
@@ -141,11 +151,13 @@ fn main() -> Result<(), String> {
         let queries = utils::precompute_ips(queries);
         ftlog::info!("Measuring throughput for dataset '{}'", dataset.name());
 
-        let start = std::time::Instant::now();
+        let mut results = Vec::new();
         let mut total_queries = 0;
+
         let min_duration = std::time::Duration::from_secs_f64(args.measurement_time);
+        let start = std::time::Instant::now();
         while start.elapsed() < min_duration {
-            let _results = best_alg.par_batch_search(&root, &metric, &queries);
+            results = best_alg.par_batch_search(&root, &metric, &queries);
             total_queries += queries.len();
         }
         let throughput = total_queries as f64 / start.elapsed().as_secs_f64();
@@ -153,7 +165,56 @@ fn main() -> Result<(), String> {
             "Measured throughput for dataset '{}' is {throughput:.8} queries/sec",
             dataset.name()
         );
+
+        ftlog::info!("Writing report...");
+
+        let root_csv_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-tree.csv");
+        root.to_csv(&root_csv_path).map_err(|e| e.to_string())?;
+        ftlog::info!("Wrote cluster tree to '{}'", root_csv_path.display());
+
+        let (neighbors, distances): (Vec<Vec<u64>>, Vec<Vec<f32>>) = results
+            .into_iter()
+            .map(|row| row.into_iter().map(|(&i, _, d)| (i as u64, d)).unzip())
+            .unzip();
+        let neighbors_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-neighbors.npy");
+        let neighbors_arr = nested_vec_to_arr(neighbors)?;
+        ndarray_npy::write_npy(&neighbors_path, &neighbors_arr).map_err(|e| e.to_string())?;
+        ftlog::info!("Wrote neighbors to '{}'", neighbors_path.display());
+
+        let distances_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-distances.npy");
+        let distances_arr = nested_vec_to_arr(distances)?;
+        ndarray_npy::write_npy(&distances_path, &distances_arr).map_err(|e| e.to_string())?;
+        ftlog::info!("Wrote distances to '{}'", distances_path.display());
+
+        let performance_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-performance.json");
+        let performance = serde_json::json!({
+            "selected_algorithm": best_alg.to_string(),
+            "expected_throughput": expected_throughput,
+            "measured_throughput": throughput,
+            "k": args.k,
+            "num_queries": total_queries,
+            "total_time_seconds": start.elapsed().as_secs_f64(),
+            "recall": 1.0,  // TODO: compute actual recall
+        });
+        std::fs::write(
+            &performance_path,
+            serde_json::to_string_pretty(&performance).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| format!("Failed to write performance file '{}': {e}", performance_path.display()))?;
+        ftlog::info!("Wrote performance report to '{}'", performance_path.display());
     }
 
     Ok(())
+}
+
+/// Converts a nested vector into a 2D ndarray Array.
+///
+/// # Errors
+///
+/// - If the nested vectors do not form a proper rectangular shape.
+fn nested_vec_to_arr<T: ndarray_npy::WritableElement>(nested_vec: Vec<Vec<T>>) -> Result<ndarray::Array2<T>, String> {
+    let rows = nested_vec.len();
+    let cols = nested_vec.first().map_or(0, Vec::len);
+    let flat = nested_vec.into_iter().flatten().collect();
+    ndarray::Array2::from_shape_vec((rows, cols), flat).map_err(|e| e.to_string())
 }

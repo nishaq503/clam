@@ -70,7 +70,7 @@ impl AnnDataset {
     }
 
     /// Returns the file name prefix for the dataset.
-    const fn file_name_prefix(&self) -> &'static str {
+    pub const fn file_name_prefix(&self) -> &'static str {
         match self {
             Self::FashionMnist => "fashion-mnist",
             Self::Mnist => "mnist",

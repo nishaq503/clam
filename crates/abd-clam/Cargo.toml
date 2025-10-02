@@ -35,6 +35,7 @@ rand = { workspace = true }
 profi = { workspace = true, default-features = false, features = ["rayon"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 bitcode = { workspace = true, features = ["derive"], optional = true }
+csv = { workspace = true, optional = true }
 
 # For:
 #  - CHAODA
@@ -58,9 +59,8 @@ distances = { workspace = true }
 
 [features]
 profile = ["profi/enable"]
-serde = ["dep:serde"]
-all = []
-bitcode = ["dep:bitcode"]
+all = ["serde"]
+serde = ["dep:serde", "dep:bitcode", "dep:csv"]
 # musals = ["dep:stringzilla"]
 # disk-io = ["dep:flate2"]
 # chaoda = ["dep:smartcore"]

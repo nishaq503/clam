@@ -7,6 +7,8 @@ use rayon::prelude::*;
 use crate::DistanceValue;
 
 mod annotations;
+#[cfg(feature = "serde")]
+mod export;
 mod partition;
 mod partition_strategy;
 

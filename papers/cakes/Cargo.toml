@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-abd-clam = { workspace = true }
+abd-clam = { workspace = true, features = ["all"] }
 clap = { workspace = true, features = ["derive"] }
 distances.workspace = true
 ftlog = { workspace = true }
@@ -12,6 +12,7 @@ ndarray.workspace = true
 ndarray-npy.workspace = true
 rand.workspace = true
 rayon.workspace = true
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
