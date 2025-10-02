@@ -2,19 +2,37 @@
 
 use std::path::{Path, PathBuf};
 
+use distances::number::Float;
 use ftlog::{
     LevelFilter, LoggerGuard,
     appender::{FileAppender, Period},
 };
+use rayon::prelude::*;
 
-/// The euclidean distance metric.
-pub fn euclidean<I: AsRef<[f32]>>(a: &I, b: &I) -> f32 {
-    distances::simd::euclidean_f32(a.as_ref(), b.as_ref())
+/// Compute the inner product of all the given vectors.
+pub fn precompute_ips(vectors: Vec<Vec<f32>>) -> Vec<(f32, Vec<f32>)> {
+    vectors
+        .into_iter()
+        .map(|v| (distances::blas::dot_f32(&v, &v), v))
+        .collect()
 }
 
-/// The cosine distance function.
-pub fn cosine<I: AsRef<[f32]>>(a: &I, b: &I) -> f32 {
-    distances::simd::cosine_f32(a.as_ref(), b.as_ref())
+/// Parallel version of [`precompute_ips`].
+pub fn par_precompute_ips(vectors: Vec<Vec<f32>>) -> Vec<(f32, Vec<f32>)> {
+    vectors
+        .into_par_iter()
+        .map(|v| (distances::blas::dot_f32(&v, &v), v))
+        .collect()
+}
+
+/// Compute the euclidean distance squared between two vectors given their precomputed inner products.
+pub fn euc_by_ip((aa, a): &(f32, Vec<f32>), (bb, b): &(f32, Vec<f32>)) -> f32 {
+    2_f32.mul_add(-distances::blas::dot_f32(a, b), aa + bb)
+}
+
+/// Compute the cosine distance between two vectors given their precomputed inner products.
+pub fn cos_by_ip((aa, a): &(f32, Vec<f32>), (bb, b): &(f32, Vec<f32>)) -> f32 {
+    distances::blas::dot_f32(a, b).mul_add(-(aa * bb).inv_sqrt(), 1.0)
 }
 
 /// Configures the logger.

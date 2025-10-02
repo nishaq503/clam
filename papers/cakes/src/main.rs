@@ -97,29 +97,31 @@ fn main() -> Result<(), String> {
     let mut rng = args.seed.map(rand::rngs::StdRng::seed_from_u64);
 
     for dataset in data::AnnDataset::euclidean_datasets() {
-        if !matches!(dataset, data::AnnDataset::FashionMnist | data::AnnDataset::Sift) {
+        if !dataset.used_in_paper() {
             // Just for quicker development iterations.
             continue;
         }
 
         ftlog::info!("Reading dataset '{}'", dataset.name());
         let items = dataset.read_train(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
+        let items = utils::par_precompute_ips(items);
 
         ftlog::info!("Building CAKES index for dataset '{}'", dataset.name());
-        let root = Cluster::par_new_tree_minimal(items, &utils::euclidean)?;
+        let root = Cluster::par_new_tree_minimal(items, &utils::euc_by_ip)?;
 
         ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
         let (best_alg, expected_throughput) =
-            selection::par_select_fastest_algorithm(&root, &utils::euclidean, 100, args.k, 5.0);
+            selection::par_select_fastest_algorithm(&root, &utils::euc_by_ip, 100, args.k, 5.0);
         ftlog::info!("Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec");
 
         let queries = dataset.read_test(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
+        let queries = utils::precompute_ips(queries);
         ftlog::info!("Measuring throughput for dataset '{}'", dataset.name());
 
         let start = std::time::Instant::now();
         let mut total_queries = 0;
         while start.elapsed().as_secs_f64() < 10.0 {
-            let _results = best_alg.par_batch_search(&root, &utils::euclidean, &queries);
+            let _results = best_alg.par_batch_search(&root, &utils::euc_by_ip, &queries);
             total_queries += queries.len();
         }
         let throughput = total_queries as f64 / start.elapsed().as_secs_f64();
@@ -130,29 +132,31 @@ fn main() -> Result<(), String> {
     }
 
     for dataset in data::AnnDataset::cosine_datasets() {
-        if !matches!(dataset, data::AnnDataset::Glove25) {
+        if !dataset.used_in_paper() {
             // Just for quicker development iterations.
             continue;
         }
 
         ftlog::info!("Reading dataset '{}'", dataset.name());
         let items = dataset.read_train(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
+        let items = utils::par_precompute_ips(items);
 
         ftlog::info!("Building CAKES index for dataset '{}'", dataset.name());
-        let root = Cluster::par_new_tree_minimal(items, &utils::cosine)?;
+        let root = Cluster::par_new_tree_minimal(items, &utils::cos_by_ip)?;
 
         ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
         let (best_alg, expected_throughput) =
-            selection::par_select_fastest_algorithm(&root, &utils::cosine, 100, args.k, 5.0);
+            selection::par_select_fastest_algorithm(&root, &utils::cos_by_ip, 100, args.k, 5.0);
         ftlog::info!("Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec");
 
         let queries = dataset.read_test(&inp_dir, rng.as_mut()).map_err(|e| e.to_string())?;
+        let queries = utils::par_precompute_ips(queries);
         ftlog::info!("Measuring throughput for dataset '{}'", dataset.name());
 
         let start = std::time::Instant::now();
         let mut total_queries = 0;
         while start.elapsed().as_secs_f64() < 10.0 {
-            let _results = best_alg.par_batch_search(&root, &utils::cosine, &queries);
+            let _results = best_alg.par_batch_search(&root, &utils::cos_by_ip, &queries);
             total_queries += queries.len();
         }
         let throughput = total_queries as f64 / start.elapsed().as_secs_f64();

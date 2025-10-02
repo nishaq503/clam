@@ -39,6 +39,11 @@ impl AnnDataset {
         }
     }
 
+    /// Returns true if the dataset was used in our CAKES paper.
+    pub const fn used_in_paper(&self) -> bool {
+        matches!(self, Self::FashionMnist | Self::Glove25 | Self::Sift)
+    }
+
     /// Returns the datasets that use Euclidean distance.
     pub fn euclidean_datasets() -> Vec<Self> {
         vec![Self::FashionMnist, Self::Mnist, Self::Sift, Self::Gist]

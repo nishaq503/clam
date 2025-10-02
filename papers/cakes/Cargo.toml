@@ -11,6 +11,7 @@ ftlog = "0.2.15"
 ndarray.workspace = true
 ndarray-npy.workspace = true
 rand.workspace = true
+rayon.workspace = true
 
 [lints]
 workspace = true
