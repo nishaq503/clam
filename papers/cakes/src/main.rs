@@ -114,8 +114,8 @@ fn main() -> Result<(), String> {
     let subset = [data::AnnDataset::FashionMnist];
 
     let strategy = PartitionStrategy::default()
-        .with_branching_factor(BranchingFactor::Fixed(2))
-        .with_span_reduction(SpanReductionFactor::Phi);
+        .with_branching_factor(BranchingFactor::Unbounded)
+        .with_span_reduction(SpanReductionFactor::Sqrt2);
 
     for dataset in data::AnnDataset::all_datasets() {
         if !subset.contains(&dataset) {

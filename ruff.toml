@@ -10,6 +10,9 @@ ignore = [
   "COM812",
   "ISC001",
   "PGH003",  # Use specific rule codes when ignoring type issues
+  "EM102",   # Use of f-string in exceptions
+  "TRY003", # Long message in exception class.
+  "PD002", # `inplace=True` in dataframe method.
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 
@@ -55,7 +58,4 @@ convention = "google"
 ]
 "**/notebooks/*.ipynb" = [ # Ignore more lints in Jupyter notebooks.
   "T201", # Use of `print` function.
-  "EM102", # Use of f-string in exceptions.
-  "TRY003", # Long message in exception class.
-  "PD002", # `inplace=True` in dataframe method.
 ]
