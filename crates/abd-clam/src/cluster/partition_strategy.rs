@@ -11,21 +11,15 @@ use super::Cluster;
 /// Our implementation of the hierarchical clustering algorithm may evolve over time. For now the strategy is used as follows:
 ///   - The `partition` method (and its variants) will first check the `predicate` to see if the cluster should be partitioned. If the `predicate` is satisfied,
 ///     we proceed to partition the cluster; otherwise, we leave the cluster as a leaf.
-///   - If the `branching_factor` not `SRF`, we use the approach described in the [`BranchingFactor`] enum to determine how many children to create.
-///   - If the `branching_factor` is `SRF`, we will use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
+///   - If the `branching_factor` is not `Unbounded`, we use the approach described in the [`BranchingFactor`] enum to determine how many children to create.
+///   - If the `branching_factor` is `Unbounded`, we use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
 ///
 /// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
-)]
 #[must_use]
 pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
     pub(crate) predicate: P,
-    /// The branching factor of the cluster tree.If the predicate is satisfied, the non-center items in the cluster are partitioned into subsets until the desired `branching_factor` is reached.
-    ///   - If the `branching_factor` is `Adaptive`, then the `span_reduction` factor is used to further partition the subsets until all child clusters will likely
-    ///     have a span that is small enough to satisfy the span reduction criterion.
+    /// The branching factor of the cluster tree.
     pub(crate) branching_factor: BranchingFactor,
     /// Span reduction factor.
     pub(crate) span_reduction: SpanReductionFactor,
@@ -37,7 +31,7 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> std::fmt:
     for PartitionStrategy<Id, I, T, A, P>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if matches!(self.branching_factor, BranchingFactor::SRF) {
+        if matches!(self.branching_factor, BranchingFactor::Unbounded) {
             write!(f, "SRF({})", self.span_reduction)
         } else {
             write!(f, "BF({})", self.branching_factor)
@@ -79,7 +73,7 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
 
     /// Sets the branching factor of the cluster tree.
     ///
-    /// The default branching factor is `SRF`.
+    /// The default branching factor is `Unbounded`.
     pub fn with_branching_factor(mut self, branching_factor: BranchingFactor) -> Self {
         self.branching_factor = if let BranchingFactor::Fixed(n) = branching_factor {
             BranchingFactor::Fixed(n.max(2))
@@ -104,11 +98,34 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
     }
 }
 
+impl<'a, Id, I, T: DistanceValue, A> From<&'a str>
+    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
+{
+    fn from(value: &'a str) -> Self {
+        let strategy = Self::default();
+        match value.to_lowercase().as_str() {
+            srf if srf.starts_with("srf(") && srf.ends_with(')') => {
+                let inner = &srf["srf(".len()..srf.len() - 1];
+                strategy.with_span_reduction(SpanReductionFactor::from(inner))
+            }
+            bf if bf.starts_with("bf(") && bf.ends_with(')') => {
+                let inner = &bf["bf(".len()..bf.len() - 1];
+                strategy.with_branching_factor(BranchingFactor::from(inner))
+            }
+            _ => strategy,
+        }
+    }
+}
+
+impl<Id, I, T: DistanceValue, A> From<String>
+    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
+{
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
 /// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the `SpanReductionFactor`).
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
-)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BranchingFactor {
@@ -120,7 +137,7 @@ pub enum BranchingFactor {
     /// subtree to the cardinality of the cluster.
     Adaptive(usize),
     /// The branching factor is effectively unbounded; the actual branching factor will be controlled by the `SpanReductionFactor` (SRF).
-    SRF,
+    Unbounded,
 }
 
 impl std::fmt::Display for BranchingFactor {
@@ -129,13 +146,13 @@ impl std::fmt::Display for BranchingFactor {
             Self::Fixed(k) => write!(f, "Fixed({k})"),
             Self::Logarithmic => write!(f, "Logarithmic"),
             Self::Adaptive(max_k) => write!(f, "Adaptive({max_k})"),
-            Self::SRF => write!(f, "SRF"),
+            Self::Unbounded => write!(f, "Unbounded"),
         }
     }
 }
 
 impl BranchingFactor {
-    /// Returns the branching factor for a cluster with the given the cardinality of the cluster, if not `SRF`.
+    /// Returns the branching factor for a cluster with the given the cardinality of the cluster, if not `Unbounded`.
     #[expect(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -156,14 +173,14 @@ impl BranchingFactor {
                 .min_by_key(|&(k, _)| k)
                 .map(|(k, _)| k)
                 .or(Some(2)),
-            Self::SRF => None, // Effectively no limit on branching factor; SRF will control the actual branching factor
+            Self::Unbounded => None, // Effectively no limit on branching factor; SRF will control the actual branching factor
         }
     }
 }
 
 impl Default for BranchingFactor {
     fn default() -> Self {
-        Self::SRF
+        Self::Unbounded
     }
 }
 
@@ -173,16 +190,38 @@ impl From<usize> for BranchingFactor {
     }
 }
 
+impl<'a> From<&'a str> for BranchingFactor {
+    fn from(value: &'a str) -> Self {
+        match value.to_lowercase().as_str() {
+            "logarithmic" => Self::Logarithmic,
+            "unbounded" => Self::Unbounded,
+            adaptive if adaptive.starts_with("adaptive(") && adaptive.ends_with(')') => {
+                let inner = &adaptive["adaptive(".len()..adaptive.len() - 1];
+                inner
+                    .parse::<usize>()
+                    .map_or(Self::Adaptive(128), |n| Self::Adaptive(n.max(3)))
+            }
+            fixed if fixed.starts_with("fixed(") && fixed.ends_with(')') => {
+                let inner = &fixed["fixed(".len()..fixed.len() - 1];
+                inner.parse::<usize>().map_or(Self::Fixed(2), |n| Self::Fixed(n.max(2)))
+            }
+            _ => value.parse::<usize>().map_or(Self::Fixed(2), |n| Self::Fixed(n.max(2))),
+        }
+    }
+}
+
+impl From<String> for BranchingFactor {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
+    }
+}
+
 /// The Span Reduction Factor (SRF) of a `Cluster` controls how much the span of child clusters should be reduced compared to their parent cluster.
 ///
 /// The `span` of a cluster is the distance between any two of its extremal items, e.g. the distance between poles used for partitioning in a binary tree. This
 /// can be thought of as an analog to the diameter of a covering sphere in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of
 /// child clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at
 /// most half the span of its parent.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
-)]
 #[non_exhaustive]
 pub enum SpanReductionFactor {
     /// Use a fixed SRF value. This must be in the range (1, ∞). If the value is outside this range, the SRF defaults to `√2`.
@@ -275,6 +314,35 @@ impl From<f32> for SpanReductionFactor {
         } else {
             Self::Sqrt2 // Default to Sqrt2 if out of range
         }
+    }
+}
+
+impl<'a> From<&'a str> for SpanReductionFactor {
+    fn from(value: &'a str) -> Self {
+        match value.to_lowercase().as_str() {
+            "sqrt2" => Self::Sqrt2,
+            "two" => Self::Two,
+            "e" => Self::E,
+            "pi" => Self::Pi,
+            "phi" => Self::Phi,
+            fixed if fixed.starts_with("fixed(") && fixed.ends_with(')') => {
+                let inner = &fixed["fixed(".len()..fixed.len() - 1];
+                inner.parse::<f64>().map_or(Self::Sqrt2, |srf| {
+                    if 1.0 < srf && srf.is_finite() {
+                        Self::Fixed(srf)
+                    } else {
+                        Self::Sqrt2
+                    }
+                })
+            }
+            _ => value.parse::<f64>().map_or(Self::Sqrt2, Self::from),
+        }
+    }
+}
+
+impl From<String> for SpanReductionFactor {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
     }
 }
 

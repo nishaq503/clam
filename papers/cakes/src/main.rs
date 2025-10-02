@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     let subset = data::AnnDataset::all_datasets();
 
     let strategy = PartitionStrategy::default()
-        .with_branching_factor(BranchingFactor::SRF)
+        .with_branching_factor(BranchingFactor::Unbounded)
         .with_span_reduction(SpanReductionFactor::Phi);
 
     for dataset in data::AnnDataset::all_datasets() {
