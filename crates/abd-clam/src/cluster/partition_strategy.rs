@@ -15,6 +15,10 @@ use super::Cluster;
 ///   - If the `branching_factor` is `SRF`, we will use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
 ///
 /// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+)]
 #[must_use]
 pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
@@ -101,6 +105,10 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
 }
 
 /// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the `SpanReductionFactor`).
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+)]
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BranchingFactor {
@@ -171,6 +179,10 @@ impl From<usize> for BranchingFactor {
 /// can be thought of as an analog to the diameter of a covering sphere in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of
 /// child clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at
 /// most half the span of its parent.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+)]
 #[non_exhaustive]
 pub enum SpanReductionFactor {
     /// Use a fixed SRF value. This must be in the range (1, ∞). If the value is outside this range, the SRF defaults to `√2`.

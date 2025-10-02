@@ -7,7 +7,7 @@ edition = "2024"
 abd-clam = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 distances.workspace = true
-ftlog = "0.2.15"
+ftlog = { workspace = true }
 ndarray.workspace = true
 ndarray-npy.workspace = true
 rand.workspace = true

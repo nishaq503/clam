@@ -32,27 +32,31 @@ missing_docs_in_private_items = { level = "warn", priority = -12 }
 unnecessary_debug_formatting = { level = "allow", priority = 1 }  # TODO Najib: Remove this after the CLI PR is merged.
 
 [workspace.dependencies]
+# Local crates.
+abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
 distances = { version = "1.8.0", path = "crates/distances" }
 symagen = { version = "0.5.0", path = "crates/symagen" }
-
+# Crate dependencies.
 num = "0.4"
 rayon = "1.11"
 rand = "0.9"
-serde = "1.0"
-libm = "0.2.14"
-ndarray = "0.16"
-ndarray-npy = "0.9"
-num-integer = "0.1"
-stringzilla = "4.0"
-numpy = "0.25"
-pyo3 = "0.25"
-test-case = "3.2.1"
-criterion = "0.7.0"
 profi = { version = "0.1.2", default-features = false }
+serde = "1.0"
+bitcode = "0.5"
+libm = "0.2.14"
+num-integer = "0.1"
 openblas-src = "0.10.13"
 rust-blas = "0.2.0"
 clap = "4.5.48"
-abd-clam = { version = "0.32.0", path = "crates/abd-clam" }
+ftlog = "0.2.15"
+numpy = "0.25"
+pyo3 = "0.25"
+# Dev dependencies.
+test-case = "3.2.1"
+criterion = "0.7.0"
+ndarray = "0.16"
+ndarray-npy = "0.9"
+stringzilla = "4.0"
 
 [profile.test]
 opt-level = 3

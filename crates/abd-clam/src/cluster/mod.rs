@@ -35,6 +35,10 @@ pub use partition_strategy::{expected_num_clusters, BranchingFactor, PartitionSt
 /// * `Id`: The type of metadata associated each item.
 /// * `T`: The type of distance values between items.
 /// * `A`: The type of arbitrary annotations associated with each cluster.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+)]
 #[must_use]
 pub struct Cluster<Id, I, T: DistanceValue, A> {
     /// The depth of the cluster in the tree. The root cluster has depth 0.
@@ -58,6 +62,10 @@ pub struct Cluster<Id, I, T: DistanceValue, A> {
 }
 
 /// The contents of a `Cluster` can either be a collection of items (if it is a leaf) or a collection of child `Cluster`s (if it is a parent).
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+)]
 pub(crate) enum Contents<Id, I, T: DistanceValue, A> {
     /// The cluster is a leaf and contains items directly.
     Leaf(Vec<(Id, I)>),
