@@ -8,7 +8,7 @@ use rand::prelude::*;
 
 /// Supported datasets from ANN-Benchmarks.
 #[derive(Debug, PartialEq, Eq)]
-#[allow(clippy::missing_docs_in_private_items)]
+#[allow(clippy::missing_docs_in_private_items, dead_code)]
 pub enum AnnDataset {
     // Euclidean
     FashionMnist,
@@ -45,10 +45,10 @@ impl AnnDataset {
 
     /// Returns the metric used by the dataset, assuming the data points are represented as `(inner-product, vec)` tuples.
     #[allow(clippy::type_complexity)]
-    pub const fn metric_by_ip(&self) -> fn(&(f32, Vec<f32>), &(f32, Vec<f32>)) -> f32 {
+    pub const fn metric_by_ip(&self) -> fn(&Vec<f32>, &Vec<f32>) -> f32 {
         match self {
-            Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => crate::utils::euc_by_ip,
-            _ => crate::utils::cos_by_ip,
+            Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => |x, y| distances::simd::euclidean_f32(x, y),
+            _ => |x, y| distances::simd::cosine_f32(x, y),
         }
     }
 
@@ -59,7 +59,7 @@ impl AnnDataset {
             Self::Glove25,
             Self::Sift,
             Self::Glove100,
-            Self::NYTimes,
+            // Self::NYTimes,
             Self::Mnist,
             Self::Glove50,
             Self::Glove200,

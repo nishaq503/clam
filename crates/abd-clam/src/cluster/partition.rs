@@ -91,6 +91,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     ///
     /// * `metric`: A function that computes the distance between two items.
     /// * `strategy`: The `PartitionStrategy` that controls how the tree is constructed.
+    #[expect(clippy::too_many_lines)]
     pub fn partition<M: Fn(&I, &I) -> T, P: Fn(&Self) -> bool>(
         mut self,
         metric: &M,
@@ -122,15 +123,18 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
                     .iter()
                     .map(|item| metric(&self.center.1, &item.1))
                     .collect::<Vec<_>>();
-                let (arg_radius, radial_sum) = radial_distances
+                let arg_radius = radial_distances
                     .iter()
                     .enumerate()
-                    .fold((0, T::zero()), |(max_i, sum), (i, &d)| {
-                        (if d > radial_distances[max_i] { i } else { max_i }, sum + d)
-                    });
-                self.radius = radial_distances[arg_radius];
+                    .max_by_key(|(_, &d)| MaxItem((), d))
+                    .map_or_else(|| unreachable!("Cardinality is at least 2"), |(i, _)| i);
+                self.radius = radial_distances
+                    .iter()
+                    .max_by_key(|&&d| MaxItem((), d))
+                    .copied()
+                    .unwrap_or_else(|| unreachable!("Cardinality is at least 2"));
                 self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
-                self.radial_sum = radial_sum;
+                self.radial_sum = radial_distances.into_iter().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
@@ -154,22 +158,30 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
 
                 let mut splits = vec![left, right];
                 if let Some(branching_factor) = strategy.branching_factor.for_cardinality(self.cardinality) {
+                    let mut splits_heap = splits
+                        .into_iter()
+                        .map(|(items, span)| {
+                            let n = items.len();
+                            ((items, span), n)
+                        })
+                        .collect::<SizedHeap<_, _>>();
                     // Further split the largest partition until we reach the desired branching factor.
-                    while splits.len() < branching_factor {
-                        let (largest_partition_index, _) = splits
-                            .iter()
-                            .enumerate()
-                            .max_by_key(|&(_, (items, _))| items.len())
-                            .unwrap_or_else(|| unreachable!("splits is non-empty"));
-                        let (items, span) = splits.swap_remove(largest_partition_index);
-                        if items.len() <= 2 {
+                    while splits_heap.len() < branching_factor {
+                        let ((items, span), _) =
+                            splits_heap.pop().unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        let n = items.len();
+                        if n <= 2 {
                             // Cannot split further.
-                            splits.push((items, span));
+                            splits_heap.push(((items, span), n));
                             break;
                         }
                         let (split, _) = split_by_poles(items, metric, None);
-                        splits.extend(split);
+                        splits_heap.extend(split.into_iter().map(|(items, span)| {
+                            let n = items.len();
+                            ((items, span), n)
+                        }));
                     }
+                    splits = splits_heap.take_items().map(|(items, _)| items).collect();
                 } else {
                     // Use the SRF to continue splitting until the span reduction criterion is met.
                     let max_child_span = strategy.span_reduction.max_child_span_for(self.span);
@@ -324,6 +336,7 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
     }
 
     /// Parallel version of [`partition`](Self::partition).
+    #[expect(clippy::too_many_lines)]
     pub fn par_partition<M: Fn(&I, &I) -> T + Send + Sync, P: Fn(&Self) -> bool + Send + Sync>(
         mut self,
         metric: &M,
@@ -355,15 +368,18 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
                     .par_iter()
                     .map(|item| metric(&self.center.1, &item.1))
                     .collect::<Vec<_>>();
-                let (arg_radius, radial_sum) = radial_distances
+                let arg_radius = radial_distances
                     .iter()
                     .enumerate()
-                    .fold((0, T::zero()), |(max_i, sum), (i, &d)| {
-                        (if d > radial_distances[max_i] { i } else { max_i }, sum + d)
-                    });
-                self.radius = radial_distances[arg_radius];
+                    .max_by_key(|(_, &d)| MaxItem((), d))
+                    .map_or_else(|| unreachable!("Cardinality is at least 2"), |(i, _)| i);
+                self.radius = radial_distances
+                    .iter()
+                    .max_by_key(|&&d| MaxItem((), d))
+                    .copied()
+                    .unwrap_or_else(|| unreachable!("Cardinality is at least 2"));
                 self.lfd = crate::utils::lfd_estimate(&radial_distances, self.radius);
-                self.radial_sum = radial_sum;
+                self.radial_sum = radial_distances.into_iter().sum();
 
                 // Replace contents so that we can check the partition criteria without running into borrow issues.
                 self.contents = Contents::Leaf(items);
@@ -387,22 +403,30 @@ impl<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, A: Send + 
 
                 let mut splits = vec![left, right];
                 if let Some(branching_factor) = strategy.branching_factor.for_cardinality(self.cardinality) {
+                    let mut splits_heap = splits
+                        .into_iter()
+                        .map(|(items, span)| {
+                            let n = items.len();
+                            ((items, span), n)
+                        })
+                        .collect::<SizedHeap<_, _>>();
                     // Further split the largest partition until we reach the desired branching factor.
-                    while splits.len() < branching_factor {
-                        let (largest_partition_index, _) = splits
-                            .iter()
-                            .enumerate()
-                            .max_by_key(|&(_, (items, _))| items.len())
-                            .unwrap_or_else(|| unreachable!("splits is non-empty"));
-                        let (items, span) = splits.swap_remove(largest_partition_index);
-                        if items.len() <= 2 {
+                    while splits_heap.len() < branching_factor {
+                        let ((items, span), _) =
+                            splits_heap.pop().unwrap_or_else(|| unreachable!("splits is non-empty"));
+                        let n = items.len();
+                        if n <= 2 {
                             // Cannot split further.
-                            splits.push((items, span));
+                            splits_heap.push(((items, span), n));
                             break;
                         }
                         let (split, _) = par_split_by_poles(items, metric, None);
-                        splits.extend(split);
+                        splits_heap.extend(split.into_iter().map(|(items, span)| {
+                            let n = items.len();
+                            ((items, span), n)
+                        }));
                     }
+                    splits = splits_heap.take_items().map(|(items, _)| items).collect();
                 } else {
                     // Use the SRF to continue splitting until the span reduction criterion is met.
                     let max_child_span = strategy.span_reduction.max_child_span_for(self.span);

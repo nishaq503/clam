@@ -2,7 +2,7 @@
 
 use num::Integer;
 
-use crate::DistanceValue;
+use crate::{utils::MinItem, DistanceValue};
 
 use super::Cluster;
 
@@ -16,6 +16,7 @@ use super::Cluster;
 ///
 /// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
 #[must_use]
+#[derive(Debug, Clone, Copy)]
 pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
     pub(crate) predicate: P,
@@ -66,9 +67,16 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
     /// Sets the predicate that determines whether a cluster should be partitioned into child clusters.
     ///
     /// The default predicate will allow partitioning of any cluster with more than one non-center item.
-    pub fn with_predicate(mut self, predicate: P) -> Self {
-        self.predicate = predicate;
-        self
+    pub const fn with_predicate<F: Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync + 'static>(
+        &self,
+        predicate: F,
+    ) -> PartitionStrategy<Id, I, T, A, F> {
+        PartitionStrategy {
+            predicate,
+            branching_factor: self.branching_factor,
+            span_reduction: self.span_reduction,
+            phantom: core::marker::PhantomData,
+        }
     }
 
     /// Sets the branching factor of the cluster tree.
@@ -126,8 +134,9 @@ impl<Id, I, T: DistanceValue, A> From<String>
 }
 
 /// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the `SpanReductionFactor`).
-#[derive(Debug)]
+#[must_use]
 #[non_exhaustive]
+#[derive(Debug, Clone, Copy)]
 pub enum BranchingFactor {
     /// Each cluster can have zero or `n` children. If `n < 2`, it is treated as 2.
     Fixed(usize),
@@ -159,19 +168,19 @@ impl BranchingFactor {
         clippy::cast_possible_truncation
     )]
     #[must_use]
-    pub fn for_cardinality(&self, cardinality: usize) -> Option<usize> {
+    pub fn for_cardinality(&self, n: usize) -> Option<usize> {
         match self {
-            Self::Fixed(k) => Some(*k),
-            Self::Logarithmic => {
+            Self::Fixed(b) => Some(*b),
+            Self::Logarithmic if n >= 5 => {
                 // Use a branching factor of O(log n), where n is the number of non-center items in the cluster.
                 // Since `cardinality > 2`, this is at least 2.
-                Some(((cardinality - 1) as f64).log2().ceil() as usize)
+                Some(((n - 1) as f64).log2().ceil() as usize)
             }
-            Self::Adaptive(max_k) => (2..=*max_k)
-                .map(|k| (k, expected_num_clusters(cardinality, k) as f64 / cardinality as f64))
-                .filter(|&(_, r)| r < 0.6)
-                .min_by_key(|&(k, _)| k)
-                .map(|(k, _)| k)
+            Self::Logarithmic => Some(2), // For n < 5, just use a branching factor of 2
+            Self::Adaptive(max_b) => (2..=*max_b)
+                .map(|b| (b, expected_num_clusters(n, b) as f64 / n as f64))
+                .min_by_key(|&(_, r)| MinItem((), r))
+                .map(|(b, _)| b)
                 .or(Some(2)),
             Self::Unbounded => None, // Effectively no limit on branching factor; SRF will control the actual branching factor
         }
@@ -222,7 +231,9 @@ impl From<String> for BranchingFactor {
 /// can be thought of as an analog to the diameter of a covering sphere in arbitrary metric (or non-metric) spaces. The SRF is the factor by which the span of
 /// child clusters should be reduced compared to their parent. For example, `SpanReductionFactor::Two` means that the span of each child cluster should be at
 /// most half the span of its parent.
+#[must_use]
 #[non_exhaustive]
+#[derive(Debug, Clone, Copy)]
 pub enum SpanReductionFactor {
     /// Use a fixed SRF value. This must be in the range (1, ∞). If the value is outside this range, the SRF defaults to `√2`.
     Fixed(f64),
@@ -242,17 +253,17 @@ impl SpanReductionFactor {
     /// Returns the maximum allowed child span for a given span from the parent cluster.
     pub fn max_child_span_for<T: DistanceValue>(&self, span: T) -> T {
         let factor = match self {
-            Self::Fixed(srf) => srf.recip(),
-            Self::Sqrt2 => core::f64::consts::FRAC_1_SQRT_2,
-            Self::Two => 0.5,
-            Self::E => core::f64::consts::E.recip(),
-            Self::Pi => core::f64::consts::FRAC_1_PI,
-            Self::Phi => crate::utils::PHI_F64.recip(),
+            Self::Fixed(srf) => *srf,
+            Self::Sqrt2 => core::f64::consts::SQRT_2,
+            Self::Two => 2.0,
+            Self::E => core::f64::consts::E,
+            Self::Pi => core::f64::consts::PI,
+            Self::Phi => crate::utils::PHI_F64,
         };
         let span = span
             .to_f64()
             .unwrap_or_else(|| unreachable!("DistanceValue must be convertible to f64"));
-        T::from_f64(span * factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
+        T::from_f64(span / factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
     }
 }
 
@@ -349,25 +360,25 @@ impl From<String> for SpanReductionFactor {
 /// Recursively finds the number of clusters in a balanced tree with the given branching factor.
 ///
 /// This implements the following recurrence relation:
-///   - `R(1) = 1` and `R(2) = 1`, the leaf clusters.
-///   - `R(n) = n - 1`, for `3 <= n <= k + 1`, the parents of leaf clusters.
-///   - `R(1 + i + k * n) = 1 + i * R(n + 1) + (k - i) * R(n)`, for `n > k + 1` and `0 <= i < k`.
+///   - `T(1) = 1` and `T(2) = 1`, the leaf clusters.
+///   - `T(n) = n - 1`, for `3 <= n <= b + 1`, the clusters whose children are all leaves
+///   - `T(1 + a + b * n) = 1 + a * T(n + 1) + (b - a) * T(n)`, for `n > b + 1` and `0 <= a < b`.
 ///
 /// This function is used to determine the number of children to create when the [`BranchingFactor`] is `Adaptive`. The chosen branching factor is the value of
-/// `k` that minimizes the expected ratio of the size of the subtree to the cardinality of the cluster.
+/// `b` that minimizes the expected ratio of the size of the subtree to the cardinality of the cluster.
 ///
 /// # Arguments
 ///
 /// - `n`: The cardinality of the cluster (number of items, including the center).
-/// - `k`: The branching factor of the tree.
+/// - `b`: The branching factor of the tree.
 #[must_use]
-pub fn expected_num_clusters(n: usize, k: usize) -> usize {
+pub fn expected_num_clusters(n: usize, b: usize) -> usize {
     if n < 3 {
         1
-    } else if n < k + 2 {
+    } else if n < b + 2 {
         n - 1
     } else {
-        let (i, n) = (n - 1).div_rem(&k);
-        1 + i * expected_num_clusters(n + 1, k) + (k - i) * expected_num_clusters(n, k)
+        let (n, a) = (n - 1).div_rem(&b);
+        1 + a * expected_num_clusters(n + 1, b) + (b - a) * expected_num_clusters(n, b)
     }
 }

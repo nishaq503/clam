@@ -58,4 +58,7 @@ convention = "google"
 ]
 "**/notebooks/*.ipynb" = [ # Ignore more lints in Jupyter notebooks.
   "T201", # Use of `print` function.
+  "C408", # Unnecessary dict call
+  "E501", # Line too long
+  "S101", # Use of assert
 ]

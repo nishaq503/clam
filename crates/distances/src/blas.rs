@@ -61,3 +61,15 @@ pub fn dot_f32(x: &[f32], y: &[f32]) -> f32 {
 pub fn dot_f64(x: &[f64], y: &[f64]) -> f64 {
     Dot::dot(x, y)
 }
+
+/// Computes the L2 norm of a vector using BLAS.
+#[must_use]
+pub fn norm2_f32(x: &[f32]) -> f32 {
+    Nrm2::nrm2(x)
+}
+
+/// Computes the L2 norm of a vector using BLAS.
+#[must_use]
+pub fn norm2_f64(x: &[f64]) -> f64 {
+    Nrm2::nrm2(x)
+}
