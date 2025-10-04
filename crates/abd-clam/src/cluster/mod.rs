@@ -191,7 +191,7 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     }
 
     /// The children of the cluster, if any.
-    pub fn children(&self) -> Option<&[Box<Self>]> {
+    pub const fn children(&self) -> Option<&[Box<Self>]> {
         match &self.contents {
             Contents::Leaf(_) => None,
             Contents::Children(children) => Some(children.as_slice()),

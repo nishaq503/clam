@@ -6,10 +6,11 @@ authors = [
     "Noah Daniels <noah_daniels@uri.edu>",
     "Tom Howard <info@tomhoward.codes>",
 ]
-edition = "2021"
 description = "Fast and generic distance functions for high-dimensional data."
-license = "MIT"
-readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme = "./README.md"
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true

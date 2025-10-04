@@ -3,9 +3,9 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    Cluster,
     cakes::selection,
     cluster::{BranchingFactor, PartitionStrategy, SpanReductionFactor},
+    Cluster,
 };
 use clap::Parser;
 use rand::prelude::*;

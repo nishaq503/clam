@@ -9,14 +9,14 @@ authors = [
     "Isaac Chen <ijchen@uri.edu>",
     "Oliver McLaughlin <olwmcjp@gmail.com>",
 ]
-edition = "2021"
-rust-version = "1.86"  # using: `next_up`
 description = "Clustering, Learning and Approximation with Manifolds"
-license = "MIT"
 readme = "./README.md"
 documentation = "https://docs.rs/abd-clam/latest/abd_clam/"
 repository = "https://github.com/URI-ABD/clam"
 homepage = "https://github.com/URI-ABD/clam"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 # Publishing lock.
 # When you're ready to start publishing, set publish to true

@@ -9,6 +9,11 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+edition = "2021"
+rust-version = "1.90"  # using: `cargo publish --workspace`
+license = "MIT"
+
 # TODO: Najib: Rework the `lints` section after [this issue](https://github.com/rust-lang/cargo/issues/12918) is resolved.
 
 [workspace.lints.rust]
@@ -66,13 +71,5 @@ debug = true
 overflow-checks = true
 
 [profile.release]
-opt-level = 3
-strip = true
-lto = true
-codegen-units = 1
-
-[profile.bench]
-opt-level = 3
-strip = true
 lto = true
 codegen-units = 1

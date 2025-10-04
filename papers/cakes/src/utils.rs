@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use ftlog::{
-    LevelFilter, LoggerGuard,
     appender::{FileAppender, Period},
+    LevelFilter, LoggerGuard,
 };
 // use rayon::prelude::*;
 
