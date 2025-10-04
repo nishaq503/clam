@@ -24,7 +24,6 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 libm = { workspace = true }
 num-integer = { workspace = true }
-openblas-src = { workspace = true }
 rust-blas = { workspace = true }
 
 [dev-dependencies]

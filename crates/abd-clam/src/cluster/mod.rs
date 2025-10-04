@@ -41,6 +41,7 @@ pub use partition_strategy::{expected_num_clusters, BranchingFactor, PartitionSt
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
 )]
+#[cfg_attr(feature = "serde", bitcode(recursive))]
 #[must_use]
 pub struct Cluster<Id, I, T: DistanceValue, A> {
     /// The depth of the cluster in the tree. The root cluster has depth 0.
@@ -68,6 +69,7 @@ pub struct Cluster<Id, I, T: DistanceValue, A> {
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
 )]
+#[cfg_attr(feature = "serde", bitcode(recursive))]
 pub(crate) enum Contents<Id, I, T: DistanceValue, A> {
     /// The cluster is a leaf and contains items directly.
     Leaf(Vec<(Id, I)>),

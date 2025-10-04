@@ -1,7 +1,5 @@
 //! Strategy for partitioning a `Cluster` into child clusters.
 
-use num::Integer;
-
 use crate::{utils::MinItem, DistanceValue};
 
 use super::Cluster;
@@ -378,7 +376,8 @@ pub fn expected_num_clusters(n: usize, b: usize) -> usize {
     } else if n < b + 2 {
         n - 1
     } else {
-        let (n, a) = (n - 1).div_rem(&b);
+        let a = (n - 1) % b;
+        let n = (n - 1) / b;
         1 + a * expected_num_clusters(n + 1, b) + (b - a) * expected_num_clusters(n, b)
     }
 }

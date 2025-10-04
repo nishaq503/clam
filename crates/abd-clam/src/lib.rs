@@ -11,16 +11,21 @@ pub use cluster::Cluster;
 
 /// A trait for types that can be used as distance values in clustering algorithms.
 pub trait DistanceValue:
-    num::Num
-    + num::Bounded
-    + num::ToPrimitive
-    + num::FromPrimitive
-    + num::traits::NumAssignOps
-    + std::iter::Sum
+    PartialEq
     + PartialOrd
     + Copy
     + Display
     + Debug
+    + num_traits::Num
+    + num_traits::NumRef
+    + num_traits::RefNum<Self>
+    + num_traits::NumAssignOps
+    + num_traits::NumAssign
+    + num_traits::NumAssignRef
+    + num_traits::Bounded
+    + num_traits::ToPrimitive
+    + num_traits::FromPrimitive
+    + std::iter::Sum
 {
     /// Returns half of the value.
     #[must_use]
@@ -31,23 +36,34 @@ pub trait DistanceValue:
 
 /// Blanket implementation of `DistanceValue` for all types that satisfy the trait bounds.
 impl<T> DistanceValue for T where
-    T: num::Num
-        + num::Bounded
-        + num::ToPrimitive
-        + num::FromPrimitive
-        + num::traits::NumAssignOps
-        + std::iter::Sum
+    T: PartialEq
         + PartialOrd
         + Copy
         + Display
         + Debug
+        + num_traits::Num
+        + num_traits::NumRef
+        + num_traits::RefNum<Self>
+        + num_traits::NumAssignOps
+        + num_traits::NumAssign
+        + num_traits::NumAssignRef
+        + num_traits::Bounded
+        + num_traits::ToPrimitive
+        + num_traits::FromPrimitive
+        + std::iter::Sum
 {
 }
 
 /// A trait for types that can be used as floating-point distance values in clustering algorithms.
-pub trait FloatDistanceValue: DistanceValue + num::Float + num::traits::FloatConst {}
+pub trait FloatDistanceValue:
+    DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self>
+{
+}
 
-impl<T> FloatDistanceValue for T where T: DistanceValue + num::Float + num::traits::FloatConst {}
+impl<T> FloatDistanceValue for T where
+    T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self>
+{
+}
 
 // /// A trait for types that can be used as floating-point distance values in
 // /// clustering algorithms.

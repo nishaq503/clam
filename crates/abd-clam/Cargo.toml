@@ -29,7 +29,7 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num = { workspace = true }
+num-traits = { workspace = true, features = ["libm"] }
 rayon = { workspace = true }
 rand = { workspace = true }
 profi = { workspace = true, default-features = false, features = ["rayon"] }

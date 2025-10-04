@@ -14,4 +14,3 @@ serde = { workspace = true, features = ["derive"] }
 rand.workspace = true
 rayon.workspace = true
 ftlog.workspace = true
-num.workspace = true

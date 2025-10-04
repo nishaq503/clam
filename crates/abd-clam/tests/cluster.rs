@@ -1,7 +1,6 @@
 //! Tests for the `Cluster` struct.
 
 use abd_clam::{cluster::PartitionStrategy, Cluster};
-use num::Integer;
 use test_case::test_case;
 
 mod common;
@@ -180,7 +179,8 @@ fn counting_clusters(k: usize) {
         memo[n] = n - 1;
     }
     for kn_i_1 in (k + 1)..=max_n {
-        let (q, r) = (kn_i_1 - 1).div_rem(&k);
+        let r = (kn_i_1 - 1) % k;
+        let q = (kn_i_1 - 1) / k;
         memo[kn_i_1] = 1 + r * memo[q + 1] + (k - r) * memo[q];
     }
 

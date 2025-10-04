@@ -3,7 +3,7 @@
 use std::iter::Sum;
 
 use abd_clam::DistanceValue;
-use num::Float;
+use num_traits::Float;
 
 pub fn absolute_difference<T: DistanceValue>(a: &T, b: &T) -> T {
     if a < b {
