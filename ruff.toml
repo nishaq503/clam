@@ -61,4 +61,6 @@ convention = "google"
   "C408", # Unnecessary dict call
   "E501", # Line too long
   "S101", # Use of assert
+  "FBT003", # Boolean variable in function argument
+  "FBT001", # Boolean-typed in positional argument in function
 ]
