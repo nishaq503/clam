@@ -63,4 +63,5 @@ convention = "google"
   "S101", # Use of assert
   "FBT003", # Boolean variable in function argument
   "FBT001", # Boolean-typed in positional argument in function
+  "EM101", # Use of string literal in exceptions
 ]
