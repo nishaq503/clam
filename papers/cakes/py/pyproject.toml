@@ -8,20 +8,16 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "ipywidgets>=8.1.7",
     "jupyterlab>=4.4.9",
-    "matplotlib>=3.10.6",
-    "mplcursors>=0.7",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
     "plotly>=6.3.0",
     "plotly-stubs>=0.0.6",
     "pyarrow>=21.0.0",
-    "scipy-stubs>=1.16.2.1",
+    "scipy-stubs>=1.16.2.3",
     "streamlit[charts]>=1.50.0",
     "tqdm>=4.67.1",
     "typer>=0.19.2",
-    "voila>=0.5.11",
 ]
 
 [build-system]
