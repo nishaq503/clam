@@ -224,6 +224,28 @@ impl<Id, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         subtree_items
     }
 
+    /// Removes and returns all items from the cluster and its descendants, excluding the center of this cluster; the children are dropped in the process and
+    /// this cluster becomes a leaf with no items other than its center.
+    ///
+    /// WARNING: This function does not recompute any properties for three the up to the root after removing the items. The caller must ensure that the
+    /// properties are still valid after this operation.
+    fn take_subtree_items(&mut self) -> Vec<(Id, I)> {
+        // Take ownership of the contents so we can recurse and drop children.
+        let contents = core::mem::replace(&mut self.contents, Contents::Leaf(Vec::new()));
+        match contents {
+            Contents::Leaf(items) => items,
+            Contents::Children(children) => {
+                let mut items = Vec::with_capacity(self.cardinality - 1);
+                for mut child in children {
+                    items.extend(child.take_subtree_items());
+                    items.push(child.center);
+                }
+
+                items
+            }
+        }
+    }
+
     /// A vector of references to all items in the cluster, including the center, which is placed first.
     pub fn all_items(&self) -> Vec<&(Id, I)> {
         match &self.contents {
