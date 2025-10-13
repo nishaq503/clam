@@ -34,6 +34,12 @@ impl<T, A> Node<T, A> {
         self.cardinality
     }
 
+    /// Returns a `Range` that can be used to index into the `items` array of the `Tree` for all items in the subtree rooted at this node, excluding the center
+    /// item of this node.
+    pub const fn subtree_indices(&self) -> std::ops::Range<usize> {
+        (self.center_index + 1)..(self.center_index + self.cardinality)
+    }
+
     /// Returns the distance from the center item to the furthest item in the subtree.
     pub const fn radius(&self) -> T
     where

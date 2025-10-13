@@ -1,9 +1,8 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
-#![expect(dead_code)]
-
 use crate::DistanceValue;
 
+pub mod cakes;
 mod node;
 mod partition;
 
@@ -37,5 +36,20 @@ where
         let root = Node::new_root(&mut items, &metric);
 
         Ok(Self { items, root, metric })
+    }
+
+    /// Returns a reference to the items stored in the tree.
+    pub fn items(&self) -> &[(Id, I)] {
+        &self.items
+    }
+
+    /// Returns a reference to the root node of the tree.
+    pub const fn root(&self) -> &Node<T, A> {
+        &self.root
+    }
+
+    /// Returns a reference to the metric used in the tree.
+    pub const fn metric(&self) -> &M {
+        &self.metric
     }
 }
