@@ -9,84 +9,92 @@ impl<T, A> Node<T, A> {
     ///
     /// # WARNING
     ///
-    /// This function assumes that the input `items` vector is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new<Id, I, M>(depth: usize, mut items: Vec<(Id, I)>, metric: &M) -> (Self, Vec<(Id, I)>)
+    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    pub(crate) fn new_root<Id, I, M>(items: &mut [(Id, I)], metric: &M) -> Self
+    where
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+    {
+        Self::new(0, 0, items, metric)
+    }
+
+    /// Creates a new `Node` and recursively partitions it if it has more than two items.
+    ///
+    /// # WARNING
+    ///
+    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    fn new<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
     {
         if items.len() == 1 {
-            let node = Self {
+            return Self {
                 depth,
-                center_index: 0,
+                center_index,
                 cardinality: 1,
                 radius: T::zero(),
                 lfd: 1.0, // By definition, a singleton has LFD of 1
                 children: None,
                 annotation: None,
             };
-            return (node, items);
         } else if items.len() == 2 {
             let radius = metric(&items[0].1, &items[1].1);
-            let node = Self {
+            return Self {
                 depth,
-                center_index: 0,
+                center_index,
                 cardinality: 2,
                 radius,
                 lfd: 1.0, // By definition, a node with two items has LFD of 1
                 children: None,
                 annotation: None,
             };
-            return (node, items);
         }
 
-        let (center_id, center) = swap_remove_center(&mut items, metric);
+        swap_center_to_front(items, metric);
 
-        let radial_distances = items.iter().map(|(_, item)| metric(&center, item)).collect::<Vec<_>>();
-        let (arg_radius, &radius) = radial_distances
+        let radial_distances = items
+            .iter()
+            .skip(1)
+            .map(|(_, item)| metric(&items[0].1, item))
+            .collect::<Vec<_>>();
+        let (radius_index, radius) = radial_distances
             .iter()
             .enumerate()
-            .max_by_key(|&(_, d)| crate::utils::MaxItem((), d))
-            .unwrap_or_else(|| unreachable!("items must be non-empty"));
+            .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
+            .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i + 1, d));
         let lfd = lfd_estimate(&radial_distances, radius);
 
-        let (left_items, right_items, span) = bipolar_split(items, metric, Some(arg_radius));
+        let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
 
-        let (left_child, mut left_items) = Self::new(depth + 1, left_items, metric);
-        let (mut right_child, mut right_items) = Self::new(depth + 1, right_items, metric);
+        let child_depth = depth + 1;
+        let l_center_index = center_index + 1;
+        let r_center_index = l_center_index + l_items.len();
 
-        let mut items = Vec::with_capacity(left_items.len() + right_items.len() + 1);
-        items.push((center_id, center));
-        items.append(&mut left_items);
-        items.append(&mut right_items);
+        let l_child = Self::new(child_depth, l_center_index, l_items, metric);
+        let r_child = Self::new(child_depth, r_center_index, r_items, metric);
 
-        right_child.center_index += left_child.cardinality; // Adjust center index for right child after reassembling items
-
-        let node = Self {
+        Self {
             depth,
-            center_index: 0, // Center is now at index 0 after reassembling items
+            center_index,
             cardinality: items.len(),
             radius,
             lfd,
-            children: Some((Box::new([left_child, right_child]), span)),
+            children: Some((Box::new([l_child, r_child]), span)),
             annotation: None,
-        };
-
-        (node, items)
+        }
     }
 }
 
-/// Moves the center item (geometric median) to the last index in the items array.
-fn swap_remove_center<Id, I, T, M>(items: &mut Vec<(Id, I)>, metric: &M) -> (Id, I)
+/// Moves the center item (geometric median) to the 0th index in the slice.
+fn swap_center_to_front<Id, I, T, M>(items: &mut [(Id, I)], metric: &M)
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    if items.len() < 3 {
-        items.pop().unwrap_or_else(|| unreachable!("items must be non-empty"))
-    } else {
-        let arg_center = arg_gm(items, metric);
-        items.swap_remove(arg_center)
+    if items.len() > 2 {
+        let center_index = gm_index(items, metric);
+        items.swap(0, center_index);
     }
 }
 
@@ -96,7 +104,7 @@ where
 /// all other items in the slice.
 ///
 /// The user must ensure that the items slice is not empty.
-fn arg_gm<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
+fn gm_index<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
@@ -149,11 +157,124 @@ where
 }
 
 /// Splits the given items into two partitions based on their distances to two poles.
-#[expect(clippy::needless_pass_by_value, clippy::type_complexity)]
-fn bipolar_split<Id, I, T, M>(
-    items: Vec<(Id, I)>,
+///
+/// The two poles are chosen as follows:
+///
+/// - If `arg_left` is provided, the item at that index is chosen as the left pole.
+/// - If `arg_left` is `None`, an arbitrary item (the first one) is temporarily chosen, and the item farthest from it is chosen as the left pole.
+/// - The right pole is then chosen as the item farthest from the left pole.
+///
+/// The `span` of the partition is defined as the distance between the two poles.
+///
+/// The items are then partitioned based on their distances to the two poles with ties going to the left partition.
+/// Finally, the poles are added back into their respective partitions, as the last item in each.
+///
+/// # Returns
+///
+/// - An array containing the two partitions of items.
+/// - The span of the partition (distance between the two poles).
+#[expect(clippy::tuple_array_conversions)]
+fn bipolar_split<'a, Id, I, T, M>(
+    items: &'a mut [(Id, I)],
     metric: &M,
-    arg_left: Option<usize>,
-) -> (Vec<(Id, I)>, Vec<(Id, I)>, T) {
-    todo!()
+    left_pole_index: Option<usize>,
+) -> ([&'a mut [(Id, I)]; 2], T)
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
+    let left_pole_index = left_pole_index.unwrap_or_else(|| {
+        // Find the item farthest from the first item.
+        items
+            .iter()
+            .enumerate()
+            .skip(1)
+            .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
+            .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+    });
+
+    // Move the left pole to the 0th index in the slice
+    items.swap(0, left_pole_index);
+
+    // Compute distances from the left pole to all other items
+    let left_pole = &items[0].1;
+    let mut left_distances = items
+        .iter()
+        .skip(1)
+        .map(|(_, item)| metric(left_pole, item))
+        .collect::<Vec<_>>();
+
+    // Find the item farthest from the left pole
+    let (right_pole_index, span) = left_distances
+        .iter()
+        .enumerate()
+        .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
+        .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
+
+    // Move the right pole and its distance to the left pole to the end of their respective slices
+    let last = items.len() - 1;
+    items.swap(right_pole_index, last);
+    left_distances.swap(right_pole_index - 1, last - 1);
+
+    // Compute the distance from the right pole to all items
+    let right_pole = &items[items.len() - 1].1;
+    let left_right_distances = items
+        .iter()
+        .skip(1)
+        .zip(left_distances)
+        .take(items.len() - 2)
+        .map(|((_, item), l)| (l, metric(right_pole, item)))
+        .collect::<Vec<_>>();
+
+    // Reorder the items in place by their distances to the two poles
+    let mid = reorder_items_in_place(&mut items[1..last], &left_right_distances);
+
+    // split the items slice into the left and right partitions
+    let (left, right) = items.split_at_mut(mid);
+
+    // Move the right pole to the 0th index in the right slice
+    right.swap(0, right.len() - 1);
+
+    ([left, right], span)
+}
+
+/// Reorder the slice of items so that the items closer to left pole are on the left side of the slice and items closer to the right pole are on the right side,
+/// returning `mid`, the index of the first item for the right pole.
+///
+/// # WARNING
+///
+/// This assumes that `items` and `distances` have the same length.
+fn reorder_items_in_place<Id, I, T>(items: &mut [(Id, I)], distances: &[(T, T)]) -> usize
+where
+    T: DistanceValue,
+{
+    // TODO(Najib): Remove after testing
+    assert_eq!(items.len(), distances.len());
+
+    let mut left = 0;
+    let mut right = items.len() - 1;
+
+    // TODO(Najib): After tesing, use unsafe code to remove bounds checks while indexing
+
+    loop {
+        // Increment `left` until we find an item for the right pole
+        while distances[left].0 <= distances[left].1 {
+            left += 1;
+        }
+
+        // Decrement `right` until we find an item for the left pole
+        while distances[right].0 > distances[right].1 {
+            right -= 1;
+        }
+
+        // If the two indices have crossed, we are done
+        if left >= right {
+            break;
+        }
+
+        // swap the items at the two indices
+        items.swap(left, right);
+    }
+
+    left
 }
