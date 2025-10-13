@@ -6,6 +6,7 @@ use std::fmt::{Debug, Display};
 pub mod cakes;
 pub mod cluster;
 pub mod codec;
+pub mod tree;
 pub mod utils; // Intended for private use, but made public for testing purposes
 
 pub use cluster::Cluster;
