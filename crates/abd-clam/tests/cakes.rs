@@ -19,6 +19,17 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
+    // Truncate all items to 3 decimal places for debugging
+    let data = data
+        .into_iter()
+        .map(|v| {
+            v.into_iter()
+                .map(|x| (x * 1000.0).trunc() / 1000.0)
+                .collect::<Vec<f32>>()
+        })
+        .collect::<Vec<_>>();
+
+    println!("Starting test with {} items of dimension {}", car, dim);
     let tree = Tree::new_minimal(data.clone(), metric)?;
     let all_items = tree.items();
 

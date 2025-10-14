@@ -16,8 +16,8 @@ impl<T, A> Node<T, A> {
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
+        Id: Send + Sync + core::fmt::Debug,
+        I: Send + Sync + core::fmt::Debug,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
     {
@@ -45,8 +45,8 @@ impl<T, A> Node<T, A> {
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
+        Id: Send + Sync + core::fmt::Debug,
+        I: Send + Sync + core::fmt::Debug,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
     {
@@ -206,8 +206,8 @@ pub fn par_bipolar_split<'a, Id, I, T, M>(
     left_pole_index: Option<usize>,
 ) -> ([&'a mut [(Id, I)]; 2], T)
 where
-    Id: Send + Sync,
-    I: Send + Sync,
+    Id: Send + Sync + core::fmt::Debug,
+    I: Send + Sync + core::fmt::Debug,
     T: DistanceValue + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
@@ -253,7 +253,7 @@ where
 
     // Compute the distance from the right pole to all items
     let right_pole = &items[items.len() - 1].1;
-    let left_right_distances = items
+    let mut left_right_distances = items
         .par_iter()
         .skip(1)
         .zip(left_distances)
@@ -262,7 +262,7 @@ where
         .collect::<Vec<_>>();
 
     // Reorder the items in place by their distances to the two poles
-    let mid = reorder_items_in_place(&mut items[1..last], &left_right_distances);
+    let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
 
     // split the items slice into the left and right partitions
     let (left, right) = items.split_at_mut(mid);

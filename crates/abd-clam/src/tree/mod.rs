@@ -1,5 +1,7 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
+#![expect(clippy::uninlined_format_args)]
+
 use crate::DistanceValue;
 use rand::prelude::*;
 
@@ -39,7 +41,10 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
+    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
+    where
+        I: core::fmt::Debug,
+    {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
@@ -57,7 +62,7 @@ where
     /// If `items` is empty.
     pub fn par_new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
     where
-        I: Send + Sync,
+        I: Send + Sync + core::fmt::Debug,
         T: Send + Sync,
         M: Send + Sync,
     {
@@ -84,6 +89,8 @@ where
     /// If `items` is empty.
     pub fn new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
     where
+        Id: core::fmt::Debug,
+        I: core::fmt::Debug,
         P: Fn(&Node<T, A>) -> bool,
     {
         if items.is_empty() {
@@ -102,8 +109,8 @@ where
     /// If `items` is empty.
     pub fn par_new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
     where
-        Id: Send + Sync,
-        I: Send + Sync,
+        Id: Send + Sync + core::fmt::Debug,
+        I: Send + Sync + core::fmt::Debug,
         T: Send + Sync,
         M: Send + Sync,
         A: Send + Sync,
