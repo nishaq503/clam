@@ -2,7 +2,7 @@
 
 use crate::{utils::MinItem, DistanceValue};
 
-use super::Cluster;
+use super::Node;
 
 /// Strategy for partitioning a `Cluster` into child clusters.
 ///
@@ -15,20 +15,16 @@ use super::Cluster;
 /// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
 #[must_use]
 #[derive(Debug, Clone, Copy)]
-pub struct PartitionStrategy<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> {
+pub struct PartitionStrategy<P> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
     pub(crate) predicate: P,
     /// The branching factor of the cluster tree.
     pub(crate) branching_factor: BranchingFactor,
     /// Span reduction factor.
     pub(crate) span_reduction: SpanReductionFactor,
-    /// Ghost in the machine.
-    phantom: core::marker::PhantomData<(Id, I, T, A)>,
 }
 
-impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> std::fmt::Display
-    for PartitionStrategy<Id, I, T, A, P>
-{
+impl<P> std::fmt::Display for PartitionStrategy<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if matches!(self.branching_factor, BranchingFactor::Unbounded) {
             write!(f, "SRF({})", self.span_reduction)
@@ -38,43 +34,53 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> std::fmt:
     }
 }
 
-impl<Id, I, T: DistanceValue, A> Default
-    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
-{
+impl<T, A> Default for PartitionStrategy<fn(&Node<T, A>) -> bool> {
     fn default() -> Self {
         Self {
-            predicate: Box::new(|b: &Cluster<Id, I, T, A>| b.cardinality > 2),
+            predicate: |b: &Node<T, A>| b.cardinality > 2,
             branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
-            phantom: core::marker::PhantomData,
         }
     }
 }
 
-impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> PartitionStrategy<Id, I, T, A, P> {
+impl<P> PartitionStrategy<P> {
     /// Creates a new `PartitionStrategy` with the given predicate.
     pub fn new(predicate: P) -> Self {
         Self {
             predicate,
             branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
-            phantom: core::marker::PhantomData,
         }
     }
 
     /// Sets the predicate that determines whether a cluster should be partitioned into child clusters.
     ///
     /// The default predicate will allow partitioning of any cluster with more than one non-center item.
-    pub const fn with_predicate<F: Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync + 'static>(
-        &self,
-        predicate: F,
-    ) -> PartitionStrategy<Id, I, T, A, F> {
+    pub const fn with_predicate<Q>(&self, predicate: Q) -> PartitionStrategy<Q> {
         PartitionStrategy {
             predicate,
             branching_factor: self.branching_factor,
             span_reduction: self.span_reduction,
-            phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Evaluates the predicate on the given cluster.
+    pub fn should_partition<T, A>(&self, cluster: &Node<T, A>) -> bool
+    where
+        P: Fn(&Node<T, A>) -> bool,
+    {
+        (self.predicate)(cluster)
+    }
+
+    /// Evaluates the predicate on the given cluster in parallel.
+    pub fn par_should_partition<T, A>(&self, cluster: &Node<T, A>) -> bool
+    where
+        T: Send + Sync,
+        A: Send + Sync,
+        P: Fn(&Node<T, A>) -> bool + Send + Sync,
+    {
+        (self.predicate)(cluster)
     }
 
     /// Sets the branching factor of the cluster tree.
@@ -104,9 +110,7 @@ impl<Id, I, T: DistanceValue, A, P: Fn(&Cluster<Id, I, T, A>) -> bool> Partition
     }
 }
 
-impl<'a, Id, I, T: DistanceValue, A> From<&'a str>
-    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
-{
+impl<'a, T, A> From<&'a str> for PartitionStrategy<fn(&Node<T, A>) -> bool> {
     fn from(value: &'a str) -> Self {
         let strategy = Self::default();
         match value.to_lowercase().as_str() {
@@ -123,9 +127,7 @@ impl<'a, Id, I, T: DistanceValue, A> From<&'a str>
     }
 }
 
-impl<Id, I, T: DistanceValue, A> From<String>
-    for PartitionStrategy<Id, I, T, A, Box<dyn Fn(&Cluster<Id, I, T, A>) -> bool + Send + Sync>>
-{
+impl<T, A> From<String> for PartitionStrategy<fn(&Node<T, A>) -> bool> {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }

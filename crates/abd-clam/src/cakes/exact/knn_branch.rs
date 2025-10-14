@@ -3,9 +3,9 @@
 use std::cmp::Reverse;
 
 use crate::{
-    cakes::{d_max, d_min, BatchedSearch, RnnChess, Search},
-    utils::{MinItem, SizedHeap},
-    Cluster, DistanceValue,
+    cakes::{d_max, d_min, RnnChess, Search},
+    utils::SizedHeap,
+    DistanceValue, Tree,
 };
 
 /// K-nearest neighbors (KNN) search using the Greedy Branch algorithm.
@@ -20,16 +20,24 @@ impl std::fmt::Display for KnnBranch {
 }
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBranch {
-    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        if self.0 > root.cardinality() {
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let root = tree.root();
+        let metric = tree.metric();
+        let items = tree.items();
+
+        if self.0 > items.len() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all_items(query, metric);
+            return items
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, metric(query, item)))
+                .collect();
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = metric(query, root.center());
+        let d = metric(query, &items[root.center_index()].1);
         candidate_radii.push((1, Reverse(d_min(root, d))));
         candidate_radii.push((root.cardinality().half() + 1, Reverse(d)));
         candidate_radii.push((root.cardinality(), Reverse(d_max(root, d))));
@@ -40,8 +48,8 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                 .children()
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
                 .iter()
-                .map(|c| (c, metric(query, c.center())))
-                .min_by_key(|&(_, d)| MinItem((), d))
+                .map(|c| (c, metric(query, &items[c.center_index()].1)))
+                .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
 
             candidate_radii.push((1, Reverse(d_min(child, d))));
@@ -62,9 +70,9 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         // Now, try CHESS with increasing candidate radii until we have k hits.
         let mut hits = Vec::new();
         while let Some((_, Reverse(d))) = candidate_radii.pop() {
-            hits = RnnChess(d).search(root, metric, query);
+            hits = RnnChess(d).search(tree, query);
             if hits.len() >= self.0 {
-                hits.sort_by_key(|&(_, _, d)| MinItem((), d));
+                hits.sort_by_key(|&(_, d)| crate::utils::MinItem((), d));
                 hits.truncate(self.0);
                 break;
             }
@@ -72,5 +80,3 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         hits
     }
 }
-
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnBranch {}

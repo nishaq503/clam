@@ -2,11 +2,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{
-    cakes::selection,
-    cluster::{BranchingFactor, PartitionStrategy, SpanReductionFactor},
-    Cluster,
-};
+use abd_clam::{cakes::selection, BranchingFactor, Node, PartitionStrategy, SpanReductionFactor, Tree};
 use clap::Parser;
 use rand::prelude::*;
 
@@ -115,7 +111,7 @@ fn main() -> Result<(), String> {
     // let subset = [data::AnnDataset::FashionMnist];
 
     let strategies = vec![
-        PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(2)),
+        PartitionStrategy::<fn(&Node<f32, ()>) -> bool>::default().with_branching_factor(BranchingFactor::Fixed(2)),
         PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic),
         PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(128)),
         PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2),
@@ -154,19 +150,19 @@ fn main() -> Result<(), String> {
         // let mut items = utils::precompute_ips(items).into_iter().enumerate().collect();
 
         for strategy in &strategies {
-            let strategy = strategy.with_predicate(|b| b.radius() > 1e-6);
+            let strategy = strategy.with_predicate(|b: &Node<f32, ()>| b.radius() > 1e-6);
             ftlog::info!(
                 "Building CAKES index for dataset '{}' with strategy {strategy}",
                 dataset.name()
             );
-            let root = Cluster::<_, _, _, ()>::par_new_tree(items, &metric, &strategy)?;
+            let tree = Tree::par_new(items, metric, &strategy)?;
 
             let root_csv_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-tree.csv");
             if root_csv_path.exists() {
                 std::fs::remove_file(&root_csv_path)
                     .map_err(|e| format!("Failed to remove existing file '{}': {e}", root_csv_path.display()))?;
             }
-            root.to_csv(&root_csv_path).map_err(|e| e.to_string())?;
+            tree.root().to_csv(&root_csv_path).map_err(|e| e.to_string())?;
             ftlog::info!("Wrote cluster tree to '{}'", root_csv_path.display());
 
             if bench_search {
@@ -175,7 +171,7 @@ fn main() -> Result<(), String> {
 
                 ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
                 let (best_alg, expected_throughput) =
-                    selection::par_select_fastest_algorithm(&root, &metric, args.q, args.k, args.selection_time);
+                    selection::par_select_fastest_algorithm(&tree, args.q, args.k, args.selection_time);
                 ftlog::info!(
                     "Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec"
                 );
@@ -187,7 +183,7 @@ fn main() -> Result<(), String> {
                 let min_duration = std::time::Duration::from_secs_f64(args.measurement_time);
                 let start = std::time::Instant::now();
                 while start.elapsed() < min_duration {
-                    results = best_alg.par_batch_search(&root, &metric, &queries);
+                    results = best_alg.par_batch_search(&tree, &queries);
                     total_queries += queries.len();
                 }
                 let time_taken = start.elapsed().as_secs_f64();
@@ -201,7 +197,7 @@ fn main() -> Result<(), String> {
 
                 let (neighbors, distances): (Vec<Vec<u64>>, Vec<Vec<f32>>) = results
                     .into_iter()
-                    .map(|row| row.into_iter().map(|(&i, _, d)| (i as u64, d)).unzip())
+                    .map(|row| row.into_iter().map(|(i, d)| (i as u64, d)).unzip())
                     .unzip();
                 let neighbors_path = data_out_dir
                     .join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-neighbors.npy");
@@ -244,7 +240,7 @@ fn main() -> Result<(), String> {
                 ftlog::info!("Wrote performance report to '{}'", performance_path.display());
             }
 
-            items = root.take_all_items();
+            items = tree.take_items();
         }
     }
 

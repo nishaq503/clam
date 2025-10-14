@@ -1,11 +1,9 @@
 //! Tests for the CAKES search algorithms.
 
-use std::fmt::Debug;
-
 use abd_clam::{
     cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
     utils::MaxItem,
-    Cluster, DistanceValue,
+    DistanceValue, Tree,
 };
 use rayon::prelude::*;
 
@@ -21,8 +19,8 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Cluster::new_tree_minimal(data.clone(), &metric)?;
-    let all_items = root.all_items();
+    let tree = Tree::new_minimal(data.clone(), metric)?;
+    let all_items = tree.items();
 
     for radius in [1.0, 1.5, 2.0] {
         let expected_hits = all_items
@@ -30,7 +28,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
                 if dist <= radius {
-                    Some((i, item, dist))
+                    Some((*i, dist))
                 } else {
                     None
                 }
@@ -39,12 +37,12 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
         let expected_hits = sort_nondescending(expected_hits);
 
         let linear_alg = RnnLinear(radius);
-        let linear_hits = linear_alg.search(&root, &metric, &query);
+        let linear_hits = linear_alg.search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         check_hits(&expected_hits, &linear_hits, format!("RnnLinear({radius})"))?;
 
         let clustered_alg = RnnChess(radius);
-        let clustered_hits = clustered_alg.search(&root, &metric, &query);
+        let clustered_hits = clustered_alg.search(&tree, &query);
         let clustered_hits = sort_nondescending(clustered_hits);
         check_hits(&expected_hits, &clustered_hits, format!("RnnChess({radius})"))?;
     }
@@ -52,7 +50,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     for k in [1, 10, 100] {
         let expected_hits = all_items
             .iter()
-            .map(|(i, item)| (i, item, metric(item, &query)))
+            .map(|(i, item)| (*i, metric(item, &query)))
             .collect::<Vec<_>>();
         let expected_hits = sort_nondescending(expected_hits)
             .into_iter()
@@ -68,27 +66,27 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
         );
 
         let linear_alg = KnnLinear(k);
-        let linear_hits = linear_alg.search(&root, &metric, &query);
+        let linear_hits = linear_alg.search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         check_hits(&expected_hits, &linear_hits, format!("KnnLinear({k})"))?;
 
         let dfs_alg = KnnDfs(k);
-        let dfs_hits = dfs_alg.search(&root, &metric, &query);
+        let dfs_hits = dfs_alg.search(&tree, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
 
         let branch_alg = KnnBranch(k);
-        let branch_hits = branch_alg.search(&root, &metric, &query);
+        let branch_hits = branch_alg.search(&tree, &query);
         let branch_hits = sort_nondescending(branch_hits);
         check_hits(&expected_hits, &branch_hits, format!("KnnBranch({k})"))?;
 
         let bfs_alg = KnnBfs(k);
-        let bfs_hits = bfs_alg.search(&root, &metric, &query);
+        let bfs_hits = bfs_alg.search(&tree, &query);
         let bfs_hits = sort_nondescending(bfs_hits);
         check_hits(&expected_hits, &bfs_hits, format!("KnnBfs({k})"))?;
 
         let rrnn_alg = KnnRrnn(k);
-        let rrnn_hits = rrnn_alg.search(&root, &metric, &query);
+        let rrnn_hits = rrnn_alg.search(&tree, &query);
         let rrnn_hits = sort_nondescending(rrnn_hits);
         check_hits(&expected_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
     }
@@ -105,8 +103,8 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
-    let root = Cluster::par_new_tree_minimal(data.clone(), &metric)?;
-    let all_items = root.all_items();
+    let tree = Tree::new_minimal(data.clone(), metric)?;
+    let all_items = tree.items();
 
     for radius in [1.0, 1.5, 2.0] {
         let expected_hits = all_items
@@ -114,7 +112,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
                 if dist <= radius {
-                    Some((i, item, dist))
+                    Some((*i, dist))
                 } else {
                     None
                 }
@@ -123,12 +121,12 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
         let expected_hits = sort_nondescending(expected_hits);
 
         let linear_alg = RnnLinear(radius);
-        let linear_hits = linear_alg.par_search(&root, &metric, &query);
+        let linear_hits = linear_alg.par_search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         check_hits(&expected_hits, &linear_hits, format!("RnnLinear({radius})"))?;
 
         let clustered_alg = RnnChess(radius);
-        let clustered_hits = clustered_alg.par_search(&root, &metric, &query);
+        let clustered_hits = clustered_alg.par_search(&tree, &query);
         let clustered_hits = sort_nondescending(clustered_hits);
         check_hits(&expected_hits, &clustered_hits, format!("RnnChess({radius})"))?;
     }
@@ -136,7 +134,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     for k in [1, 10, 100] {
         let expected_hits = all_items
             .par_iter()
-            .map(|(i, item)| (i, item, metric(item, &query)))
+            .map(|(i, item)| (*i, metric(item, &query)))
             .collect::<Vec<_>>();
         let expected_hits = sort_nondescending(expected_hits)
             .into_iter()
@@ -152,27 +150,27 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
         );
 
         let linear_alg = KnnLinear(k);
-        let linear_hits = linear_alg.par_search(&root, &metric, &query);
+        let linear_hits = linear_alg.par_search(&tree, &query);
         let linear_hits = sort_nondescending(linear_hits);
         check_hits(&expected_hits, &linear_hits, format!("KnnLinear({k})"))?;
 
         let dfs_alg = KnnDfs(k);
-        let dfs_hits = dfs_alg.par_search(&root, &metric, &query);
+        let dfs_hits = dfs_alg.par_search(&tree, &query);
         let dfs_hits = sort_nondescending(dfs_hits);
         check_hits(&expected_hits, &dfs_hits, format!("KnnDfs({k})"))?;
 
         let branch_alg = KnnBranch(k);
-        let branch_hits = branch_alg.par_search(&root, &metric, &query);
+        let branch_hits = branch_alg.par_search(&tree, &query);
         let branch_hits = sort_nondescending(branch_hits);
         check_hits(&expected_hits, &branch_hits, format!("KnnBranch({k})"))?;
 
         let bfs_alg = KnnBfs(k);
-        let bfs_hits = bfs_alg.par_search(&root, &metric, &query);
+        let bfs_hits = bfs_alg.par_search(&tree, &query);
         let bfs_hits = sort_nondescending(bfs_hits);
         check_hits(&expected_hits, &bfs_hits, format!("KnnBfs({k})"))?;
 
         let rrnn_alg = KnnRrnn(k);
-        let rrnn_hits = rrnn_alg.par_search(&root, &metric, &query);
+        let rrnn_hits = rrnn_alg.par_search(&tree, &query);
         let rrnn_hits = sort_nondescending(rrnn_hits);
         check_hits(&expected_hits, &rrnn_hits, format!("KnnRrnn({k})"))?;
     }
@@ -180,33 +178,29 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     Ok(())
 }
 
-fn check_hits<Id: Debug, I: Debug, T: DistanceValue + Debug>(
-    expected: &[(&Id, &I, T)],
-    actual: &[(&Id, &I, T)],
-    alg_name: String,
-) -> Result<(), String> {
+fn check_hits<T: DistanceValue>(expected: &[(usize, T)], actual: &[(usize, T)], alg_name: String) -> Result<(), String> {
     assert_eq!(
         expected.len(),
         actual.len(),
         "{alg_name}: Hit count mismatch: \nexp {:?}, \ngot {:?}",
-        expected.iter().map(|(_, _, d)| d).collect::<Vec<_>>(),
-        actual.iter().map(|(_, _, d)| d).collect::<Vec<_>>()
+        expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
+        actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
     );
 
-    for (i, (&(_, _, e), &(_, _, a))) in expected.iter().zip(actual.iter()).enumerate() {
+    for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
         assert_eq!(
             e,
             a,
             "{alg_name}: Distance mismatch at index {i}: \nexp {:?}, \ngot {:?}",
-            expected.iter().map(|(_, _, d)| d).collect::<Vec<_>>(),
-            actual.iter().map(|(_, _, d)| d).collect::<Vec<_>>()
+            expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
+            actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
         );
     }
 
     Ok(())
 }
 
-fn sort_nondescending<'a, Id, I, T: PartialOrd + Copy>(mut items: Vec<(&'a Id, &'a I, T)>) -> Vec<(&'a Id, &'a I, T)> {
-    items.sort_by_key(|&(_, _, d)| MaxItem((), d));
+fn sort_nondescending<T: PartialOrd>(mut items: Vec<(usize, T)>) -> Vec<(usize, T)> {
+    items.sort_by(|(_, l), (_, r)| MaxItem((), l).cmp(&MaxItem((), r)));
     items
 }

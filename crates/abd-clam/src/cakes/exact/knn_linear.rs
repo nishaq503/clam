@@ -2,11 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    cakes::{BatchedSearch, Search},
-    utils::SizedHeap,
-    Cluster, DistanceValue,
-};
+use crate::{cakes::Search, utils::SizedHeap, DistanceValue, Tree};
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
 ///
@@ -19,14 +15,23 @@ impl std::fmt::Display for KnnLinear {
     }
 }
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnLinear {
-    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
+impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnLinear
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(root.all_items().into_iter().map(|item| (item, metric(query, &item.1))));
-        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
+        heap.extend(
+            tree.items()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, tree.metric()(query, item))),
+        );
+        heap.take_items().collect()
     }
 
-    fn par_search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)>
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
     where
         Self: Send + Sync,
         Id: Send + Sync,
@@ -37,77 +42,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     {
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(
-            root.all_items()
+            tree.items()
                 .into_par_iter()
-                .map(|item| (item, metric(query, &item.1)))
+                .enumerate()
+                .map(|(i, (_, item))| (i, tree.metric()(query, item)))
                 .collect::<Vec<_>>(),
         );
-        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
-    }
-}
-
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnLinear {
-    fn batch_search<'a>(
-        &self,
-        root: &'a Cluster<Id, I, T, A>,
-        metric: &M,
-        queries: &[I],
-    ) -> Vec<Vec<(&'a Id, &'a I, T)>> {
-        let all_items = root.all_items();
-        queries
-            .iter()
-            .map(|query| {
-                let mut heap = SizedHeap::new(Some(self.0));
-                heap.extend(all_items.iter().map(|item| (item, metric(query, &item.1))));
-                heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
-            })
-            .collect()
-    }
-
-    fn par_batch_search<'a>(
-        &self,
-        root: &'a Cluster<Id, I, T, A>,
-        metric: &M,
-        queries: &[I],
-    ) -> Vec<Vec<(&'a Id, &'a I, T)>>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
-        let all_items = root.all_items();
-        queries
-            .par_iter()
-            .map(|query| {
-                let mut heap = SizedHeap::new(Some(self.0));
-                heap.extend(
-                    all_items
-                        .par_iter()
-                        .map(|item| (item, metric(query, &item.1)))
-                        .collect::<Vec<_>>(),
-                );
-                heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
-            })
-            .collect()
-    }
-
-    fn par_batch_par_search<'a>(
-        &self,
-        root: &'a Cluster<Id, I, T, A>,
-        metric: &M,
-        queries: &[I],
-    ) -> Vec<Vec<(&'a Id, &'a I, T)>>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
-        self.par_batch_search(root, metric, queries)
+        heap.take_items().collect()
     }
 }

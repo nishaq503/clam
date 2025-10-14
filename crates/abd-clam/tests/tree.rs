@@ -1,6 +1,6 @@
 //! Tests for the `Cluster` struct.
 
-use abd_clam::{cluster::PartitionStrategy, Cluster};
+use abd_clam::{Node, PartitionStrategy, Tree};
 use test_case::test_case;
 
 mod common;
@@ -8,38 +8,48 @@ mod common;
 #[test]
 fn new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
+    let items = items.into_iter().enumerate().collect::<Vec<_>>();
     let cardinality = items.len();
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_| false);
-    let root = Cluster::<_, _, _, ()>::new_tree(items.into_iter().enumerate().collect(), &metric, &strategy)?;
+    let strategy = PartitionStrategy::new(|_: &Node<_, ()>| false);
+    let tree = Tree::new(items.clone(), metric, &strategy)?;
+    let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(
+        tree.items()[root.center_index()].1,
+        vec![5, 6],
+        "Center mismatch: {root:?}"
+    );
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
     assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
 
     // Now partition the root
-    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let root = root.partition(&metric, &strategy);
+    // let strategy = PartitionStrategy::default().with_branching_factor(2.into());
+    let items = items.into_iter().map(|(_, v)| v).collect();
+    let tree = Tree::new_minimal(items, metric)?;
+    let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
 
-    let subtree = root.subtree();
+    let subtree = root.subtree_preorder();
+
+    let tree_line = subtree.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>().join("\n");
+    if subtree.len() != 3 {
+        eprintln!("Subtree:\n{tree_line}");
+        eprintln!("Items: {:?}", tree.items());
+    }
+
     assert_eq!(
         subtree.len(),
         3, // Because both children will have cardinality == 2, and so will not be partitioned further
-        "Subtree cardinality mismatch: [{:?}]",
-        subtree
-            .iter()
-            .map(|c| format!("{c:?}"))
-            .collect::<Vec<_>>()
-            .join(" :: "),
+        "Subtree cardinality mismatch",
     );
 
     Ok(())
@@ -48,28 +58,33 @@ fn new() -> Result<(), String> {
 #[test]
 fn par_new() -> Result<(), String> {
     let items = vec![vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8], vec![11, 12]];
+    let items = items.into_iter().enumerate().collect::<Vec<_>>();
     let cardinality = items.len();
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_| false);
-    let root = Cluster::<_, _, _, ()>::par_new_tree(items.into_iter().enumerate().collect(), &metric, &strategy)?;
+    let strategy = PartitionStrategy::new(|_: &Node<_, ()>| false);
+    let tree = Tree::par_new(items, metric, &strategy)?;
+    let root = tree.root();
+    let items = tree.items();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(root.center(), &vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(&items[root.center_index()].1, &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     // Now partition the root
-    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let root = root.par_partition(&metric, &strategy);
+    // let strategy = PartitionStrategy::default().with_branching_factor(2.into());
+    let items = tree.take_items().into_iter().map(|(_, v)| v).collect();
+    let tree = Tree::par_new_minimal(items, metric)?;
+    let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
 
-    let subtree = root.subtree();
+    let subtree = root.subtree_preorder();
     assert_eq!(
         subtree.len(),
         3, // Because both children will have cardinality == 2, and so will not be partitioned further
@@ -96,9 +111,9 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Cluster::par_new_tree_minimal(data, &metric)?;
+        let tree = Tree::par_new_minimal(data, metric)?;
 
-        let n_clusters = root.subtree().len();
+        let n_clusters = tree.all_nodes_preorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -112,6 +127,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         ratios.push(ratio);
         assert_eq!(ratios.len(), i + 1);
 
+        let root = tree.root();
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
@@ -131,9 +147,9 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let root = Cluster::par_new_tree_minimal(data, &metric)?;
+        let tree = Tree::par_new_minimal(data, metric)?;
 
-        let n_clusters = root.subtree().len();
+        let n_clusters = tree.all_nodes_preorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -147,6 +163,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         ratios.push(ratio);
         assert_eq!(ratios.len(), i + 1);
 
+        let root = tree.root();
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");

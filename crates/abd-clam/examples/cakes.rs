@@ -3,33 +3,39 @@
 use std::path::Path;
 
 use abd_clam::{
-    cakes::{BatchedSearch, Search},
-    Cluster,
+    cakes::{KnnBfs, KnnDfs, KnnRrnn, RnnChess, Search},
+    utils::MaxItem,
+    Tree,
 };
 use rayon::prelude::*;
 
-fn build_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     distances::simd::euclidean_f32(a, b)
+}
+
+fn build_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+    profi::prof!();
+    metric(a, b)
 }
 
 fn knn_dfs_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     profi::prof!();
-    distances::simd::euclidean_f32(a, b)
+    metric(a, b)
 }
 
 fn knn_bfs_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     profi::prof!();
-    distances::simd::euclidean_f32(a, b)
+    metric(a, b)
 }
 
 fn knn_rrnn_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     profi::prof!();
-    distances::simd::euclidean_f32(a, b)
+    metric(a, b)
 }
 
 fn oracle_metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     profi::prof!();
-    distances::simd::euclidean_f32(a, b)
+    metric(a, b)
 }
 
 fn read_data(name: &str) -> Result<[Vec<Vec<f32>>; 2], String> {
@@ -51,31 +57,39 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn build_ball(items: Vec<Vec<f32>>) -> Result<Cluster<usize, Vec<f32>, f32, ()>, String> {
-    Cluster::par_new_tree_minimal(items, &build_metric)
-}
-
-fn search_ball<'a>(root: &'a Cluster<usize, Vec<f32>, f32, ()>, queries: &[Vec<f32>], k: usize) {
+fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(
+    tree: Tree<usize, Vec<f32>, f32, (), M>,
+    queries: &[Vec<f32>],
+    k: usize,
+) {
     profi::prof!();
 
-    let dfs_results = abd_clam::cakes::KnnDfs(k).par_batch_search(root, &knn_dfs_metric, queries);
-    let bfs_results = abd_clam::cakes::KnnBfs(k).par_batch_search(root, &knn_bfs_metric, queries);
-    let rrnn_results = abd_clam::cakes::KnnRrnn(k).par_batch_search(root, &knn_rrnn_metric, queries);
+    // For each of the search algorithms, we change the metric to count distance computations separately.
+
+    let tree = tree.with_metric(knn_dfs_metric);
+    let dfs_results = KnnDfs(k).par_batch_search(&tree, queries);
+
+    let tree = tree.with_metric(knn_bfs_metric);
+    let bfs_results = KnnBfs(k).par_batch_search(&tree, queries);
+
+    let tree = tree.with_metric(knn_rrnn_metric);
+    let rrnn_results = KnnRrnn(k).par_batch_search(&tree, queries);
 
     let oracles = dfs_results
         .iter()
         .map(|res| {
             res.iter()
-                .max_by_key(|&&(_, _, d)| abd_clam::utils::MaxItem((), d))
-                .map(|&(_, _, radius)| abd_clam::cakes::RnnChess(radius))
+                .max_by_key(|&&(_, d)| MaxItem((), d))
+                .map(|&(_, radius)| RnnChess(radius))
                 .unwrap()
         })
         .collect::<Vec<_>>();
 
+    let tree = tree.with_metric(oracle_metric);
     let oracle_results = oracles
         .into_par_iter()
         .zip(queries)
-        .map(|(oracle, query)| oracle.par_search(root, &oracle_metric, query))
+        .map(|(oracle, query)| oracle.par_search(&tree, query))
         .collect::<Vec<_>>();
 
     for (i, (res, oracle)) in dfs_results.into_iter().zip(oracle_results).enumerate() {
@@ -98,9 +112,11 @@ fn main() -> Result<(), String> {
     let k = 10;
 
     let [items, queries] = read_data("fashion-mnist")?;
-    let root = build_ball(items)?;
 
-    search_ball(&root, &queries[..1000], k);
+    // Build tree with `build_metric` to count the number of distance computations in building the tree.
+    let tree = Tree::par_new_minimal(items, build_metric)?;
+
+    search_tree(tree, &queries[..1000], k);
 
     Ok(())
 }

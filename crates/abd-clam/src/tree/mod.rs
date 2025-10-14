@@ -3,12 +3,9 @@
 use crate::DistanceValue;
 use rand::prelude::*;
 
-pub mod cakes;
 mod node;
-mod par_partition;
-mod partition;
 
-pub use node::Node;
+pub use node::{lfd_estimate, BranchingFactor, Node, PartitionStrategy, SpanReductionFactor};
 
 /// A tree structure used in CLAM for organizing items based on a given metric.
 pub struct Tree<Id, I, T, A, M> {
@@ -29,7 +26,49 @@ where
 {
     fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
         self.items.deep_size_of_children(context) + self.root.deep_size_of_children(context) + core::mem::size_of::<M>()
-        // for self.metric
+    }
+}
+
+impl<I, T, M> Tree<usize, I, T, (), M>
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
+    /// Creates a new `Tree` from the given items and metric.
+    ///
+    /// # Errors
+    ///
+    /// If `items` is empty.
+    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
+        let root = Node::new_root(&mut items, &metric, &PartitionStrategy::default());
+
+        Ok(Self { items, root, metric })
+    }
+
+    /// Parallel version of [`new`](Self::new).
+    ///
+    /// # Errors
+    ///
+    /// If `items` is empty.
+    pub fn par_new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
+    where
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
+        let root = Node::par_new_root(&mut items, &metric, &PartitionStrategy::default());
+
+        Ok(Self { items, root, metric })
     }
 }
 
@@ -43,12 +82,15 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new(mut items: Vec<(Id, I)>, metric: M) -> Result<Self, &'static str> {
+    pub fn new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
+    where
+        P: Fn(&Node<T, A>) -> bool,
+    {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Node::new_root(&mut items, &metric);
+        let root = Node::new_root(&mut items, &metric, strategy);
 
         Ok(Self { items, root, metric })
     }
@@ -58,19 +100,20 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn par_new(mut items: Vec<(Id, I)>, metric: M) -> Result<Self, &'static str>
+    pub fn par_new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
     where
         Id: Send + Sync,
         I: Send + Sync,
         T: Send + Sync,
         M: Send + Sync,
         A: Send + Sync,
+        P: Fn(&Node<T, A>) -> bool + Send + Sync,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Node::par_new_root(&mut items, &metric);
+        let root = Node::par_new_root(&mut items, &metric, strategy);
 
         Ok(Self { items, root, metric })
     }
@@ -78,6 +121,11 @@ where
     /// Returns a reference to the items stored in the tree.
     pub fn items(&self) -> &[(Id, I)] {
         &self.items
+    }
+
+    /// Consumes the tree and returns all items stored in it.
+    pub fn take_items(self) -> Vec<(Id, I)> {
+        self.items
     }
 
     /// Returns a reference to the root node of the tree.
@@ -88,6 +136,28 @@ where
     /// Returns a reference to the metric used in the tree.
     pub const fn metric(&self) -> &M {
         &self.metric
+    }
+
+    /// Changes the metric used in the tree to the provided one.
+    pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N>
+    where
+        N: Fn(&I, &I) -> T,
+    {
+        Tree {
+            items: self.items,
+            root: self.root,
+            metric,
+        }
+    }
+
+    /// Returns the number of items stored in the tree.
+    pub const fn cardinality(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Returns a vector of references to all nodes in the tree, in pre-order traversal.
+    pub fn all_nodes_preorder(&self) -> Vec<&Node<T, A>> {
+        self.root.subtree_preorder()
     }
 
     /// Clones and returns a random subset of `n` items from the tree.

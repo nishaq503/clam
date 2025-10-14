@@ -3,9 +3,9 @@
 use core::cmp::Reverse;
 
 use crate::{
-    cakes::{d_max, d_min, leaf_into_hits, pop_till_leaf, BatchedSearch, Search},
+    cakes::{d_max, d_min, leaf_into_hits, pop_till_leaf, Search},
     utils::SizedHeap,
-    Cluster, DistanceValue,
+    DistanceValue, Node, Tree,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
@@ -34,19 +34,26 @@ impl std::fmt::Display for KnnDfs {
 }
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
-    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        if self.0 > root.cardinality() {
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let root = tree.root();
+        let metric = tree.metric();
+        let items = tree.items();
+
+        if self.0 > items.len() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all_items(query, metric);
+            return items
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, metric(query, item)))
+                .collect();
         }
         // let tol = 0.01; // Tolerance for hit improvement.
 
-        let mut candidates = SizedHeap::<&'a Cluster<Id, I, T, A>, Reverse<(T, T, T)>>::new(None);
-        let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
-
-        let d = metric(query, root.center());
-        hits.push(((root.center_id(), root.center()), d));
+        let mut candidates = SizedHeap::<&Node<T, A>, Reverse<(T, T, T)>>::new(None);
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
+        let d = metric(query, &items[root.center_index()].1);
+        hits.push((root.center_index(), d));
         candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
 
         let mut leaves_visited = 0;
@@ -54,12 +61,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
-            let (leaf, d, n) = pop_till_leaf(query, metric, &mut candidates, &mut hits);
+            let (leaf, d, n) = pop_till_leaf(query, metric, items, &mut candidates, &mut hits);
             leaves_visited += 1;
             distance_computations += n;
 
             // Process the leaf and update hits.
-            distance_computations += leaf_into_hits(query, metric, &mut hits, leaf, d);
+            distance_computations += leaf_into_hits(query, metric, items, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates
@@ -80,8 +87,6 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             }
         }
 
-        hits.take_items().map(|((id, item), d)| (id, item, d)).collect()
+        hits.take_items().collect()
     }
 }
-
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnDfs {}

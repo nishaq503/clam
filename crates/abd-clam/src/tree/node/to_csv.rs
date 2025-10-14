@@ -1,14 +1,19 @@
-//! Exporting the `Cluster` and its information to various formats.
+//! Exporting the `Node` and its information to various formats.
 
-use std::{fmt::Display, path::Path};
+use std::path::Path;
 
-use crate::{Cluster, DistanceValue};
+use crate::DistanceValue;
+
+use super::Node;
 
 /// The number of features to include in the CSV export.
-const NUM_CLUSTER_FEATURES: usize = 8;
+const NUM_CLUSTER_FEATURES: usize = 7;
 
-impl<Id: Display, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
-    /// Writes the `Cluster` tree to a CSV file at the specified path.
+impl<T, A> Node<T, A>
+where
+    T: DistanceValue,
+{
+    /// Writes the `Node` tree to a CSV file at the specified path.
     ///
     /// # Errors
     ///
@@ -19,8 +24,8 @@ impl<Id: Display, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
         let mut wtr = csv::Writer::from_path(path)?;
         wtr.write_record(Self::csv_header())?;
 
-        for cluster in self.subtree() {
-            wtr.write_record(cluster.csv_row())?;
+        for node in self.subtree_preorder() {
+            wtr.write_record(node.csv_row())?;
         }
 
         wtr.flush()
@@ -29,12 +34,11 @@ impl<Id: Display, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Returns a CSV header string for the cluster information.
     const fn csv_header() -> [&'static str; NUM_CLUSTER_FEATURES] {
         [
-            "center_id",
+            "center_index",
             "depth",
             "cardinality",
             "radius",
             "lfd",
-            "radial_sum",
             "span",
             "num_children",
         ]
@@ -43,13 +47,12 @@ impl<Id: Display, I, T: DistanceValue, A> Cluster<Id, I, T, A> {
     /// Returns a row of CSV data representing the cluster's information.
     fn csv_row(&self) -> [String; NUM_CLUSTER_FEATURES] {
         [
-            self.center.0.to_string(),
+            self.center_index.to_string(),
             self.depth.to_string(),
             self.cardinality().to_string(),
             self.radius().to_string(),
             self.lfd().to_string(),
-            self.radial_sum().to_string(),
-            self.span.to_string(),
+            self.span().map_or_else(|| T::zero().to_string(), ToString::to_string),
             self.children().map_or(0, <[_]>::len).to_string(),
         ]
     }

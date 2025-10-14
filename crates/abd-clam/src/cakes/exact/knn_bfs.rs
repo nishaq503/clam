@@ -1,11 +1,9 @@
 //! K-Nearest Neighbors (KNN) search using the Breadth-First Sieve algorithm.
 
-#![expect(clippy::type_complexity)]
-
 use crate::{
-    cakes::{d_max, BatchedSearch, Search},
+    cakes::{d_max, Search},
     utils::SizedHeap,
-    Cluster, DistanceValue,
+    DistanceValue, Node, Tree,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
@@ -20,20 +18,26 @@ impl std::fmt::Display for KnnBfs {
 }
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBfs {
-    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        profi::prof!("KnnBfs::search");
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let root = tree.root();
+        let metric = tree.metric();
+        let items = tree.items();
 
-        if self.0 > root.cardinality() {
+        if self.0 > items.len() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all_items(query, metric);
+            return items
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, metric(query, item)))
+                .collect();
         }
 
         let mut candidates = Vec::new();
-        let mut hits = SizedHeap::<(&'a Id, &'a I), T>::new(Some(self.0));
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = metric(query, root.center());
-        hits.push(((root.center_id(), root.center()), d));
+        let d = metric(query, &items[root.center_index()].1);
+        hits.push((root.center_index(), d));
         candidates.push((root, d_max(root, d)));
 
         while !candidates.is_empty() {
@@ -47,31 +51,23 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                 )  // OR
                 || cluster.is_leaf()
                 {
-                    profi::prof!("KnnBfs::search::leaf");
                     // The cluster is a leaf, so we have to look at its points
                     if cluster.is_singleton() {
                         // It's a singleton, so just add non-center items with the precomputed distance
-                        hits.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+                        hits.extend(cluster.subtree_indices().map(|i| (i, d)));
                     } else {
                         // Not a singleton, so compute distances to all non-center items
                         // and add them to hits
-                        hits.extend(
-                            cluster
-                                .subtree_items()
-                                .iter()
-                                .map(|(id, item)| ((id, item), metric(query, item))),
-                        );
+                        hits.extend(cluster.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
                     }
                 } else {
-                    profi::prof!("KnnBfs::search::parent");
-
                     for child in cluster
                         .children()
                         .unwrap_or_else(|| unreachable!("Cluster is a parent"))
                     {
-                        let d = metric(query, child.center());
-                        hits.push(((child.center_id(), child.center()), d));
-                        next_candidates.push((child.as_ref(), d_max(child, d)));
+                        let d = metric(query, &items[child.center_index()].1);
+                        hits.push((child.center_index(), d));
+                        next_candidates.push((child, d_max(child, d)));
                     }
                 }
             }
@@ -79,18 +75,13 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             candidates = next_candidates;
         }
 
-        hits.take_items().map(|((id, item), d)| (id, item, d)).collect()
+        hits.take_items().collect()
     }
 }
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnBfs {}
-
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
-fn filter_candidates<Id, I, T: DistanceValue, A>(
-    mut candidates: Vec<(&Cluster<Id, I, T, A>, T)>,
-    k: usize,
-) -> Vec<(&Cluster<Id, I, T, A>, T)> {
+fn filter_candidates<T: DistanceValue, A>(mut candidates: Vec<(&Node<T, A>, T)>, k: usize) -> Vec<(&Node<T, A>, T)> {
     profi::prof!("KnnBfs::filter_candidates");
 
     let threshold_index = quick_partition(&mut candidates, k);
@@ -115,14 +106,14 @@ fn filter_candidates<Id, I, T: DistanceValue, A>(
 /// also reordering the list so that all elements to the left of the k-th
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
-fn quick_partition<Id, I, T: DistanceValue, A>(items: &mut [(&Cluster<Id, I, T, A>, T)], k: usize) -> usize {
+fn quick_partition<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], k: usize) -> usize {
     profi::prof!("KnnBfs::quick_partition");
 
     qps(items, k, 0, items.len() - 1)
 }
 
 /// The recursive helper function for the Quick Partition algorithm.
-fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Cluster<Id, I, T, A>, T)], k: usize, l: usize, r: usize) -> usize {
+fn qps<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], k: usize, l: usize, r: usize) -> usize {
     if l >= r {
         core::cmp::min(l, r)
     } else {
@@ -164,12 +155,7 @@ fn qps<Id, I, T: DistanceValue, A>(items: &mut [(&Cluster<Id, I, T, A>, T)], k: 
 /// Moves pivot point and swaps elements around so that all elements to left
 /// of pivot are less than or equal to pivot and all elements to right of pivot
 /// are greater than pivot.
-fn find_pivot<Id, I, T: DistanceValue, A>(
-    items: &mut [(&Cluster<Id, I, T, A>, T)],
-    l: usize,
-    r: usize,
-    pivot: usize,
-) -> usize {
+fn find_pivot<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], l: usize, r: usize, pivot: usize) -> usize {
     profi::prof!("KnnBfs::find_pivot");
 
     // Move pivot to the end

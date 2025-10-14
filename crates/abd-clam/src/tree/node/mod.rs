@@ -1,5 +1,13 @@
 //! A `Node` in a `Tree` for use in CLAM.
 
+mod par_partition;
+mod partition;
+mod partition_strategy;
+mod to_csv;
+
+pub use partition::{lfd_estimate, reorder_items_in_place};
+pub use partition_strategy::{BranchingFactor, PartitionStrategy, SpanReductionFactor};
+
 /// A node in the `Tree`.
 pub struct Node<T, A> {
     /// Depth of this node in the tree, with root at depth 0.
@@ -16,6 +24,27 @@ pub struct Node<T, A> {
     pub(crate) children: Option<(Box<[Self]>, T)>,
     /// Optional arbitrary data associated with this node.
     pub(crate) annotation: Option<A>,
+}
+
+impl<T, A> core::fmt::Debug for Node<T, A>
+where
+    T: core::fmt::Debug,
+    A: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Node")
+            .field("depth", &self.depth)
+            .field("center_index", &self.center_index)
+            .field("cardinality", &self.cardinality)
+            .field("radius", &self.radius)
+            .field("lfd", &self.lfd)
+            .field(
+                "children",
+                &self.children.as_ref().map(|(children, span)| (children.len(), span)),
+            )
+            .field("annotation", &self.annotation)
+            .finish()
+    }
 }
 
 impl<T, A> deepsize::DeepSizeOf for Node<T, A>
@@ -97,6 +126,17 @@ impl<T, A> Node<T, A> {
     /// The span is the distance between the two poles used to partition the node.
     pub fn span(&self) -> Option<&T> {
         self.children.as_ref().map(|(_, span)| span)
+    }
+
+    /// Returns all nodes in the subtree rooted at this node, including this node, in pre-order.
+    pub fn subtree_preorder(&self) -> Vec<&Self> {
+        if let Some((children, _)) = &self.children {
+            core::iter::once(self)
+                .chain(children.iter().flat_map(|child| child.subtree_preorder()))
+                .collect()
+        } else {
+            vec![self]
+        }
     }
 
     /// Returns true if this node has an annotation.

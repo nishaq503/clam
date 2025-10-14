@@ -4,13 +4,12 @@
 
 use std::usize;
 
+use abd_clam::{
+    cakes::{search_quality_stats, KnnDfs, KnnLinear, Search},
+    DistanceValue, Tree,
+};
 use rand::prelude::*;
 
-use abd_clam::{
-    cakes::{self, BatchedSearch},
-    cluster::{BranchingFactor, PartitionStrategy},
-    tree, Cluster, DistanceValue,
-};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use deepsize::DeepSizeOf;
 use rayon::prelude::*;
@@ -21,8 +20,7 @@ use utils::ann_benchmarks::{base_dir, AnnDataset};
 
 fn bench_for_ks<Id, I, T, A, M>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    tree: &tree::Tree<Id, I, T, A, M>,
-    root: &Cluster<Id, I, T, A>,
+    tree: &Tree<Id, I, T, A, M>,
     queries: &[I],
     multiplier: usize,
     ks: &[usize],
@@ -34,17 +32,10 @@ fn bench_for_ks<Id, I, T, A, M>(
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     for &k in ks {
-        let true_hits = cakes::KnnLinear(k).par_batch_search(&root, tree.metric(), &queries);
+        let true_hits = KnnLinear(k).par_batch_search(tree, queries);
 
         // Benchmark the exact algorithms
-        bench_one_alg(
-            group,
-            (tree, &tree::cakes::KnnDfs(k)),
-            (root, &cakes::KnnDfs(k)),
-            queries,
-            &true_hits,
-            multiplier,
-        );
+        bench_one_alg(group, tree, &KnnDfs(k), queries, &true_hits, multiplier);
         // bench_one_alg(
         //     group,
         //     (tree, &tree::cakes::KnnBfs(k)),
@@ -98,12 +89,12 @@ fn bench_for_ks<Id, I, T, A, M>(
     }
 }
 
-fn bench_one_alg<Id, I, T, A, M, Alg, TreeAlg>(
+fn bench_one_alg<Id, I, T, A, M, Alg>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    (tree, t_alg): (&tree::Tree<Id, I, T, A, M>, &TreeAlg),
-    (root, r_alg): (&Cluster<Id, I, T, A>, &Alg),
+    tree: &Tree<Id, I, T, A, M>,
+    alg: &Alg,
     queries: &[I],
-    true_hits: &[Vec<(&Id, &I, T)>],
+    true_hits: &[Vec<(usize, T)>],
     multiplier: usize,
 ) where
     Id: Send + Sync,
@@ -111,20 +102,12 @@ fn bench_one_alg<Id, I, T, A, M, Alg, TreeAlg>(
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: BatchedSearch<Id, I, T, A, M> + Send + Sync,
-    TreeAlg: tree::cakes::Search<Id, I, T, A, M> + Send + Sync,
+    Alg: Search<Id, I, T, A, M> + Send + Sync,
 {
-    let r_id = BenchmarkId::new(format!("Root-{}", r_alg.to_string()), multiplier);
-    group.bench_function(r_id, |b| {
-        b.iter_with_large_drop(|| r_alg.par_batch_search(&root, tree.metric(), &queries))
-    });
+    let id = BenchmarkId::new(alg.to_string(), multiplier);
+    group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
 
-    let t_id = BenchmarkId::new(format!("Tree-{}", t_alg.to_string()), multiplier);
-    group.bench_function(t_id, |b| {
-        b.iter_with_large_drop(|| t_alg.par_batch_search(&tree, &queries))
-    });
-
-    let all_clusters = root.subtree();
+    let all_clusters = tree.all_nodes_preorder();
     let size_of_tree = all_clusters.len();
     let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
 
@@ -137,19 +120,19 @@ fn bench_one_alg<Id, I, T, A, M, Alg, TreeAlg>(
 
     println!(
         "Tree stats for dataset with cardinality {} after multiplier {multiplier}:",
-        root.cardinality()
+        tree.cardinality()
     );
     println!(
         "    Number of clusters: {size_of_tree}, Ratio: {:.8}",
-        size_of_tree as f64 / root.cardinality() as f64
+        size_of_tree as f64 / tree.cardinality() as f64
     );
     println!("    Max depth: {max_depth}");
     println!("    Leaf fraction of clusters: {leaf_fraction:.8}, mean leaf cardinality: {mean_leaf_cardinality:.8}");
     println!("    Singleton fraction of leaves: {singleton_fraction:.8}");
 
-    let pred_hits = r_alg.par_batch_search(&root, tree.metric(), &queries);
-    let recall_stats = cakes::search_quality_stats(true_hits, &pred_hits);
-    println!("Search quality of {}:", r_alg.to_string());
+    let pred_hits = alg.par_batch_search(&tree, queries);
+    let recall_stats = search_quality_stats(true_hits, &pred_hits);
+    println!("Search quality of {}:", alg.to_string());
     for (stat_name, stat_value) in recall_stats {
         println!("    {stat_name}: {stat_value:.8}");
     }
@@ -236,51 +219,41 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
         //     strategies
         // };
-        let strategies = vec![PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(2))];
+        // let strategies = vec![PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(2))];
 
-        for strategy in &strategies {
-            let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
-            config_group(&mut group, queries.len());
+        // for strategy in &strategies {
+        // let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
+        let mut group = c.benchmark_group(format!("CAKES-{}", dataset.name()));
+        config_group(&mut group, queries.len());
 
-            // Build a tree with no annotations and benchmark the search algorithms
-            if shuffle {
-                items.shuffle(rng);
-            }
-            let indexed_items = items.into_iter().enumerate().collect::<Vec<_>>();
-            let items_size = indexed_items.deep_size_of();
-            println!(
-                "Dataset has cardinality {} and memory size {items_size} bytes",
-                indexed_items.len()
-            );
-
-            println!("Building Cluster with strategy {strategy}");
-            let root_start = std::time::Instant::now();
-            let root = Cluster::<_, _, _, ()>::par_new_tree(indexed_items.clone(), &metric, strategy).unwrap();
-            let root_time = root_start.elapsed();
-            println!("Built Cluster in {:.6}", root_time.as_secs_f32());
-            let root_size = root.deep_size_of();
-            println!("Cluster has memory size {root_size} bytes");
-            let root_overhead = root_size as f64 / items_size as f64;
-            println!("Cluster overhead ratio: {root_overhead:.8}");
-
-            println!("Building Tree");
-            let tree_start = std::time::Instant::now();
-            let tree = tree::Tree::par_new(indexed_items, metric).unwrap();
-            let tree_time = tree_start.elapsed();
-            println!("Built Tree in {:.6}", tree_time.as_secs_f32());
-            let tree_size = tree.deep_size_of();
-            println!("Tree has memory size {tree_size} bytes");
-            let tree_overhead = tree_size as f64 / items_size as f64;
-            println!("Tree overhead ratio: {tree_overhead:.8}");
-
-            bench_for_ks(&mut group, &tree, &root, &queries, multiplier, ks);
-
-            // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
-            augmentation_error = root.radius() / 1000.0;
-            items = root.take_all_items().into_iter().map(|(_, p)| p).collect();
-
-            group.finish();
+        // Build a tree with no annotations and benchmark the search algorithms
+        if shuffle {
+            items.shuffle(rng);
         }
+        let items_size = items.deep_size_of();
+        println!(
+            "Dataset has cardinality {} and memory size {items_size} bytes",
+            items.len()
+        );
+
+        println!("Building Tree");
+        let tree_start = std::time::Instant::now();
+        let tree = Tree::par_new_minimal(items, metric).unwrap();
+        let tree_time = tree_start.elapsed();
+        println!("Built Tree in {:.6}", tree_time.as_secs_f32());
+        let tree_size = tree.deep_size_of();
+        println!("Tree has memory size {tree_size} bytes");
+        let tree_overhead = tree_size as f64 / items_size as f64;
+        println!("Tree overhead ratio: {tree_overhead:.8}");
+
+        bench_for_ks(&mut group, &tree, &queries, multiplier, ks);
+
+        // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
+        augmentation_error = tree.root().radius() / 1000.0;
+        items = tree.take_items().into_iter().map(|(_, p)| p).collect();
+
+        group.finish();
+        // }
     }
 }
 

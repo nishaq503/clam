@@ -1,9 +1,10 @@
 //! K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 
 use crate::{
-    cakes::{BatchedSearch, Search},
-    utils::SizedHeap,
-    Cluster, DistanceValue,
+    cakes::Search,
+    tree::lfd_estimate,
+    utils::{MaxItem, SizedHeap},
+    DistanceValue, Node, Tree,
 };
 
 use super::rnn_chess::tree_search;
@@ -20,11 +21,19 @@ impl std::fmt::Display for KnnRrnn {
 }
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnRrnn {
-    fn search<'a>(&self, root: &'a Cluster<Id, I, T, A>, metric: &M, query: &I) -> Vec<(&'a Id, &'a I, T)> {
-        if self.0 > root.cardinality() {
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let root = tree.root();
+        let metric = tree.metric();
+        let items = tree.items();
+
+        if self.0 > items.len() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return root.distances_to_all_items(query, metric);
+            return items
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, metric(query, item)))
+                .collect();
         }
 
         // Estimate an initial radius to cover k points.
@@ -34,6 +43,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         let (mut centers, mut subsumed, mut straddlers) = tree_search(
             root,
             metric,
+            items,
             query,
             T::from_f64(radius)
                 .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
@@ -56,6 +66,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             (centers, subsumed, straddlers) = tree_search(
                 root,
                 metric,
+                items,
                 query,
                 T::from_f64(radius)
                     .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
@@ -65,32 +76,25 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         }
 
         // We now have at least k confirmed hits; collect them.
-        let mut heap = SizedHeap::<(&Id, &I), T>::new(Some(self.0));
-        heap.extend(centers.into_iter().map(|(id, item, d)| ((id, item), d)));
+        let mut heap = SizedHeap::<usize, T>::new(Some(self.0));
+        heap.extend(centers);
 
-        for cluster in subsumed.into_iter().chain(straddlers) {
-            if cluster.is_singleton() {
-                let d = metric(query, cluster.center());
-                heap.extend(cluster.subtree_items().iter().map(|(id, item)| ((id, item), d)));
+        for node in subsumed.into_iter().chain(straddlers) {
+            if node.is_singleton() {
+                let d = metric(query, &items[node.center_index()].1);
+                heap.extend(node.subtree_indices().map(|i| (i, d)));
             } else {
-                heap.extend(
-                    cluster
-                        .subtree_items()
-                        .iter()
-                        .map(|(id, item)| ((id, item), metric(query, item))),
-                );
+                heap.extend(node.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
             }
         }
 
-        heap.take_items().map(|((id, item), d)| (id, item, d)).collect()
+        heap.take_items().collect()
     }
 }
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> BatchedSearch<Id, I, T, A, M> for KnnRrnn {}
-
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]
-fn radius_for_k<I, Id, T: DistanceValue, A>(cluster: &Cluster<I, Id, T, A>, k: usize) -> f64 {
+fn radius_for_k<T: DistanceValue, A>(cluster: &Node<T, A>, k: usize) -> f64 {
     let r = cluster
         .radius()
         .to_f64()
@@ -103,7 +107,7 @@ fn radius_for_k<I, Id, T: DistanceValue, A>(cluster: &Cluster<I, Id, T, A>, k: u
 }
 
 /// Counts the total number of hits from confirmed centers and subsumed clusters.
-fn count_hits<Id, I, T: DistanceValue, A>(centers: &[(&Id, &I, T)], subsumed: &[&Cluster<Id, I, T, A>]) -> usize {
+fn count_hits<T: DistanceValue, A>(centers: &[(usize, T)], subsumed: &[&Node<T, A>]) -> usize {
     centers.len()
         + subsumed
             .iter()
@@ -113,19 +117,19 @@ fn count_hits<Id, I, T: DistanceValue, A>(centers: &[(&Id, &I, T)], subsumed: &[
 
 /// Calculate a multiplier for the radius using the LFDs of the clusters.
 #[expect(clippy::cast_precision_loss)]
-fn lfd_multiplier<Id, I, T: DistanceValue, A>(
-    centers: &[(&Id, &I, T)],
-    subsumed: &[&Cluster<Id, I, T, A>],
-    straddlers: &[&Cluster<Id, I, T, A>],
+fn lfd_multiplier<T: DistanceValue, A>(
+    centers: &[(usize, T)],
+    subsumed: &[&Node<T, A>],
+    straddlers: &[&Node<T, A>],
     k: usize,
     num_confirmed: usize,
 ) -> f64 {
-    let radial_distances = centers.iter().map(|&(_, _, d)| d).collect::<Vec<_>>();
+    let radial_distances = centers.iter().map(|&(_, d)| d).collect::<Vec<_>>();
     let radius = radial_distances
         .iter()
-        .max_by_key(|&&d| crate::utils::MaxItem((), d))
+        .max_by_key(|&&d| MaxItem((), d))
         .map_or_else(T::zero, |&d| d);
-    let lfd_recip_sum_init = crate::utils::lfd_estimate(&radial_distances, radius).recip();
+    let lfd_recip_sum_init = lfd_estimate(&radial_distances, radius).recip();
 
     let lfd_recip_sum = lfd_recip_sum_init
         + subsumed
