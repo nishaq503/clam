@@ -31,7 +31,12 @@ impl<T, A> Node<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    #[expect(clippy::tuple_array_conversions)]
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::tuple_array_conversions
+    )]
     fn par_new<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> Self
     where
         Id: Send + Sync,
@@ -62,8 +67,14 @@ impl<T, A> Node<T, A> {
                 annotation: None,
             };
         }
-
-        par_swap_center_to_front(items, metric);
+        if items.len() <= 100 {
+            // For small number of items, find the exact geometric median
+            par_swap_center_to_front(items, metric);
+        } else {
+            let n = 100 + ((items.len() - 100) as f64).sqrt() as usize;
+            // For large number of items, find an approximate geometric median using a random sample of size n
+            par_swap_center_to_front(&mut items[..n], metric);
+        }
 
         let radial_distances = items
             .par_iter()
@@ -74,7 +85,7 @@ impl<T, A> Node<T, A> {
             .iter()
             .enumerate()
             .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
-            .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i + 1, d));
+            .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i, d));
         let lfd = lfd_estimate(&radial_distances, radius);
 
         let ([l_items, r_items], span) = par_bipolar_split(&mut items[1..], metric, Some(radius_index));
@@ -190,6 +201,13 @@ where
     T: DistanceValue + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
+    if items.len() == 2 {
+        // If there are only two items, just return them as the two partitions.
+        let span = metric(&items[0].1, &items[1].1);
+        let (left, right) = items.split_at_mut(1);
+        return ([left, right], span);
+    }
+
     let left_pole_index = left_pole_index.unwrap_or_else(|| {
         // Find the item farthest from the first item.
         items
@@ -234,7 +252,7 @@ where
         .collect::<Vec<_>>();
 
     // Reorder the items in place by their distances to the two poles
-    let mid = reorder_items_in_place(&mut items[1..last], &left_right_distances);
+    let mid = reorder_items_in_place(&mut items[1..last], &left_right_distances) + 1; // +1 to account for the left pole at index 0
 
     // split the items slice into the left and right partitions
     let (left, right) = items.split_at_mut(mid);

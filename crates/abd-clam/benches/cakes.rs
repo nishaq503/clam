@@ -255,7 +255,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
-            let tree = tree::Tree::par_new(indexed_items, metric).unwrap();
+            let tree = tree::Tree::new(indexed_items, metric).unwrap();
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
 
