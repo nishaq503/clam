@@ -9,6 +9,12 @@ use crate::{tree::cakes::Search, utils::SizedHeap, DistanceValue};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnLinear(pub usize);
 
+impl std::fmt::Display for KnnLinear {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KnnLinear(k={})", self.0)
+    }
+}
+
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnLinear
 where
     T: DistanceValue,

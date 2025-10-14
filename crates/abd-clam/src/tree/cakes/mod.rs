@@ -12,7 +12,7 @@ mod exact;
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A Nearest Neighbor Search algorithm.
-pub trait Search<Id, I, T, A, M>
+pub trait Search<Id, I, T, A, M>: std::fmt::Display
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,

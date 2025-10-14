@@ -4,6 +4,7 @@ use crate::DistanceValue;
 
 pub mod cakes;
 mod node;
+mod par_partition;
 mod partition;
 
 pub use node::Node;
@@ -34,6 +35,28 @@ where
         }
 
         let root = Node::new_root(&mut items, &metric);
+
+        Ok(Self { items, root, metric })
+    }
+
+    /// Parallel version of [`new`](Self::new).
+    ///
+    /// # Errors
+    ///
+    /// If `items` is empty.
+    pub fn par_new(mut items: Vec<(Id, I)>, metric: M) -> Result<Self, &'static str>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+        A: Send + Sync,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let root = Node::par_new_root(&mut items, &metric);
 
         Ok(Self { items, root, metric })
     }
