@@ -107,7 +107,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     let id = BenchmarkId::new(alg.to_string(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
 
-    let all_clusters = tree.all_nodes_preorder();
+    let all_clusters = tree.all_clusters_preorder();
     let size_of_tree = all_clusters.len();
     let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
 

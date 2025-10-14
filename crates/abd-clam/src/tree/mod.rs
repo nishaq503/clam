@@ -3,16 +3,16 @@
 use crate::DistanceValue;
 use rand::prelude::*;
 
-mod node;
+mod cluster;
 
-pub use node::{lfd_estimate, BranchingFactor, Node, PartitionStrategy, SpanReductionFactor};
+pub use cluster::{lfd_estimate, BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor};
 
 /// A tree structure used in CLAM for organizing items based on a given metric.
 pub struct Tree<Id, I, T, A, M> {
     /// The items stored in the tree, each paired with its identifier.
     items: Vec<(Id, I)>,
-    /// The root node of the tree.
-    root: Node<T, A>,
+    /// The root cluster of the tree.
+    root: Cluster<T, A>,
     /// The metric used to compute distances between items.
     metric: M,
 }
@@ -48,7 +48,7 @@ where
         }
 
         let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Node::new_root(&mut items, &metric, &PartitionStrategy::default());
+        let root = Cluster::new_root(&mut items, &metric, &PartitionStrategy::default());
 
         Ok(Self { items, root, metric })
     }
@@ -69,7 +69,7 @@ where
         }
 
         let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Node::par_new_root(&mut items, &metric, &PartitionStrategy::default());
+        let root = Cluster::par_new_root(&mut items, &metric, &PartitionStrategy::default());
 
         Ok(Self { items, root, metric })
     }
@@ -89,13 +89,13 @@ where
     where
         Id: core::fmt::Debug,
         I: core::fmt::Debug,
-        P: Fn(&Node<T, A>) -> bool,
+        P: Fn(&Cluster<T, A>) -> bool,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Node::new_root(&mut items, &metric, strategy);
+        let root = Cluster::new_root(&mut items, &metric, strategy);
 
         Ok(Self { items, root, metric })
     }
@@ -112,13 +112,13 @@ where
         T: Send + Sync,
         M: Send + Sync,
         A: Send + Sync,
-        P: Fn(&Node<T, A>) -> bool + Send + Sync,
+        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Node::par_new_root(&mut items, &metric, strategy);
+        let root = Cluster::par_new_root(&mut items, &metric, strategy);
 
         Ok(Self { items, root, metric })
     }
@@ -133,8 +133,8 @@ where
         self.items
     }
 
-    /// Returns a reference to the root node of the tree.
-    pub const fn root(&self) -> &Node<T, A> {
+    /// Returns a reference to the root cluster of the tree.
+    pub const fn root(&self) -> &Cluster<T, A> {
         &self.root
     }
 
@@ -160,8 +160,8 @@ where
         self.items.len()
     }
 
-    /// Returns a vector of references to all nodes in the tree, in pre-order traversal.
-    pub fn all_nodes_preorder(&self) -> Vec<&Node<T, A>> {
+    /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
+    pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
         self.root.subtree_preorder()
     }
 

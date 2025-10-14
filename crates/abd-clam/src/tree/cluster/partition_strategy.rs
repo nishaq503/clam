@@ -2,7 +2,7 @@
 
 use crate::{utils::MinItem, DistanceValue};
 
-use super::Node;
+use super::Cluster;
 
 /// Strategy for partitioning a `Cluster` into child clusters.
 ///
@@ -34,10 +34,10 @@ impl<P> std::fmt::Display for PartitionStrategy<P> {
     }
 }
 
-impl<T, A> Default for PartitionStrategy<fn(&Node<T, A>) -> bool> {
+impl<T, A> Default for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn default() -> Self {
         Self {
-            predicate: |b: &Node<T, A>| b.cardinality > 2,
+            predicate: |b: &Cluster<T, A>| b.cardinality > 2,
             branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
         }
@@ -66,19 +66,19 @@ impl<P> PartitionStrategy<P> {
     }
 
     /// Evaluates the predicate on the given cluster.
-    pub fn should_partition<T, A>(&self, cluster: &Node<T, A>) -> bool
+    pub fn should_partition<T, A>(&self, cluster: &Cluster<T, A>) -> bool
     where
-        P: Fn(&Node<T, A>) -> bool,
+        P: Fn(&Cluster<T, A>) -> bool,
     {
         (self.predicate)(cluster)
     }
 
     /// Evaluates the predicate on the given cluster in parallel.
-    pub fn par_should_partition<T, A>(&self, cluster: &Node<T, A>) -> bool
+    pub fn par_should_partition<T, A>(&self, cluster: &Cluster<T, A>) -> bool
     where
         T: Send + Sync,
         A: Send + Sync,
-        P: Fn(&Node<T, A>) -> bool + Send + Sync,
+        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
     {
         (self.predicate)(cluster)
     }
@@ -110,7 +110,7 @@ impl<P> PartitionStrategy<P> {
     }
 }
 
-impl<'a, T, A> From<&'a str> for PartitionStrategy<fn(&Node<T, A>) -> bool> {
+impl<'a, T, A> From<&'a str> for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn from(value: &'a str) -> Self {
         let strategy = Self::default();
         match value.to_lowercase().as_str() {
@@ -127,7 +127,7 @@ impl<'a, T, A> From<&'a str> for PartitionStrategy<fn(&Node<T, A>) -> bool> {
     }
 }
 
-impl<T, A> From<String> for PartitionStrategy<fn(&Node<T, A>) -> bool> {
+impl<T, A> From<String> for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }

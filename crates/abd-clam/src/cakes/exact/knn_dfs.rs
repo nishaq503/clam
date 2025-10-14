@@ -5,7 +5,7 @@ use core::cmp::Reverse;
 use crate::{
     cakes::{d_max, d_min, Search},
     utils::SizedHeap,
-    DistanceValue, Node, Tree,
+    Cluster, DistanceValue, Tree,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
@@ -35,7 +35,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                 .collect();
         }
 
-        let mut candidates = SizedHeap::<&Node<T, A>, Reverse<(T, T, T)>>::new(None);
+        let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
         let d = metric(query, &items[root.center_index()].1);
@@ -72,9 +72,9 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
     metric: &M,
     items: &[(Id, I)],
-    candidates: &mut SizedHeap<&'a Node<T, A>, Reverse<(T, T, T)>>,
+    candidates: &mut SizedHeap<&'a Cluster<T, A>, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
-) -> (&'a Node<T, A>, T, usize) {
+) -> (&'a Cluster<T, A>, T, usize) {
     profi::prof!("KnnDfs::pop_till_leaf");
 
     let mut distance_computations = 0;
@@ -115,7 +115,7 @@ pub fn leaf_into_hits<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     metric: &M,
     items: &[(Id, I)],
     hits: &mut SizedHeap<usize, T>,
-    leaf: &Node<T, A>,
+    leaf: &Cluster<T, A>,
     d: T,
 ) -> usize {
     profi::prof!("KnnDfs::leaf_into_hits");

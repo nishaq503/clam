@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{cakes::selection, BranchingFactor, Node, PartitionStrategy, SpanReductionFactor, Tree};
+use abd_clam::{cakes::selection, BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
 use clap::Parser;
 use rand::prelude::*;
 
@@ -111,7 +111,7 @@ fn main() -> Result<(), String> {
     // let subset = [data::AnnDataset::FashionMnist];
 
     let strategies = vec![
-        PartitionStrategy::<fn(&Node<f32, ()>) -> bool>::default().with_branching_factor(BranchingFactor::Fixed(2)),
+        PartitionStrategy::<fn(&Cluster<f32, ()>) -> bool>::default().with_branching_factor(BranchingFactor::Fixed(2)),
         PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic),
         PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(128)),
         PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2),
@@ -150,7 +150,7 @@ fn main() -> Result<(), String> {
         // let mut items = utils::precompute_ips(items).into_iter().enumerate().collect();
 
         for strategy in &strategies {
-            let strategy = strategy.with_predicate(|b: &Node<f32, ()>| b.radius() > 1e-6);
+            let strategy = strategy.with_predicate(|b: &Cluster<f32, ()>| b.radius() > 1e-6);
             ftlog::info!(
                 "Building CAKES index for dataset '{}' with strategy {strategy}",
                 dataset.name()

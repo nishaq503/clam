@@ -3,7 +3,7 @@
 use crate::{
     cakes::{d_max, Search},
     utils::SizedHeap,
-    DistanceValue, Node, Tree,
+    Cluster, DistanceValue, Tree,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
@@ -83,7 +83,10 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
-fn filter_candidates<T: DistanceValue, A>(mut candidates: Vec<(&Node<T, A>, T)>, k: usize) -> Vec<(&Node<T, A>, T)> {
+fn filter_candidates<T: DistanceValue, A>(
+    mut candidates: Vec<(&Cluster<T, A>, T)>,
+    k: usize,
+) -> Vec<(&Cluster<T, A>, T)> {
     profi::prof!("KnnBfs::filter_candidates");
 
     let threshold_index = quick_partition(&mut candidates, k);
@@ -108,14 +111,14 @@ fn filter_candidates<T: DistanceValue, A>(mut candidates: Vec<(&Node<T, A>, T)>,
 /// also reordering the list so that all elements to the left of the k-th
 /// smallest element are less than or equal to it, and all elements to the right
 /// of the k-th smallest element are greater than or equal to it.
-fn quick_partition<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], k: usize) -> usize {
+fn quick_partition<T: DistanceValue, A>(items: &mut [(&Cluster<T, A>, T)], k: usize) -> usize {
     profi::prof!("KnnBfs::quick_partition");
 
     qps(items, k, 0, items.len() - 1)
 }
 
 /// The recursive helper function for the Quick Partition algorithm.
-fn qps<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], k: usize, l: usize, r: usize) -> usize {
+fn qps<T: DistanceValue, A>(items: &mut [(&Cluster<T, A>, T)], k: usize, l: usize, r: usize) -> usize {
     if l >= r {
         core::cmp::min(l, r)
     } else {
@@ -157,7 +160,7 @@ fn qps<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], k: usize, l: usize, 
 /// Moves pivot point and swaps elements around so that all elements to left
 /// of pivot are less than or equal to pivot and all elements to right of pivot
 /// are greater than pivot.
-fn find_pivot<T: DistanceValue, A>(items: &mut [(&Node<T, A>, T)], l: usize, r: usize, pivot: usize) -> usize {
+fn find_pivot<T: DistanceValue, A>(items: &mut [(&Cluster<T, A>, T)], l: usize, r: usize, pivot: usize) -> usize {
     profi::prof!("KnnBfs::find_pivot");
 
     // Move pivot to the end

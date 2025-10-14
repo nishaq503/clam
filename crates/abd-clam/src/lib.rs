@@ -4,11 +4,11 @@
 use std::fmt::{Debug, Display};
 
 pub mod cakes;
-// pub mod codec;
+pub mod codec;
 mod tree;
 pub mod utils; // Intended for private use, but made public for testing purposes
 
-pub use tree::{BranchingFactor, Node, PartitionStrategy, SpanReductionFactor, Tree};
+pub use tree::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
 
 /// A trait for types that can be used as distance values in clustering algorithms.
 pub trait DistanceValue:

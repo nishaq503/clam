@@ -1,19 +1,19 @@
-//! Exporting the `Node` and its information to various formats.
+//! Exporting the `Cluster` and its information to various formats.
 
 use std::path::Path;
 
 use crate::DistanceValue;
 
-use super::Node;
+use super::Cluster;
 
 /// The number of features to include in the CSV export.
 const NUM_CLUSTER_FEATURES: usize = 7;
 
-impl<T, A> Node<T, A>
+impl<T, A> Cluster<T, A>
 where
     T: DistanceValue,
 {
-    /// Writes the `Node` tree to a CSV file at the specified path.
+    /// Writes the `Cluster` tree to a CSV file at the specified path.
     ///
     /// # Errors
     ///
@@ -24,8 +24,8 @@ where
         let mut wtr = csv::Writer::from_path(path)?;
         wtr.write_record(Self::csv_header())?;
 
-        for node in self.subtree_preorder() {
-            wtr.write_record(node.csv_row())?;
+        for cluster in self.subtree_preorder() {
+            wtr.write_record(cluster.csv_row())?;
         }
 
         wtr.flush()

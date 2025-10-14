@@ -1,6 +1,6 @@
 //! Tests for the `Cluster` struct.
 
-use abd_clam::{Node, PartitionStrategy, Tree};
+use abd_clam::{Cluster, PartitionStrategy, Tree};
 use test_case::test_case;
 
 mod common;
@@ -13,7 +13,7 @@ fn new() -> Result<(), String> {
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_: &Node<_, ()>| false);
+    let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
     let tree = Tree::new(items.clone(), metric, &strategy)?;
     let root = tree.root();
 
@@ -63,7 +63,7 @@ fn par_new() -> Result<(), String> {
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_: &Node<_, ()>| false);
+    let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
     let tree = Tree::par_new(items, metric, &strategy)?;
     let root = tree.root();
     let items = tree.items();
@@ -113,7 +113,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         let data = common::data_gen::tabular(car, dim, min, max);
         let tree = Tree::par_new_minimal(data, metric)?;
 
-        let n_clusters = tree.all_nodes_preorder().len();
+        let n_clusters = tree.all_clusters_preorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -149,7 +149,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         let data = common::data_gen::tabular(car, dim, min, max);
         let tree = Tree::par_new_minimal(data, metric)?;
 
-        let n_clusters = tree.all_nodes_preorder().len();
+        let n_clusters = tree.all_clusters_preorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;

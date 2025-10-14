@@ -4,7 +4,7 @@ use crate::{
     cakes::Search,
     tree::lfd_estimate,
     utils::{MaxItem, SizedHeap},
-    DistanceValue, Node, Tree,
+    Cluster, DistanceValue, Tree,
 };
 
 use super::rnn_chess::tree_search;
@@ -79,12 +79,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         let mut heap = SizedHeap::<usize, T>::new(Some(self.0));
         heap.extend(centers);
 
-        for node in subsumed.into_iter().chain(straddlers) {
-            if node.is_singleton() {
-                let d = metric(query, &items[node.center_index()].1);
-                heap.extend(node.subtree_indices().map(|i| (i, d)));
+        for cluster in subsumed.into_iter().chain(straddlers) {
+            if cluster.is_singleton() {
+                let d = metric(query, &items[cluster.center_index()].1);
+                heap.extend(cluster.subtree_indices().map(|i| (i, d)));
             } else {
-                heap.extend(node.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
+                heap.extend(cluster.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
             }
         }
 
@@ -94,7 +94,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
 /// Computes the radius needed to cover k points from the cluster center.
 #[expect(clippy::cast_precision_loss)]
-fn radius_for_k<T: DistanceValue, A>(cluster: &Node<T, A>, k: usize) -> f64 {
+fn radius_for_k<T: DistanceValue, A>(cluster: &Cluster<T, A>, k: usize) -> f64 {
     let r = cluster
         .radius()
         .to_f64()
@@ -107,7 +107,7 @@ fn radius_for_k<T: DistanceValue, A>(cluster: &Node<T, A>, k: usize) -> f64 {
 }
 
 /// Counts the total number of hits from confirmed centers and subsumed clusters.
-fn count_hits<T: DistanceValue, A>(centers: &[(usize, T)], subsumed: &[&Node<T, A>]) -> usize {
+fn count_hits<T: DistanceValue, A>(centers: &[(usize, T)], subsumed: &[&Cluster<T, A>]) -> usize {
     centers.len()
         + subsumed
             .iter()
@@ -119,8 +119,8 @@ fn count_hits<T: DistanceValue, A>(centers: &[(usize, T)], subsumed: &[&Node<T, 
 #[expect(clippy::cast_precision_loss)]
 fn lfd_multiplier<T: DistanceValue, A>(
     centers: &[(usize, T)],
-    subsumed: &[&Node<T, A>],
-    straddlers: &[&Node<T, A>],
+    subsumed: &[&Cluster<T, A>],
+    straddlers: &[&Cluster<T, A>],
     k: usize,
     num_confirmed: usize,
 ) -> f64 {

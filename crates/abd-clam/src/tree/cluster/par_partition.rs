@@ -1,27 +1,30 @@
-//! Methods for recursively partitioning a `Node` to build a `Tree`.
+//! Methods for recursively partitioning a `Cluster` to build a `Tree`.
+
+use rayon::prelude::*;
 
 use crate::{DistanceValue, PartitionStrategy};
 
-use super::Node;
+use super::{lfd_estimate, reorder_items_in_place, Cluster};
 
-impl<T, A> Node<T, A> {
-    /// Creates a new `Node` and recursively partitions it if it has more than two items.
+impl<T, A> Cluster<T, A> {
+    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
     ///
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new_root<Id, I, M, P>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>) -> Self
+    pub(crate) fn par_new_root<Id, I, M, P>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>) -> Self
     where
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
-        T: DistanceValue,
-        M: Fn(&I, &I) -> T,
-        P: Fn(&Self) -> bool,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        Id: Send + Sync + core::fmt::Debug,
+        I: Send + Sync + core::fmt::Debug,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        P: Fn(&Self) -> bool + Send + Sync,
     {
-        Self::new(0, 0, items, metric, strategy)
+        Self::par_new(0, 0, items, metric, strategy)
     }
 
-    /// Creates a new `Node` and recursively partitions it if it has more than two items.
+    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
     ///
     /// # WARNING
     ///
@@ -29,9 +32,10 @@ impl<T, A> Node<T, A> {
     #[expect(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
+        clippy::cast_possible_truncation,
+        clippy::tuple_array_conversions
     )]
-    fn new<Id, I, M, P>(
+    fn par_new<Id, I, M, P>(
         depth: usize,
         center_index: usize,
         items: &mut [(Id, I)],
@@ -39,14 +43,13 @@ impl<T, A> Node<T, A> {
         strategy: &PartitionStrategy<P>,
     ) -> Self
     where
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
-        T: DistanceValue,
-        M: Fn(&I, &I) -> T,
-        P: Fn(&Self) -> bool,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        Id: Send + Sync + core::fmt::Debug,
+        I: Send + Sync + core::fmt::Debug,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        P: Fn(&Self) -> bool + Send + Sync,
     {
-        assert!(!items.is_empty(), "Node::new called with empty items");
-
         if items.len() == 1 {
             return Self {
                 depth,
@@ -64,23 +67,22 @@ impl<T, A> Node<T, A> {
                 center_index,
                 cardinality: 2,
                 radius,
-                lfd: 1.0, // By definition, a node with two items has LFD of 1
+                lfd: 1.0, // By definition, a cluster with two items has LFD of 1
                 children: None,
                 annotation: None,
             };
         }
-
         if items.len() <= 100 {
             // For small number of items, find the exact geometric median
-            swap_center_to_front(items, metric);
+            par_swap_center_to_front(items, metric);
         } else {
             let n = 100 + ((items.len() - 100) as f64).sqrt() as usize;
             // For large number of items, find an approximate geometric median using a random sample of size n
-            swap_center_to_front(&mut items[..n], metric);
+            par_swap_center_to_front(&mut items[..n], metric);
         }
 
         let radial_distances = items
-            .iter()
+            .par_iter()
             .skip(1)
             .map(|(_, item)| metric(&items[0].1, item))
             .collect::<Vec<_>>();
@@ -91,7 +93,7 @@ impl<T, A> Node<T, A> {
             .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i, d));
         let lfd = lfd_estimate(&radial_distances, radius);
 
-        let mut node = Self {
+        let mut cluster = Self {
             depth,
             center_index,
             cardinality: items.len(),
@@ -101,32 +103,36 @@ impl<T, A> Node<T, A> {
             annotation: None,
         };
 
-        if !strategy.should_partition(&node) {
-            return node;
+        if !strategy.par_should_partition(&cluster) {
+            return cluster;
         }
 
-        let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
+        let ([l_items, r_items], span) = par_bipolar_split(&mut items[1..], metric, Some(radius_index));
 
         let child_depth = depth + 1;
         let l_center_index = center_index + 1;
         let r_center_index = l_center_index + l_items.len();
 
-        let l_child = Self::new(child_depth, l_center_index, l_items, metric, strategy);
-        let r_child = Self::new(child_depth, r_center_index, r_items, metric, strategy);
+        let (l_child, r_child) = rayon::join(
+            || Self::par_new(child_depth, l_center_index, l_items, metric, strategy),
+            || Self::par_new(child_depth, r_center_index, r_items, metric, strategy),
+        );
 
-        node.children = Some((Box::new([l_child, r_child]), span));
-        node
+        cluster.children = Some((Box::new([l_child, r_child]), span));
+        cluster
     }
 }
 
 /// Moves the center item (geometric median) to the 0th index in the slice.
-pub fn swap_center_to_front<Id, I, T, M>(items: &mut [(Id, I)], metric: &M)
+pub fn par_swap_center_to_front<Id, I, T, M>(items: &mut [(Id, I)], metric: &M)
 where
-    T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
 {
     if items.len() > 2 {
-        let center_index = gm_index(items, metric);
+        let center_index = par_gm_index(items, metric);
         items.swap(0, center_index);
     }
 }
@@ -137,56 +143,43 @@ where
 /// all other items in the slice.
 ///
 /// The user must ensure that the items slice is not empty.
-pub fn gm_index<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
+pub fn par_gm_index<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
 where
-    T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
 {
     // Compute the full distance matrix for the items.
     let distance_matrix = {
-        let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        for (r, (_, i)) in items.iter().enumerate() {
-            for (c, (_, j)) in items.iter().enumerate().take(r) {
+        let matrix = vec![vec![T::zero(); items.len()]; items.len()];
+
+        items.par_iter().enumerate().for_each(|(r, (_, i))| {
+            items.par_iter().enumerate().take(r).for_each(|(c, (_, j))| {
                 let d = metric(i, j);
-                matrix[r][c] = d;
-                matrix[c][r] = d;
-            }
-        }
+                // SAFETY: We have exclusive access to each cell in the matrix
+                // because every (r, c) pair is unique.
+                #[allow(unsafe_code)]
+                unsafe {
+                    let row_ptr = &mut *matrix.as_ptr().cast_mut().add(r);
+                    row_ptr[c] = d;
+
+                    let col_ptr = &mut *matrix.as_ptr().cast_mut().add(c);
+                    col_ptr[r] = d;
+                }
+            });
+        });
+
         matrix
     };
 
     // Find the index of the item with the minimum total distance to all other items.
     distance_matrix
-        .into_iter()
+        .into_par_iter()
         .map(|row| row.into_iter().sum::<T>())
         .enumerate()
         .min_by_key(|&(i, v)| crate::utils::MinItem(i, v))
         .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
-}
-
-/// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.
-///
-/// This uses the formula `log2(N / n)`, where `N` is `distances.len() + 1` (the total number of items including the center), and `n` is the number of distances
-/// that are less than or equal to `radius / 2` plus one (to account for the center).
-///
-/// If the radius is zero or if there are no items within half the radius, the LFD is, by definition, `1.0`.
-#[expect(clippy::cast_precision_loss)]
-pub fn lfd_estimate<T>(distances: &[T], radius: T) -> f64
-where
-    T: DistanceValue,
-{
-    let half_radius = radius.half();
-    if distances.len() < 2 || half_radius.is_zero() {
-        // In all three of the following cases, we define LFD to be 1.0:
-        //   - No non-center items (singleton cluster)
-        //   - One non-center item (cluster with two items)
-        //   - Radius is zero or too small to be represented as a non-zero value
-        1.0
-    } else {
-        // The cluster has at least 2 non-center items, so LFD computation is meaningful.
-        let half_count = distances.iter().filter(|&&d| d <= half_radius).count();
-        ((distances.len() + 1) as f64 / ((half_count + 1) as f64)).log2()
-    }
 }
 
 /// Splits the given items into two partitions based on their distances to two poles.
@@ -207,16 +200,16 @@ where
 /// - An array containing the two partitions of items.
 /// - The span of the partition (distance between the two poles).
 #[expect(clippy::tuple_array_conversions)]
-pub fn bipolar_split<'a, Id, I, T, M>(
+pub fn par_bipolar_split<'a, Id, I, T, M>(
     items: &'a mut [(Id, I)],
     metric: &M,
     left_pole_index: Option<usize>,
 ) -> ([&'a mut [(Id, I)]; 2], T)
 where
-    Id: core::fmt::Debug,
-    I: core::fmt::Debug,
-    T: DistanceValue,
-    M: Fn(&I, &I) -> T,
+    Id: Send + Sync + core::fmt::Debug,
+    I: Send + Sync + core::fmt::Debug,
+    T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
 {
     if items.len() == 2 {
         // If there are only two items, just return them as the two partitions.
@@ -228,7 +221,7 @@ where
     let left_pole_index = left_pole_index.unwrap_or_else(|| {
         // Find the item farthest from the first item.
         items
-            .iter()
+            .par_iter()
             .enumerate()
             .skip(1)
             .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
@@ -241,7 +234,7 @@ where
     // Compute distances from the left pole to all other items
     let left_pole = &items[0].1;
     let mut left_distances = items
-        .iter()
+        .par_iter()
         .skip(1)
         .map(|(_, item)| metric(left_pole, item))
         .collect::<Vec<_>>();
@@ -253,7 +246,7 @@ where
         .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
         .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
 
-    // Move the right pole and its distance to the end of their respective slices
+    // Move the right pole and its distance to the left pole to the end of their respective slices
     let last = items.len() - 1;
     items.swap(right_pole_index, last);
     left_distances.swap(right_pole_index - 1, last - 1);
@@ -261,7 +254,7 @@ where
     // Compute the distance from the right pole to all items
     let right_pole = &items[items.len() - 1].1;
     let mut left_right_distances = items
-        .iter()
+        .par_iter()
         .skip(1)
         .zip(left_distances)
         .take(items.len() - 2)
@@ -273,64 +266,9 @@ where
 
     // split the items slice into the left and right partitions
     let (left, right) = items.split_at_mut(mid);
-    assert!(!left.is_empty(), "Left partition is empty");
-    assert!(!right.is_empty(), "Right partition is empty");
 
     // Move the right pole to the 0th index in the right slice
     right.swap(0, right.len() - 1);
 
     ([left, right], span)
-}
-
-/// Reorder the slice of items so that the items closer to left pole are on the left side of the slice and items closer to the right pole are on the right side,
-/// returning `mid`, the index of the first item for the right pole.
-///
-/// # WARNING
-///
-/// This assumes that `items` and `distances` have the same length.
-pub fn reorder_items_in_place<Id, I, T>(items: &mut [(Id, I)], distances: &mut [(T, T)]) -> usize
-where
-    Id: core::fmt::Debug,
-    I: core::fmt::Debug,
-    T: DistanceValue,
-{
-    assert_eq!(
-        items.len(),
-        distances.len(),
-        "items and distances must have the same length"
-    );
-
-    let mut left = 0;
-    let mut right = distances.len() - 1;
-
-    // TODO(Najib): After testing, use unsafe code to remove bounds checks while indexing
-    let mut n_swaps = 0;
-    while left < right {
-        // println!("Start of loop: left={}, right={}", left, right);
-
-        // Increment `left` until we find an item for the right pole
-        while left < distances.len() && distances[left].0 <= distances[left].1 {
-            left += 1;
-        }
-
-        // Decrement `right` until we find an item for the left pole
-        while right > 0 && distances[right].0 > distances[right].1 {
-            right -= 1;
-        }
-
-        // If the two indices have crossed, we are done
-        if left >= right {
-            return left;
-        }
-        assert!(n_swaps < 1 + items.len() / 2, "Finding where the infinite loop is happening: left = {}, distances[left] = {:?}, right = {}, distances[right] = {:?}", left, distances[left], right, distances[right]);
-
-        // swap the items at the two indices
-        items.swap(left, right);
-        distances.swap(left, right);
-        n_swaps += 1;
-        left += 1;
-        right -= 1;
-    }
-
-    left
 }

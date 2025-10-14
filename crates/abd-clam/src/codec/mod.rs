@@ -1,6 +1,6 @@
 //! Compression, decompression, and compressive search with CLAM.
 
-use crate::{Cluster, DistanceValue};
+use crate::{DistanceValue, Tree};
 
 mod item;
 
@@ -45,25 +45,13 @@ where
     Dec: Decoder<I, Enc> + ?Sized,
 {
     /// For a given query, return its nearest neighbors as a vector of tuples `(id, distance)`.
-    fn search<'a>(
-        &self,
-        root: &'a Cluster<Id, CodecItem<I, Enc, Dec>, T, A>,
-        metric: &M,
-        query: &I,
-        decoder: &Dec,
-    ) -> Vec<(&'a Id, T)>;
+    fn search(&self, tree: &Tree<Id, CodecItem<I, Enc, Dec>, T, A, M>, query: &I, decoder: &Dec) -> Vec<(usize, T)>;
 
     /// Parallel version of [`Search::search`].
     ///
     /// The default implementation offers no parallelism. This method should be overridden for algorithms that will actually benefit from parallelism when
     /// searching for a single query.
-    fn par_search<'a>(
-        &self,
-        root: &'a Cluster<Id, CodecItem<I, Enc, Dec>, T, A>,
-        metric: &M,
-        query: &I,
-        decoder: &Dec,
-    ) -> Vec<(&'a Id, T)>
+    fn par_search(&self, tree: &Tree<Id, CodecItem<I, Enc, Dec>, T, A, M>, query: &I, decoder: &Dec) -> Vec<(usize, T)>
     where
         Self: Send + Sync,
         Id: Send + Sync,
@@ -75,6 +63,6 @@ where
         Dec: Send + Sync,
         Enc::Output: Send + Sync,
     {
-        self.search(root, metric, query, decoder)
+        self.search(tree, query, decoder)
     }
 }
