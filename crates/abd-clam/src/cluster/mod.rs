@@ -77,6 +77,41 @@ pub(crate) enum Contents<Id, I, T: DistanceValue, A> {
     Children(Vec<Box<Cluster<Id, I, T, A>>>),
 }
 
+impl<Id, I, T, A> deepsize::DeepSizeOf for Cluster<Id, I, T, A>
+where
+    Id: deepsize::DeepSizeOf,
+    I: deepsize::DeepSizeOf,
+    T: DistanceValue + deepsize::DeepSizeOf,
+    A: deepsize::DeepSizeOf,
+{
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        core::mem::size_of::<usize>()  // for self.depth
+            + core::mem::size_of::<usize>()  // for self.cardinality
+            + self.center.deep_size_of_children(context)
+            + self.radius.deep_size_of_children(context)
+            + core::mem::size_of::<f64>()  // for self.lfd
+            + self.radial_sum.deep_size_of_children(context)
+            + self.span.deep_size_of_children(context)
+            + self.contents.deep_size_of_children(context)
+            + self.annotation.deep_size_of_children(context)
+    }
+}
+
+impl<Id, I, T, A> deepsize::DeepSizeOf for Contents<Id, I, T, A>
+where
+    Id: deepsize::DeepSizeOf,
+    I: deepsize::DeepSizeOf,
+    T: DistanceValue + deepsize::DeepSizeOf,
+    A: deepsize::DeepSizeOf,
+{
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        match self {
+            Self::Leaf(items) => items.deep_size_of_children(context),
+            Self::Children(children) => children.iter().map(|child| child.deep_size_of_children(context)).sum(),
+        }
+    }
+}
+
 impl<I: Debug, Id: Debug, T: DistanceValue + Debug, A: Debug> Debug for Cluster<Id, I, T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cluster")

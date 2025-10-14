@@ -19,6 +19,19 @@ pub struct Tree<Id, I, T, A, M> {
     metric: M,
 }
 
+impl<Id, I, T, A, M> deepsize::DeepSizeOf for Tree<Id, I, T, A, M>
+where
+    Id: deepsize::DeepSizeOf,
+    I: deepsize::DeepSizeOf,
+    T: deepsize::DeepSizeOf,
+    A: deepsize::DeepSizeOf,
+{
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        self.items.deep_size_of_children(context) + self.root.deep_size_of_children(context) + core::mem::size_of::<M>()
+        // for self.metric
+    }
+}
+
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     T: DistanceValue,

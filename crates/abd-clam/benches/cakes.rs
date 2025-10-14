@@ -12,6 +12,7 @@ use abd_clam::{
     tree, Cluster, DistanceValue,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use deepsize::DeepSizeOf;
 use rayon::prelude::*;
 
 mod utils;
@@ -44,30 +45,30 @@ fn bench_for_ks<Id, I, T, A, M>(
             &true_hits,
             multiplier,
         );
-        bench_one_alg(
-            group,
-            (tree, &tree::cakes::KnnBfs(k)),
-            (root, &cakes::KnnBfs(k)),
-            queries,
-            &true_hits,
-            multiplier,
-        );
-        bench_one_alg(
-            group,
-            (tree, &tree::cakes::KnnBranch(k)),
-            (root, &cakes::KnnBranch(k)),
-            queries,
-            &true_hits,
-            multiplier,
-        );
-        bench_one_alg(
-            group,
-            (tree, &tree::cakes::KnnRrnn(k)),
-            (root, &cakes::KnnRrnn(k)),
-            queries,
-            &true_hits,
-            multiplier,
-        );
+        // bench_one_alg(
+        //     group,
+        //     (tree, &tree::cakes::KnnBfs(k)),
+        //     (root, &cakes::KnnBfs(k)),
+        //     queries,
+        //     &true_hits,
+        //     multiplier,
+        // );
+        // bench_one_alg(
+        //     group,
+        //     (tree, &tree::cakes::KnnBranch(k)),
+        //     (root, &cakes::KnnBranch(k)),
+        //     queries,
+        //     &true_hits,
+        //     multiplier,
+        // );
+        // bench_one_alg(
+        //     group,
+        //     (tree, &tree::cakes::KnnRrnn(k)),
+        //     (root, &cakes::KnnRrnn(k)),
+        //     queries,
+        //     &true_hits,
+        //     multiplier,
+        // );
 
         // // Benchmark the approximate algorithms
         // for n in [10, 100, 1000] {
@@ -246,18 +247,31 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 items.shuffle(rng);
             }
             let indexed_items = items.into_iter().enumerate().collect::<Vec<_>>();
+            let items_size = indexed_items.deep_size_of();
+            println!(
+                "Dataset has cardinality {} and memory size {items_size} bytes",
+                indexed_items.len()
+            );
 
             println!("Building Cluster with strategy {strategy}");
             let root_start = std::time::Instant::now();
             let root = Cluster::<_, _, _, ()>::par_new_tree(indexed_items.clone(), &metric, strategy).unwrap();
             let root_time = root_start.elapsed();
             println!("Built Cluster in {:.6}", root_time.as_secs_f32());
+            let root_size = root.deep_size_of();
+            println!("Cluster has memory size {root_size} bytes");
+            let root_overhead = root_size as f64 / items_size as f64;
+            println!("Cluster overhead ratio: {root_overhead:.8}");
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
-            let tree = tree::Tree::new(indexed_items, metric).unwrap();
+            let tree = tree::Tree::par_new(indexed_items, metric).unwrap();
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
+            let tree_size = tree.deep_size_of();
+            println!("Tree has memory size {tree_size} bytes");
+            let tree_overhead = tree_size as f64 / items_size as f64;
+            println!("Tree overhead ratio: {tree_overhead:.8}");
 
             bench_for_ks(&mut group, &tree, &root, &queries, multiplier, ks);
 
@@ -305,9 +319,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let base = base_dir().unwrap();
     for dataset in &datasets {
-        if !matches!(dataset, AnnDataset::FashionMnist) {
-            continue; // Targeting dataset for hyperparameter tuning
-        }
+        // if !matches!(dataset, AnnDataset::FashionMnist) {
+        //     continue; // Targeting dataset for hyperparameter tuning
+        // }
         // For the paper, only use the first 3 datasets
         run_group(
             c,
