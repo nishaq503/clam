@@ -1,6 +1,7 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
 use crate::DistanceValue;
+use rand::prelude::*;
 
 pub mod cakes;
 mod node;
@@ -87,5 +88,18 @@ where
     /// Returns a reference to the metric used in the tree.
     pub const fn metric(&self) -> &M {
         &self.metric
+    }
+
+    /// Clones and returns a random subset of `n` items from the tree.
+    ///
+    /// If `n` is greater than the number of items in the tree, all items are returned.
+    ///
+    /// The order of items in the returned vector is random.
+    pub fn random_subset<R: rand::Rng>(&self, n: usize, rng: &mut R) -> Vec<&I> {
+        let n = n.min(self.items.len());
+        let mut indices = (0..self.items.len()).collect::<Vec<_>>();
+        indices.shuffle(rng);
+        indices.truncate(n);
+        indices.iter().map(|&i| &self.items[i].1).collect()
     }
 }
