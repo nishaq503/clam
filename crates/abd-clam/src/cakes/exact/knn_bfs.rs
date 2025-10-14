@@ -51,6 +51,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                 )  // OR
                 || cluster.is_leaf()
                 {
+                    profi::prof!("KnnBfs::process_leaf");
                     // The cluster is a leaf, so we have to look at its points
                     if cluster.is_singleton() {
                         // It's a singleton, so just add non-center items with the precomputed distance
@@ -61,6 +62,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                         hits.extend(cluster.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
                     }
                 } else {
+                    profi::prof!("KnnBfs::process_parent");
                     for child in cluster
                         .children()
                         .unwrap_or_else(|| unreachable!("Cluster is a parent"))
