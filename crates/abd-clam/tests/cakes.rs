@@ -11,12 +11,17 @@ use test_case::test_case;
 
 mod common;
 
+fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
+    let d = common::metrics::euclidean::<_, _, f32>(a, b);
+    // Truncate to 3 decimal places for easier debugging
+    (d * 1000.0).trunc() / 1000.0
+}
+
 #[test_case(10, 2; "10 x 2")]
 #[test_case(1_000, 2; "1_000 x 2")]
 #[test_case(10_000, 10; "10_000 x 10")]
 fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
-    let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
     // Truncate all items to 3 decimal places for debugging
@@ -111,7 +116,6 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
 #[test_case(100_000, 100; "100_000 x 100")]
 fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
-    let metric = common::metrics::euclidean::<_, _, f32>;
     let query = vec![0.0; dim];
 
     let tree = Tree::new_minimal(data.clone(), metric)?;

@@ -1,7 +1,5 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
-#![expect(clippy::uninlined_format_args)]
-
 use crate::DistanceValue;
 use rand::prelude::*;
 

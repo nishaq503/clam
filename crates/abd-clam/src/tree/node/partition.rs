@@ -69,13 +69,6 @@ impl<T, A> Node<T, A> {
                 annotation: None,
             };
         }
-        println!(
-            "Creating node at depth {}, offset {}, with {} items: {:?}",
-            depth,
-            center_index,
-            items.len(),
-            items
-        );
 
         if items.len() <= 100 {
             // For small number of items, find the exact geometric median
@@ -109,27 +102,10 @@ impl<T, A> Node<T, A> {
         };
 
         if !strategy.should_partition(&node) {
-            println!(
-                "Stopping partitioning at depth {}, offset {}, with {} items: {:?}",
-                depth,
-                center_index,
-                items.len(),
-                items
-            );
             return node;
         }
 
-        println!(
-            "Continuing partitioning at depth {}, offset {}, with {} items: {:?}",
-            depth,
-            center_index,
-            items.len(),
-            items
-        );
         let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
-        println!("Left partition has {} items {:?}", l_items.len(), l_items);
-        println!("Right partition has {} items {:?}", r_items.len(), r_items);
-        println!("Span between poles: {:?}", span);
 
         let child_depth = depth + 1;
         let l_center_index = center_index + 1;
@@ -138,7 +114,6 @@ impl<T, A> Node<T, A> {
         let l_child = Self::new(child_depth, l_center_index, l_items, metric, strategy);
         let r_child = Self::new(child_depth, r_center_index, r_items, metric, strategy);
 
-        println!("Created children for node at depth {}, offset {}", depth, center_index);
         node.children = Some((Box::new([l_child, r_child]), span));
         node
     }
@@ -244,13 +219,11 @@ where
     M: Fn(&I, &I) -> T,
 {
     if items.len() == 2 {
-        println!("Only two items to split: {:?}", items);
         // If there are only two items, just return them as the two partitions.
         let span = metric(&items[0].1, &items[1].1);
         let (left, right) = items.split_at_mut(1);
         return ([left, right], span);
     }
-    println!("Splitting {} items: {:?}", items.len(), items);
 
     let left_pole_index = left_pole_index.unwrap_or_else(|| {
         // Find the item farthest from the first item.
@@ -261,14 +234,9 @@ where
             .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
             .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
     });
-    println!(
-        "Chosen left pole index: {}, item: {:?}",
-        left_pole_index, items[left_pole_index]
-    );
 
     // Move the left pole to the 0th index in the slice
     items.swap(0, left_pole_index);
-    println!("Items after moving left pole to front: {:?}", items);
 
     // Compute distances from the left pole to all other items
     let left_pole = &items[0].1;
@@ -277,7 +245,6 @@ where
         .skip(1)
         .map(|(_, item)| metric(left_pole, item))
         .collect::<Vec<_>>();
-    println!("Distances from left pole: {:?}", left_distances);
 
     // Find the item farthest from the left pole
     let (right_pole_index, span) = left_distances
@@ -285,21 +252,11 @@ where
         .enumerate()
         .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
         .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
-    println!(
-        "Chosen right pole index: {}, item: {:?}",
-        right_pole_index, items[right_pole_index]
-    );
-    println!("Span of poles: {:?}", span);
 
     // Move the right pole and its distance to the end of their respective slices
     let last = items.len() - 1;
     items.swap(right_pole_index, last);
     left_distances.swap(right_pole_index - 1, last - 1);
-    println!("Items after moving right pole to end: {:?}", items);
-    println!(
-        "Left distances after moving right pole distance to end: {:?}",
-        left_distances
-    );
 
     // Compute the distance from the right pole to all items
     let right_pole = &items[items.len() - 1].1;
@@ -310,21 +267,17 @@ where
         .take(items.len() - 2)
         .map(|((_, item), l)| (l, metric(right_pole, item)))
         .collect::<Vec<_>>();
-    println!("Distances from left and right poles: {:?}", left_right_distances);
 
     // Reorder the items in place by their distances to the two poles
     let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
-    println!("Items after reordering: {:?}", items);
-    println!("Distances after reordering: {:?}", left_right_distances);
-    println!("Mid index: {}", mid);
 
     // split the items slice into the left and right partitions
     let (left, right) = items.split_at_mut(mid);
+    assert!(!left.is_empty(), "Left partition is empty");
+    assert!(!right.is_empty(), "Right partition is empty");
 
     // Move the right pole to the 0th index in the right slice
     right.swap(0, right.len() - 1);
-    println!("Left partition: {:?}", left);
-    println!("Right partition: {:?}", right);
 
     ([left, right], span)
 }
@@ -346,16 +299,14 @@ where
         distances.len(),
         "items and distances must have the same length"
     );
-    println!("Reordering {} items {:?}", items.len(), items);
-    println!("With distances {:?}", distances);
 
     let mut left = 0;
-    let mut right = items.len() - 1;
+    let mut right = distances.len() - 1;
 
-    // TODO(Najib): After tesing, use unsafe code to remove bounds checks while indexing
-
+    // TODO(Najib): After testing, use unsafe code to remove bounds checks while indexing
+    let mut n_swaps = 0;
     while left < right {
-        println!("Start of loop: left={}, right={}", left, right);
+        // println!("Start of loop: left={}, right={}", left, right);
 
         // Increment `left` until we find an item for the right pole
         while left < distances.len() && distances[left].0 <= distances[left].1 {
@@ -369,22 +320,17 @@ where
 
         // If the two indices have crossed, we are done
         if left >= right {
-            println!("Indices have crossed: left={}, right={}", left, right);
-            break;
+            return left;
         }
-        println!("Swapping items at indices: left={}, right={}", left, right);
+        assert!(n_swaps < 1 + items.len() / 2, "Finding where the infinite loop is happening: left = {}, distances[left] = {:?}, right = {}, distances[right] = {:?}", left, distances[left], right, distances[right]);
 
         // swap the items at the two indices
         items.swap(left, right);
         distances.swap(left, right);
+        n_swaps += 1;
         left += 1;
         right -= 1;
-
-        println!("Items after swap: {:?}", items);
-        println!("Distances after swap: {:?}", distances);
-        println!("End of loop: left={}, right={}", left, right);
     }
 
-    println!("Returning mid index: {}", left);
     left
 }
