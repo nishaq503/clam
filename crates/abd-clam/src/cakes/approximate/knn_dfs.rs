@@ -19,21 +19,19 @@ use crate::{
 /// [`exact variant`](crate::cakes::KnnDfs) of this algorithm.
 pub struct KnnDfs(pub usize, pub usize, pub usize);
 
-impl std::fmt::Display for KnnDfs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
+    fn name(&self) -> String {
         if self.1 == usize::MAX && self.2 == usize::MAX {
-            write!(f, "KnnDfs(k={})", self.0)
+            format!("KnnDfs(k={})", self.0)
         } else if self.2 == usize::MAX {
-            write!(f, "ApproxKnnDfs(k={},leaves<{})", self.0, self.1)
+            format!("ApproxKnnDfs(k={},leaves<{})", self.0, self.1)
         } else if self.1 == usize::MAX {
-            write!(f, "ApproxKnnDfs(k={},dist_comps<{})", self.0, self.2)
+            format!("ApproxKnnDfs(k={},dist_comps<{})", self.0, self.2)
         } else {
-            write!(f, "ApproxKnnDfs(k={},leaves<{},dist_comps<{})", self.0, self.1, self.2)
+            format!("ApproxKnnDfs(k={},leaves<{},dist_comps<{})", self.0, self.1, self.2)
         }
     }
-}
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all

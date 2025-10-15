@@ -14,13 +14,11 @@ use super::rnn_chess::tree_search;
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnRrnn(pub usize);
 
-impl std::fmt::Display for KnnRrnn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "KnnRrnn(k={})", self.0)
-    }
-}
-
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnRrnn {
+    fn name(&self) -> String {
+        format!("KnnRrnn(k={})", self.0)
+    }
+
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all

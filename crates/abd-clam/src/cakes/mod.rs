@@ -12,11 +12,19 @@ pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 
 /// A Nearest Neighbor Search algorithm.
-pub trait Search<Id, I, T, A, M>: std::fmt::Display
+pub trait Search<Id, I, T, A, M>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
+    /// Returns a name for the search algorithm.
+    ///
+    /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm. The default implementation uses
+    /// [`type_name`](core::any::type_name).
+    fn name(&self) -> String {
+        core::any::type_name::<Self>().to_string()
+    }
+
     /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
 

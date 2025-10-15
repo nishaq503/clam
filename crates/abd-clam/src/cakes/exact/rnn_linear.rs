@@ -9,17 +9,15 @@ use crate::{cakes::Search, DistanceValue, Tree};
 /// The field is the radius of the query ball to search within.
 pub struct RnnLinear<T: DistanceValue>(pub T);
 
-impl<T: DistanceValue> std::fmt::Display for RnnLinear<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RnnLinear(radius={})", self.0)
-    }
-}
-
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnLinear<T>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
+    fn name(&self) -> String {
+        format!("RnnLinear(radius={})", self.0)
+    }
+
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         tree.distances_to_items_in_cluster(query, tree.root())
             .into_iter()

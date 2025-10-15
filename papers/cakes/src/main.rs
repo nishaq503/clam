@@ -173,7 +173,8 @@ fn main() -> Result<(), String> {
                 let (best_alg, expected_throughput) =
                     selection::par_select_fastest_algorithm(&tree, args.q, args.k, args.selection_time);
                 ftlog::info!(
-                    "Selected algorithm {best_alg} with expected throughput {expected_throughput:.8} queries/sec"
+                    "Selected algorithm {} with expected throughput {expected_throughput:.8} queries/sec",
+                    best_alg.name()
                 );
 
                 ftlog::info!("Measuring throughput for dataset '{}'", dataset.name());
@@ -199,8 +200,8 @@ fn main() -> Result<(), String> {
                     .into_iter()
                     .map(|row| row.into_iter().map(|(i, d)| (i as u64, d)).unzip())
                     .unzip();
-                let neighbors_path = data_out_dir
-                    .join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-neighbors.npy");
+                let neighbors_path =
+                    data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-neighbors.npy");
                 if neighbors_path.exists() {
                     std::fs::remove_file(&neighbors_path)
                         .map_err(|e| format!("Failed to remove existing file '{}': {e}", neighbors_path.display()))?;
@@ -209,8 +210,8 @@ fn main() -> Result<(), String> {
                 ndarray_npy::write_npy(&neighbors_path, &neighbors_arr).map_err(|e| e.to_string())?;
                 ftlog::info!("Wrote neighbors to '{}'", neighbors_path.display());
 
-                let distances_path = data_out_dir
-                    .join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-distances.npy");
+                let distances_path =
+                    data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-distances.npy");
                 if distances_path.exists() {
                     std::fs::remove_file(&distances_path)
                         .map_err(|e| format!("Failed to remove existing file '{}': {e}", distances_path.display()))?;
@@ -220,7 +221,7 @@ fn main() -> Result<(), String> {
                 ftlog::info!("Wrote distances to '{}'", distances_path.display());
 
                 let performance_path = data_out_dir
-                    .join(strategy.to_string().to_ascii_lowercase() + &best_alg.to_string() + "-performance.json");
+                    .join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-performance.json");
                 if performance_path.exists() {
                     std::fs::remove_file(&performance_path)
                         .map_err(|e| format!("Failed to remove existing file '{}': {e}", performance_path.display()))?;

@@ -5,7 +5,7 @@
 use std::usize;
 
 use abd_clam::{
-    cakes::{search_quality_stats, KnnDfs, KnnLinear, Search},
+    cakes::{approximate, search_quality_stats, KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, Search},
     DistanceValue, Tree,
 };
 use rand::prelude::*;
@@ -36,56 +36,19 @@ fn bench_for_ks<Id, I, T, A, M>(
 
         // Benchmark the exact algorithms
         bench_one_alg(group, tree, &KnnDfs(k), queries, &true_hits, multiplier);
-        // bench_one_alg(
-        //     group,
-        //     (tree, &tree::cakes::KnnBfs(k)),
-        //     (root, &cakes::KnnBfs(k)),
-        //     queries,
-        //     &true_hits,
-        //     multiplier,
-        // );
-        // bench_one_alg(
-        //     group,
-        //     (tree, &tree::cakes::KnnBranch(k)),
-        //     (root, &cakes::KnnBranch(k)),
-        //     queries,
-        //     &true_hits,
-        //     multiplier,
-        // );
-        // bench_one_alg(
-        //     group,
-        //     (tree, &tree::cakes::KnnRrnn(k)),
-        //     (root, &cakes::KnnRrnn(k)),
-        //     queries,
-        //     &true_hits,
-        //     multiplier,
-        // );
+        bench_one_alg(group, tree, &KnnBfs(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &KnnBranch(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &KnnRrnn(k), queries, &true_hits, multiplier);
 
-        // // Benchmark the approximate algorithms
-        // for n in [10, 100, 1000] {
-        //     // Varying number of leaves explored
-        //     bench_one_alg(
-        //         group,
-        //         &cakes::approximate::KnnDfs(k, n, usize::MAX),
-        //         root,
-        //         metric,
-        //         queries,
-        //         &true_hits,
-        //         pruned_str,
-        //         multiplier,
-        //     );
-        //     // Varying number of distance computations performed
-        //     bench_one_alg(
-        //         group,
-        //         &cakes::approximate::KnnDfs(k, usize::MAX, n * 100),
-        //         root,
-        //         metric,
-        //         queries,
-        //         &true_hits,
-        //         pruned_str,
-        //         multiplier,
-        //     );
-        // }
+        // Benchmark the approximate algorithms
+        for n in [10, 100, 1000] {
+            // Varying number of leaves explored
+            let l_alg = approximate::KnnDfs(k, n, usize::MAX);
+            bench_one_alg(group, tree, &l_alg, queries, &true_hits, multiplier);
+            // Varying number of distance computations performed
+            let d_alg = approximate::KnnDfs(k, usize::MAX, n * 100);
+            bench_one_alg(group, tree, &d_alg, queries, &true_hits, multiplier);
+        }
     }
 }
 
@@ -104,7 +67,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     M: Fn(&I, &I) -> T + Send + Sync,
     Alg: Search<Id, I, T, A, M> + Send + Sync,
 {
-    let id = BenchmarkId::new(alg.to_string(), multiplier);
+    let id = BenchmarkId::new(alg.name(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
 
     let all_clusters = tree.all_clusters_preorder();
@@ -132,7 +95,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
 
     let pred_hits = alg.par_batch_search(&tree, queries);
     let recall_stats = search_quality_stats(true_hits, &pred_hits);
-    println!("Search quality of {}:", alg.to_string());
+    println!("Search quality of {}:", alg.name());
     for (stat_name, stat_value) in recall_stats {
         println!("    {stat_name}: {stat_value:.8}");
     }

@@ -9,17 +9,15 @@ use crate::{cakes::Search, Cluster, DistanceValue, Tree};
 /// The field is the radius of the query ball to search within.
 pub struct RnnChess<T: DistanceValue>(pub T);
 
-impl<T: DistanceValue> std::fmt::Display for RnnChess<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RnnChess(radius={})", self.0)
-    }
-}
-
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnChess<T>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
+    fn name(&self) -> String {
+        format!("RnnChess(radius={})", self.0)
+    }
+
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let (mut hits, subsumed, straddlers) = tree_search(tree, tree.root(), query, self.0);
 
