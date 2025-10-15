@@ -36,10 +36,10 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
 
     println!("Starting test with {} items of dimension {}", car, dim);
     let tree = Tree::new_minimal(data.clone(), metric)?;
-    let all_items = tree.items();
 
     for radius in [1.0, 1.5, 2.0] {
-        let expected_hits = all_items
+        let expected_hits = tree
+            .items_in_cluster(tree.root())
             .iter()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
@@ -64,7 +64,8 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     }
 
     for k in [1, 10, 100] {
-        let expected_hits = all_items
+        let expected_hits = tree
+            .items_in_cluster(tree.root())
             .iter()
             .map(|(i, item)| (*i, metric(item, &query)))
             .collect::<Vec<_>>();
@@ -119,10 +120,10 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let query = vec![0.0; dim];
 
     let tree = Tree::new_minimal(data.clone(), metric)?;
-    let all_items = tree.items();
 
     for radius in [1.0, 1.5, 2.0] {
-        let expected_hits = all_items
+        let expected_hits = tree
+            .items_in_cluster(tree.root())
             .par_iter()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
@@ -147,7 +148,8 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     }
 
     for k in [1, 10, 100] {
-        let expected_hits = all_items
+        let expected_hits = tree
+            .items_in_cluster(tree.root())
             .par_iter()
             .map(|(i, item)| (*i, metric(item, &query)))
             .collect::<Vec<_>>();

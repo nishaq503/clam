@@ -20,11 +20,7 @@ fn new() -> Result<(), String> {
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(
-        tree.items()[root.center_index()].1,
-        vec![5, 6],
-        "Center mismatch: {root:?}"
-    );
+    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
     assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
 
@@ -43,7 +39,7 @@ fn new() -> Result<(), String> {
     let tree_line = subtree.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>().join("\n");
     if subtree.len() != 3 {
         eprintln!("Subtree:\n{tree_line}");
-        eprintln!("Items: {:?}", tree.items());
+        eprintln!("Items: {:?}", tree.items_in_cluster(tree.root()));
     }
 
     assert_eq!(
@@ -66,12 +62,11 @@ fn par_new() -> Result<(), String> {
     let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
     let tree = Tree::par_new(items, metric, &strategy)?;
     let root = tree.root();
-    let items = tree.items();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
     assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(&items[root.center_index()].1, &vec![5, 6], "Center mismatch: {root:?}");
+    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root:?}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     // Now partition the root

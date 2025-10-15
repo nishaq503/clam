@@ -82,6 +82,11 @@ impl<T, A> Cluster<T, A> {
         self.cardinality
     }
 
+    /// Returns a `Range` that can be used to index into the `items` array of the `Tree` for all items in this cluster, including the center item.
+    pub const fn all_items_indices(&self) -> std::ops::Range<usize> {
+        self.center_index..(self.center_index + self.cardinality)
+    }
+
     /// Returns a `Range` that can be used to index into the `items` array of the `Tree` for all items in the subtree rooted at this cluster, excluding the
     /// center item of this cluster.
     pub const fn subtree_indices(&self) -> std::ops::Range<usize> {

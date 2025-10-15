@@ -22,28 +22,19 @@ impl std::fmt::Display for KnnRrnn {
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnRrnn {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        if self.0 > items.len() {
+        if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| (i, metric(query, item)))
-                .collect();
+            return tree.distances_to_items_in_cluster(query, tree.root());
         }
 
         // Estimate an initial radius to cover k points.
-        let mut radius = radius_for_k(root, self.0);
+        let mut radius = radius_for_k(tree.root(), self.0);
 
         // Perform the initial tree search.
         let (mut centers, mut subsumed, mut straddlers) = tree_search(
-            root,
-            metric,
-            items,
+            tree,
+            tree.root(),
             query,
             T::from_f64(radius)
                 .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
@@ -64,9 +55,8 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             // Increase the radius and repeat the search.
             radius *= multiplier;
             (centers, subsumed, straddlers) = tree_search(
-                root,
-                metric,
-                items,
+                tree,
+                tree.root(),
                 query,
                 T::from_f64(radius)
                     .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
@@ -81,10 +71,11 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
         for cluster in subsumed.into_iter().chain(straddlers) {
             if cluster.is_singleton() {
-                let d = metric(query, &items[cluster.center_index()].1);
+                // TODO(Najib): Figure out how to get this distance from the heap
+                let d = tree.distance_to_center(query, cluster);
                 heap.extend(cluster.subtree_indices().map(|i| (i, d)));
             } else {
-                heap.extend(cluster.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
+                heap.extend(tree.distances_to_items_in_subtree(query, cluster));
             }
         }
 

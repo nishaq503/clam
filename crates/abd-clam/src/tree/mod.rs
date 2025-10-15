@@ -1,7 +1,9 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
-use crate::DistanceValue;
 use rand::prelude::*;
+use rayon::prelude::*;
+
+use crate::DistanceValue;
 
 mod cluster;
 
@@ -123,9 +125,81 @@ where
         Ok(Self { items, root, metric })
     }
 
-    /// Returns a reference to the items stored in the tree.
-    pub fn items(&self) -> &[(Id, I)] {
-        &self.items
+    /// Returns a reference to the identifier of the center item of the given cluster.
+    pub fn center_id_of_cluster(&self, cluster: &Cluster<T, A>) -> &Id {
+        &self.items[cluster.center_index()].0
+    }
+
+    /// Returns a reference to the center item of the given cluster.
+    pub fn center_of_cluster(&self, cluster: &Cluster<T, A>) -> &I {
+        &self.items[cluster.center_index()].1
+    }
+
+    /// Returns a slice of the items in the given cluster, excluding the cluster's center.
+    pub fn items_in_subtree(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
+        &self.items[cluster.subtree_indices()]
+    }
+
+    /// Returns a slice of the items in the given cluster, including the cluster's center.
+    pub fn items_in_cluster(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
+        &self.items[cluster.all_items_indices()]
+    }
+
+    /// Returns the distance between the query item and the center of the given cluster.
+    pub fn distance_to_center(&self, query: &I, cluster: &Cluster<T, A>) -> T {
+        (self.metric)(query, self.center_of_cluster(cluster))
+    }
+
+    /// Returns the distances between the query item and all items in the given cluster, excluding the cluster's center.
+    pub fn distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
+        cluster
+            .subtree_indices()
+            .zip(self.items_in_subtree(cluster))
+            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
+            .collect()
+    }
+
+    /// Returns the distances between the query item and all items in the given cluster, including the cluster's center.
+    pub fn distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
+        cluster
+            .all_items_indices()
+            .zip(self.items_in_cluster(cluster))
+            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
+            .collect()
+    }
+
+    /// Parallel version of [`distances_to_items_in_subtree`](Self::distances_to_items_in_subtree).
+    pub fn par_distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
+        cluster
+            .subtree_indices()
+            .into_par_iter()
+            .zip(self.items_in_subtree(cluster))
+            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
+            .collect()
+    }
+
+    /// Parallel version of [`distances_to_items_in_cluster`](Self::distances_to_items_in_cluster).
+    pub fn par_distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
+        cluster
+            .all_items_indices()
+            .into_par_iter()
+            .zip(self.items_in_cluster(cluster))
+            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
+            .collect()
     }
 
     /// Consumes the tree and returns all items stored in it.

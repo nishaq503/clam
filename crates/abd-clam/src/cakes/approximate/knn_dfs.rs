@@ -35,38 +35,30 @@ impl std::fmt::Display for KnnDfs {
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        if self.0 > items.len() {
+        if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| (i, metric(query, item)))
-                .collect();
+            return tree.distances_to_items_in_cluster(query, tree.root());
         }
         // let tol = 0.01; // Tolerance for hit improvement.
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-        let d = metric(query, &items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = tree.distance_to_center(query, tree.root());
+        hits.push((tree.root().center_index(), d));
+        candidates.push((tree.root(), Reverse((d_min(tree.root(), d), d_max(tree.root(), d), d))));
 
         let mut leaves_visited = 0;
         let mut distance_computations = 1;
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
-            let (leaf, d, n) = pop_till_leaf(query, metric, items, &mut candidates, &mut hits);
+            let (leaf, d, n) = pop_till_leaf(query, tree, &mut candidates, &mut hits);
             leaves_visited += 1;
             distance_computations += n;
 
             // Process the leaf and update hits.
-            distance_computations += leaf_into_hits(query, metric, items, &mut hits, leaf, d);
+            distance_computations += leaf_into_hits(query, tree, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates

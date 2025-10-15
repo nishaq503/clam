@@ -21,34 +21,26 @@ impl std::fmt::Display for KnnBranch {
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBranch {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        if self.0 > items.len() {
+        if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| (i, metric(query, item)))
-                .collect();
+            return tree.distances_to_items_in_cluster(query, tree.root());
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = metric(query, &items[root.center_index()].1);
-        candidate_radii.push((1, Reverse(d_min(root, d))));
-        candidate_radii.push((root.cardinality().half() + 1, Reverse(d)));
-        candidate_radii.push((root.cardinality(), Reverse(d_max(root, d))));
+        let d = tree.distance_to_center(query, tree.root());
+        candidate_radii.push((1, Reverse(d_min(tree.root(), d))));
+        candidate_radii.push((tree.cardinality().half() + 1, Reverse(d)));
+        candidate_radii.push((tree.cardinality(), Reverse(d_max(tree.root(), d))));
 
-        let mut latest = root;
+        let mut latest = tree.root();
         while !latest.is_leaf() {
             let (child, d) = latest
                 .children()
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
                 .iter()
-                .map(|c| (c, metric(query, &items[c.center_index()].1)))
+                .map(|c| (c, tree.distance_to_center(query, c)))
                 .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
 

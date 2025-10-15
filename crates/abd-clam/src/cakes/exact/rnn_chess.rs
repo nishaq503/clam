@@ -21,30 +21,20 @@ where
     M: Fn(&I, &I) -> T,
 {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        let (mut hits, subsumed, straddlers) = tree_search(root, metric, items, query, self.0);
+        let (mut hits, subsumed, straddlers) = tree_search(tree, tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.extend(
             subsumed
                 .into_iter()
-                .flat_map(|cluster| cluster.subtree_indices().map(|i| (i, metric(&items[i].1, query)))),
+                .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster)),
         );
 
         // Check all items from straddling clusters
         hits.extend(straddlers.into_iter().flat_map(|cluster| {
-            cluster.subtree_indices().filter_map(|i| {
-                let dist = metric(&items[i].1, query);
-                if dist <= self.0 {
-                    // Item is within the search radius so include it
-                    Some((i, dist))
-                } else {
-                    None
-                }
-            })
+            tree.distances_to_items_in_subtree(query, cluster)
+                .into_iter()
+                .filter(|(_, dist)| *dist <= self.0)
         }));
 
         hits
@@ -59,31 +49,20 @@ where
         A: Send + Sync,
         M: Send + Sync,
     {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        let (mut hits, subsumed, straddlers) = par_tree_search(root, metric, items, query, self.0);
+        let (mut hits, subsumed, straddlers) = par_tree_search(tree, tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters
-        hits.par_extend(subsumed.into_par_iter().flat_map(|cluster| {
-            cluster
-                .subtree_indices()
+        hits.par_extend(
+            subsumed
                 .into_par_iter()
-                .map(|i| (i, metric(&items[i].1, query)))
-        }));
+                .flat_map(|cluster| tree.par_distances_to_items_in_subtree(query, cluster)),
+        );
 
         // Check all items from straddling clusters
         hits.par_extend(straddlers.into_par_iter().flat_map(|cluster| {
-            cluster.subtree_indices().into_par_iter().filter_map(|i| {
-                let dist = metric(&items[i].1, query);
-                if dist <= self.0 {
-                    // Item is within the search radius so include it
-                    Some((i, dist))
-                } else {
-                    None
-                }
-            })
+            tree.par_distances_to_items_in_subtree(query, cluster)
+                .into_par_iter()
+                .filter(|(_, dist)| *dist <= self.0)
         }));
 
         hits
@@ -108,9 +87,8 @@ where
 ///   - clusters that have overlapping volume with the query cluster but are not fully subsumed.
 #[allow(clippy::type_complexity)]
 pub fn tree_search<'a, Id, I, T, A, M>(
+    tree: &'a Tree<Id, I, T, A, M>,
     cluster: &'a Cluster<T, A>,
-    metric: &M,
-    items: &[(Id, I)],
     query: &I,
     radius: T,
 ) -> (Vec<(usize, T)>, Vec<&'a Cluster<T, A>>, Vec<&'a Cluster<T, A>>)
@@ -118,8 +96,7 @@ where
     T: DistanceValue + 'a,
     M: Fn(&I, &I) -> T,
 {
-    let center = &items[cluster.center_index()].1;
-    let center_dist = metric(center, query);
+    let center_dist = tree.distance_to_center(query, cluster);
 
     if center_dist > cluster.radius() + radius {
         // No overlapping volume between the query cluster and this cluster
@@ -147,7 +124,7 @@ where
         Some(children) => {
             // Recurse into children
             for child in children {
-                let (child_centers, child_subsumed, child_straddlers) = tree_search(child, metric, items, query, radius);
+                let (child_centers, child_subsumed, child_straddlers) = tree_search(tree, child, query, radius);
                 centers.extend(child_centers);
                 subsumed.extend(child_subsumed);
                 straddlers.extend(child_straddlers);
@@ -160,9 +137,8 @@ where
 /// Parallel version of [`tree_search`](tree_search).
 #[allow(clippy::type_complexity)]
 pub fn par_tree_search<'a, Id, I, T, A, M>(
+    tree: &'a Tree<Id, I, T, A, M>,
     cluster: &'a Cluster<T, A>,
-    metric: &M,
-    items: &[(Id, I)],
     query: &I,
     radius: T,
 ) -> (Vec<(usize, T)>, Vec<&'a Cluster<T, A>>, Vec<&'a Cluster<T, A>>)
@@ -173,8 +149,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
     A: Send + Sync,
 {
-    let center = &items[cluster.center_index()].1;
-    let center_dist = metric(center, query);
+    let center_dist = tree.distance_to_center(query, cluster);
 
     if center_dist > cluster.radius() + radius {
         // No overlapping volume between the query cluster and this cluster
@@ -203,7 +178,7 @@ where
             // Recurse into children
             let returns = children
                 .par_iter()
-                .map(|child| par_tree_search(child, metric, items, query, radius))
+                .map(|child| par_tree_search(tree, child, query, radius))
                 .collect::<Vec<_>>();
 
             for (child_centers, child_subsumed, child_straddlers) in returns {

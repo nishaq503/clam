@@ -21,32 +21,24 @@ impl std::fmt::Display for KnnDfs {
 
 impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnDfs {
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = tree.root();
-        let metric = tree.metric();
-        let items = tree.items();
-
-        if self.0 > items.len() {
+        if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return items
-                .iter()
-                .enumerate()
-                .map(|(i, (_, item))| (i, metric(query, item)))
-                .collect();
+            return tree.distances_to_items_in_cluster(query, tree.root());
         }
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = metric(query, &items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = tree.distance_to_center(query, tree.root());
+        hits.push((tree.root().center_index(), d));
+        candidates.push((tree.root(), Reverse((d_min(tree.root(), d), d_max(tree.root(), d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
-            let (leaf, d, _) = pop_till_leaf(query, metric, items, &mut candidates, &mut hits);
+            let (leaf, d, _) = pop_till_leaf(query, tree, &mut candidates, &mut hits);
             // Process the leaf and update hits.
-            leaf_into_hits(query, metric, items, &mut hits, leaf, d);
+            leaf_into_hits(query, tree, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
             let min_c = candidates
@@ -70,8 +62,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 #[allow(clippy::type_complexity)]
 pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
-    metric: &M,
-    items: &[(Id, I)],
+    tree: &Tree<Id, I, T, A, M>,
     candidates: &mut SizedHeap<&'a Cluster<T, A>, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
 ) -> (&'a Cluster<T, A>, T, usize) {
@@ -90,7 +81,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
                 distance_computations += children.len();
 
                 for child in children {
-                    let d = metric(query, &items[child.center_index()].1);
+                    let d = tree.distance_to_center(query, child);
                     hits.push((child.center_index(), d));
                     candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
                 }
@@ -112,8 +103,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
 /// distance to the center (which is already known).
 pub fn leaf_into_hits<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
-    metric: &M,
-    items: &[(Id, I)],
+    tree: &Tree<Id, I, T, A, M>,
     hits: &mut SizedHeap<usize, T>,
     leaf: &Cluster<T, A>,
     d: T,
@@ -128,7 +118,7 @@ pub fn leaf_into_hits<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute
         // the distance from the query to each item in the leaf.
-        hits.extend(leaf.subtree_indices().map(|i| (i, metric(query, &items[i].1))));
+        hits.extend(tree.distances_to_items_in_subtree(query, leaf));
         leaf.cardinality() - 1 // We already knew the distance to the center.
     }
 }

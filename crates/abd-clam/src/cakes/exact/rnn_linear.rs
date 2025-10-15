@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{cakes::Search, DistanceValue};
+use crate::{cakes::Search, DistanceValue, Tree};
 
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 ///
@@ -20,22 +20,14 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn search(&self, tree: &crate::tree::Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        tree.items()
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, (_, item))| {
-                let dist = (tree.metric())(query, item);
-                if dist <= self.0 {
-                    Some((idx, dist))
-                } else {
-                    None
-                }
-            })
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        tree.distances_to_items_in_cluster(query, tree.root())
+            .into_iter()
+            .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })
             .collect()
     }
 
-    fn par_search(&self, tree: &crate::tree::Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
     where
         Self: Send + Sync,
         Id: Send + Sync,
@@ -44,17 +36,9 @@ where
         M: Send + Sync,
         A: Send + Sync,
     {
-        tree.items()
-            .par_iter()
-            .enumerate()
-            .filter_map(|(idx, (_, item))| {
-                let dist = (tree.metric())(query, item);
-                if dist <= self.0 {
-                    Some((idx, dist))
-                } else {
-                    None
-                }
-            })
+        tree.par_distances_to_items_in_cluster(query, tree.root())
+            .into_par_iter()
+            .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })
             .collect()
     }
 }
