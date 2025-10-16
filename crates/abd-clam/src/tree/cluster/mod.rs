@@ -26,24 +26,34 @@ pub struct Cluster<T, A> {
     pub(crate) annotation: Option<A>,
 }
 
-impl<T, A> core::fmt::Debug for Cluster<T, A>
+impl<T, A> core::fmt::Display for Cluster<T, A>
 where
-    T: core::fmt::Debug,
+    T: core::fmt::Display,
     A: core::fmt::Debug,
 {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Cluster")
-            .field("depth", &self.depth)
-            .field("center_index", &self.center_index)
-            .field("cardinality", &self.cardinality)
-            .field("radius", &self.radius)
-            .field("lfd", &self.lfd)
-            .field(
-                "children",
-                &self.children.as_ref().map(|(children, span)| (children.len(), span)),
-            )
-            .field("annotation", &self.annotation)
-            .finish()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut fields = vec![
+            format!("depth: {}", self.depth),
+            format!("center_index: {}", self.center_index),
+            format!("cardinality: {}", self.cardinality),
+            format!("radius: {}", self.radius),
+            format!("lfd: {:.6}", self.lfd),
+            format!(
+                "indices: {}..{}",
+                self.center_index + 1,
+                self.center_index + self.cardinality
+            ),
+        ];
+        if let Some(annotation) = &self.annotation {
+            fields.push(format!("annotation: {:?}", annotation));
+        }
+        if let Some((children, span)) = &self.children {
+            fields.push(format!("span: {}", span));
+            fields.push(format!("children: {}", children.len()));
+        }
+
+        let joined = fields.join(", ");
+        write!(f, "Cluster({})", joined)
     }
 }
 

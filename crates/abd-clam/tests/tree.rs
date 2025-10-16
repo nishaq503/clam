@@ -17,25 +17,25 @@ fn new() -> Result<(), String> {
     let tree = Tree::new(items.clone(), metric, &strategy)?;
     let root = tree.root();
 
-    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
-    assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-    assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root:?}");
-    assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
-    assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
+    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
+    assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+    assert!(root.is_leaf(), "Root should be a leaf: {root}");
+    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root}");
+    assert_eq!(root.radius(), 12, "Radius mismatch: {root}");
+    assert!(root.annotation().is_none(), "Annotation should be None: {root}");
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
     let tree = Tree::new(items, metric, &strategy)?;
     let root: &Cluster<i32, ()> = tree.root();
 
-    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
-    assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-    assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
+    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
+    assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+    assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
     let subtree = root.subtree_preorder();
 
-    let tree_line = subtree.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>().join("\n");
+    let tree_line = subtree.iter().map(|c| format!("{c}")).collect::<Vec<_>>().join("\n");
     if subtree.len() != 3 {
         eprintln!("Subtree:\n{tree_line}");
         eprintln!("Items: {:?}", tree.items_in_cluster(tree.root()));
@@ -62,31 +62,27 @@ fn par_new() -> Result<(), String> {
     let tree = Tree::par_new(items.clone(), metric, &strategy)?;
     let root = tree.root();
 
-    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
-    assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-    assert!(root.is_leaf(), "Root should be a leaf: {root:?}");
-    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root:?}");
-    assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
+    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
+    assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+    assert!(root.is_leaf(), "Root should be a leaf: {root}");
+    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root}");
+    assert_eq!(root.radius(), 12, "Radius mismatch: {root}");
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
     let tree = Tree::par_new(items, metric, &strategy)?;
     let root: &Cluster<i32, ()> = tree.root();
 
-    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
-    assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-    assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
+    assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
+    assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+    assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
     let subtree = root.subtree_preorder();
     assert_eq!(
         subtree.len(),
         3, // Because both children will have cardinality == 2, and so will not be partitioned further
         "Subtree cardinality mismatch: [{:?}]",
-        subtree
-            .iter()
-            .map(|c| format!("{c:?}"))
-            .collect::<Vec<_>>()
-            .join(" :: "),
+        subtree.iter().map(|c| format!("{c}")).collect::<Vec<_>>().join(" :: "),
     );
 
     Ok(())
@@ -121,9 +117,9 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         assert_eq!(ratios.len(), i + 1);
 
         let root = tree.root();
-        assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
-        assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-        assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
+        assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root}");
+        assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+        assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
         assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
     }
 
@@ -157,9 +153,9 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         assert_eq!(ratios.len(), i + 1);
 
         let root = tree.root();
-        assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root:?}");
-        assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
-        assert!(!root.is_leaf(), "Root should not be a leaf: {root:?}");
+        assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root}");
+        assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
+        assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
         assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
     }
 

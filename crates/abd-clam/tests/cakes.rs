@@ -39,7 +39,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
 
     println!("Tree Items: {:?}", tree.items_in_cluster(tree.root()));
     for c in tree.root().subtree_preorder() {
-        println!("{c:?}");
+        println!("{c}");
         println!("Indices in cluster: {:?}", c.subtree_indices().collect::<Vec<_>>());
     }
 

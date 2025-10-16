@@ -3,7 +3,7 @@
 
 #![expect(clippy::uninlined_format_args)]
 
-use std::fmt::{Debug, Display};
+use core::fmt::{Debug, Display};
 
 pub mod cakes;
 pub mod codec;
