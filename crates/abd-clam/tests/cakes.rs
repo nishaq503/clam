@@ -17,9 +17,9 @@ fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
     (d * 1000.0).trunc() / 1000.0
 }
 
-#[test_case(10, 2; "10 x 2")]
-#[test_case(1_000, 2; "1_000 x 2")]
-#[test_case(10_000, 10; "10_000 x 10")]
+#[test_case(10, 2; "10x2")]
+#[test_case(1_000, 2; "1_000x2")]
+#[test_case(10_000, 10; "10_000x10")]
 fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
     let query = vec![0.0; dim];
@@ -37,7 +37,13 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     println!("Starting test with {} items of dimension {}", car, dim);
     let tree = Tree::new_minimal(data.clone(), metric)?;
 
-    for radius in [1.0, 1.5, 2.0] {
+    println!("Tree Items: {:?}", tree.items_in_cluster(tree.root()));
+    for c in tree.root().subtree_preorder() {
+        println!("{c:?}");
+        println!("Indices in cluster: {:?}", c.subtree_indices().collect::<Vec<_>>());
+    }
+
+    for radius in [0.5, 1.0, 1.5, 2.0] {
         let expected_hits = tree
             .items_in_cluster(tree.root())
             .iter()
@@ -111,10 +117,10 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     Ok(())
 }
 
-#[test_case(10_000, 10; "10_000 x 10")]
-#[test_case(10_000, 100; "10_000 x 100")]
-#[test_case(100_000, 10; "100_000 x 10")]
-#[test_case(100_000, 100; "100_000 x 100")]
+#[test_case(10_000, 10; "10_000x10")]
+#[test_case(10_000, 100; "10_000x100")]
+#[test_case(100_000, 10; "100_000x10")]
+#[test_case(100_000, 100; "100_000x100")]
 fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
     let query = vec![0.0; dim];
@@ -199,18 +205,13 @@ fn check_hits<T: DistanceValue>(expected: &[(usize, T)], actual: &[(usize, T)], 
     assert_eq!(
         expected.len(),
         actual.len(),
-        "{alg_name}: Hit count mismatch: \nexp {:?}, \ngot {:?}",
-        expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
-        actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+        "{alg_name}: Hit count mismatch: \nexp {expected:?}, \ngot {actual:?}",
     );
 
     for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
         assert_eq!(
-            e,
-            a,
-            "{alg_name}: Distance mismatch at index {i}: \nexp {:?}, \ngot {:?}",
-            expected.iter().map(|(_, d)| d).collect::<Vec<_>>(),
-            actual.iter().map(|(_, d)| d).collect::<Vec<_>>()
+            e, a,
+            "{alg_name}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}",
         );
     }
 

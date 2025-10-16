@@ -25,10 +25,9 @@ fn new() -> Result<(), String> {
     assert!(root.annotation().is_none(), "Annotation should be None: {root:?}");
 
     // Now partition the root
-    // let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let items = items.into_iter().map(|(_, v)| v).collect();
-    let tree = Tree::new_minimal(items, metric)?;
-    let root = tree.root();
+    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
+    let tree = Tree::new(items, metric, &strategy)?;
+    let root: &Cluster<i32, ()> = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");
@@ -60,7 +59,7 @@ fn par_new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
-    let tree = Tree::par_new(items, metric, &strategy)?;
+    let tree = Tree::par_new(items.clone(), metric, &strategy)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
@@ -70,10 +69,9 @@ fn par_new() -> Result<(), String> {
     assert_eq!(root.radius(), 12, "Radius mismatch: {root:?}");
 
     // Now partition the root
-    // let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let items = tree.take_items().into_iter().map(|(_, v)| v).collect();
-    let tree = Tree::par_new_minimal(items, metric)?;
-    let root = tree.root();
+    let strategy = PartitionStrategy::default().with_branching_factor(2.into());
+    let tree = Tree::par_new(items, metric, &strategy)?;
+    let root: &Cluster<i32, ()> = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root:?}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root:?}");

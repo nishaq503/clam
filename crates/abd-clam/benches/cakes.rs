@@ -6,7 +6,7 @@ use std::usize;
 
 use abd_clam::{
     cakes::{approximate, search_quality_stats, KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, Search},
-    DistanceValue, Tree,
+    BranchingFactor, Cluster, DistanceValue, PartitionStrategy, SpanReductionFactor, Tree,
 };
 use rand::prelude::*;
 
@@ -102,18 +102,6 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
 }
 
 /// Run benchmarks for a given dataset, doubling the dataset size each iteration until `max_items` is reached.
-///
-/// # Parameters
-///
-/// * `group`: the benchmark group to add benchmarks to
-/// * `rng`: a random number generator for shuffling and data augmentation
-/// * `dataset`: the dataset to benchmark
-/// * `base`: the base directory where datasets are stored
-/// * `max_items`: the maximum number of items to allow in the augmented dataset
-/// * `max_queries`: the maximum number of queries to use from the dataset
-/// * `shuffle`: whether to shuffle the dataset before building the tree
-/// * `ks`: the values of k to benchmark for k-NN search
-#[expect(unused_variables)]
 fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     c: &mut Criterion,
     rng: &mut R,
@@ -161,62 +149,62 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
                 .collect();
         }
 
-        // let strategies = {
-        //     let mut strategies = vec![];
+        let strategies = {
+            let mut strategies: Vec<PartitionStrategy<fn(&Cluster<f32, ()>) -> bool>> = vec![];
 
-        //     for &bf in branching_factors {
-        //         strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
-        //     }
-        //     for &bf in branching_factors {
-        //         if bf > 2 {
-        //             strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(bf)));
-        //         }
-        //     }
-        //     strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic));
+            for &bf in branching_factors {
+                strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
+            }
+            for &bf in branching_factors {
+                if bf > 2 {
+                    strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Adaptive(bf)));
+                }
+            }
+            strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Logarithmic));
 
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Two));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::E));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Pi));
-        //     strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Phi));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Sqrt2));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Two));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::E));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Pi));
+            strategies.push(PartitionStrategy::default().with_span_reduction(SpanReductionFactor::Phi));
 
-        //     strategies
-        // };
+            strategies
+        };
         // let strategies = vec![PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(2))];
 
-        // for strategy in &strategies {
-        // let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
-        let mut group = c.benchmark_group(format!("CAKES-{}", dataset.name()));
-        config_group(&mut group, queries.len());
+        for strategy in &strategies {
+            let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
+            // let mut group = c.benchmark_group(format!("CAKES-{}", dataset.name()));
+            config_group(&mut group, queries.len());
 
-        // Build a tree with no annotations and benchmark the search algorithms
-        if shuffle {
-            items.shuffle(rng);
+            // Build a tree with no annotations and benchmark the search algorithms
+            if shuffle {
+                items.shuffle(rng);
+            }
+            let items_size = items.deep_size_of();
+            println!(
+                "Dataset has cardinality {} and memory size {items_size} bytes",
+                items.len()
+            );
+
+            println!("Building Tree");
+            let tree_start = std::time::Instant::now();
+            let tree = Tree::par_new_minimal(items, metric).unwrap();
+            let tree_time = tree_start.elapsed();
+            println!("Built Tree in {:.6}", tree_time.as_secs_f32());
+            let tree_size = tree.deep_size_of();
+            println!("Tree has memory size {tree_size} bytes");
+            let tree_overhead = tree_size as f64 / items_size as f64;
+            println!("Tree overhead ratio: {tree_overhead:.8}");
+
+            bench_for_ks(&mut group, &tree, &queries, multiplier, ks);
+
+            // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
+            augmentation_error = tree.root().radius() / 1000.0;
+            items = tree.take_items().into_iter().map(|(_, p)| p).collect();
+
+            group.finish();
         }
-        let items_size = items.deep_size_of();
-        println!(
-            "Dataset has cardinality {} and memory size {items_size} bytes",
-            items.len()
-        );
-
-        println!("Building Tree");
-        let tree_start = std::time::Instant::now();
-        let tree = Tree::par_new_minimal(items, metric).unwrap();
-        let tree_time = tree_start.elapsed();
-        println!("Built Tree in {:.6}", tree_time.as_secs_f32());
-        let tree_size = tree.deep_size_of();
-        println!("Tree has memory size {tree_size} bytes");
-        let tree_overhead = tree_size as f64 / items_size as f64;
-        println!("Tree overhead ratio: {tree_overhead:.8}");
-
-        bench_for_ks(&mut group, &tree, &queries, multiplier, ks);
-
-        // Set the augmentation error to 0.1% of the radius of the root ball for the next augmentation
-        augmentation_error = tree.root().radius() / 1000.0;
-        items = tree.take_items().into_iter().map(|(_, p)| p).collect();
-
-        group.finish();
-        // }
     }
 }
 

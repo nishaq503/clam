@@ -38,7 +38,7 @@ impl<T, A> Default for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn default() -> Self {
         Self {
             predicate: |b: &Cluster<T, A>| b.cardinality > 2,
-            branching_factor: BranchingFactor::default(),
+            branching_factor: BranchingFactor::Fixed(2),
             span_reduction: SpanReductionFactor::default(),
         }
     }
@@ -251,7 +251,7 @@ pub enum SpanReductionFactor {
 
 impl SpanReductionFactor {
     /// Returns the maximum allowed child span for a given span from the parent cluster.
-    pub fn max_child_span_for<T: DistanceValue>(&self, span: T) -> T {
+    pub fn max_child_span_for<T: DistanceValue>(&self, parent_span: T) -> T {
         let factor = match self {
             Self::Fixed(srf) => *srf,
             Self::Sqrt2 => core::f64::consts::SQRT_2,
@@ -260,10 +260,10 @@ impl SpanReductionFactor {
             Self::Pi => core::f64::consts::PI,
             Self::Phi => crate::utils::PHI_F64,
         };
-        let span = span
+        let parent_span = parent_span
             .to_f64()
             .unwrap_or_else(|| unreachable!("DistanceValue must be convertible to f64"));
-        T::from_f64(span / factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
+        T::from_f64(parent_span / factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
     }
 }
 

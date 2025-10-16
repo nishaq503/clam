@@ -108,7 +108,7 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Returns whether the heap is full.
     #[must_use]
     pub fn is_full(&self) -> bool {
-        self.heap.len() == self.k
+        self.heap.len() >= self.k
     }
 
     /// Merge two heaps into one.

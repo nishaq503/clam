@@ -25,14 +25,17 @@ where
         hits.extend(
             subsumed
                 .into_iter()
-                .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster)),
+                .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster))
+                .inspect(|item| println!("Adding subsumed hit: {:?}", item)),
         );
 
         // Check all items from straddling clusters
         hits.extend(straddlers.into_iter().flat_map(|cluster| {
             tree.distances_to_items_in_subtree(query, cluster)
                 .into_iter()
+                .inspect(|item| println!("Checking straddling hit: {:?}", item))
                 .filter(|(_, dist)| *dist <= self.0)
+                .inspect(|item| println!("Adding straddling hit: {:?}", item))
         }));
 
         hits
@@ -101,7 +104,7 @@ where
         return (Vec::new(), Vec::new(), Vec::new());
     }
 
-    if radius > center_dist + cluster.radius() {
+    if radius >= center_dist + cluster.radius() {
         // This cluster is fully contained within the query cluster
         return (vec![(cluster.center_index(), center_dist)], vec![cluster], Vec::new());
     }

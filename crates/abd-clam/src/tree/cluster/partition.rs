@@ -1,6 +1,6 @@
 //! Methods for recursively partitioning a `Cluster` to build a `Tree`.
 
-use crate::{DistanceValue, PartitionStrategy};
+use crate::{utils::SizedHeap, DistanceValue, PartitionStrategy};
 
 use super::Cluster;
 
@@ -26,11 +26,6 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
     fn new<Id, I, M, P>(
         depth: usize,
         center_index: usize,
@@ -45,10 +40,105 @@ impl<T, A> Cluster<T, A> {
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
     {
+        let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric);
+        if !strategy.should_partition(&cluster) {
+            return cluster;
+        }
+
+        println!("Parent as {} items: {:?}", items.len(), items);
+
+        let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
+
+        let child_items = if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
+            let mut child_items = SizedHeap::new(Some(n_children));
+            let nl = l_items.len();
+            child_items.push((l_items, nl));
+            let nr = r_items.len();
+            child_items.push((r_items, nr));
+
+            while !child_items.is_full() {
+                let (items, n) = child_items
+                    .pop()
+                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
+                if n <= 2 {
+                    break;
+                }
+                let ([l_items, r_items], _) = bipolar_split(items, metric, None);
+                let nl = l_items.len();
+                child_items.push((l_items, nl));
+                let nr = r_items.len();
+                child_items.push((r_items, nr));
+            }
+
+            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
+        } else {
+            let max_span = strategy.span_reduction.max_child_span_for(span);
+
+            let mut child_items = SizedHeap::new(None);
+            let l_span = span_estimate(l_items, metric);
+            child_items.push((l_items, l_span));
+            let r_span = span_estimate(r_items, metric);
+            child_items.push((r_items, r_span));
+
+            while child_items.peek().is_some_and(|(_, s)| *s > max_span) {
+                let (items, _) = child_items
+                    .pop()
+                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
+                if items.len() <= 2 {
+                    break;
+                }
+                let ([l_items, r_items], _) = bipolar_split(items, metric, None);
+                let l_span = span_estimate(l_items, metric);
+                child_items.push((l_items, l_span));
+                let r_span = span_estimate(r_items, metric);
+                child_items.push((r_items, r_span));
+            }
+
+            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
+        };
+
+        let center_indices = child_items
+            .iter()
+            .scan(1 + center_index, |state, items| {
+                let current = *state;
+                *state += items.len();
+                Some(current)
+            })
+            .collect::<Vec<_>>();
+
+        println!("Center index: {center_index}, Child center indices: {center_indices:?}");
+        for c_items in &child_items {
+            println!("Child has {} items: {:?}", c_items.len(), c_items);
+        }
+
+        let children = child_items
+            .into_iter()
+            .zip(center_indices)
+            .map(|(c_items, c_index)| Self::new(depth + 1, c_index, c_items, metric, strategy))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        cluster.children = Some((children, span));
+        cluster
+    }
+
+    /// Creates a new `Cluster` as a leaf.
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    fn new_leaf<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> (Self, usize)
+    where
+        Id: core::fmt::Debug,
+        I: core::fmt::Debug,
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+    {
         assert!(!items.is_empty(), "Cluster::new called with empty items");
 
         if items.len() == 1 {
-            return Self {
+            let c = Self {
                 depth,
                 center_index,
                 cardinality: 1,
@@ -57,9 +147,10 @@ impl<T, A> Cluster<T, A> {
                 children: None,
                 annotation: None,
             };
+            return (c, 0);
         } else if items.len() == 2 {
             let radius = metric(&items[0].1, &items[1].1);
-            return Self {
+            let c = Self {
                 depth,
                 center_index,
                 cardinality: 2,
@@ -68,6 +159,7 @@ impl<T, A> Cluster<T, A> {
                 children: None,
                 annotation: None,
             };
+            return (c, 1);
         }
 
         if items.len() <= 100 {
@@ -91,7 +183,7 @@ impl<T, A> Cluster<T, A> {
             .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i, d));
         let lfd = lfd_estimate(&radial_distances, radius);
 
-        let mut cluster = Self {
+        let cluster = Self {
             depth,
             center_index,
             cardinality: items.len(),
@@ -101,21 +193,7 @@ impl<T, A> Cluster<T, A> {
             annotation: None,
         };
 
-        if !strategy.should_partition(&cluster) {
-            return cluster;
-        }
-
-        let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
-
-        let child_depth = depth + 1;
-        let l_center_index = center_index + 1;
-        let r_center_index = l_center_index + l_items.len();
-
-        let l_child = Self::new(child_depth, l_center_index, l_items, metric, strategy);
-        let r_child = Self::new(child_depth, r_center_index, r_items, metric, strategy);
-
-        cluster.children = Some((Box::new([l_child, r_child]), span));
-        cluster
+        (cluster, radius_index)
     }
 }
 
@@ -333,4 +411,33 @@ where
     }
 
     left
+}
+
+/// Estimates the Span (maximum distance between any two items) of the given items using a heuristic approach.
+pub fn span_estimate<Id, I, T, M>(items: &[(Id, I)], metric: &M) -> T
+where
+    Id: core::fmt::Debug,
+    I: core::fmt::Debug,
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
+    match items.len().cmp(&2) {
+        core::cmp::Ordering::Less => T::zero(),
+        core::cmp::Ordering::Equal => metric(&items[0].1, &items[1].1),
+        core::cmp::Ordering::Greater => {
+            let temp_pole_index = 0;
+            let left_pole_index = items
+                .iter()
+                .enumerate()
+                .skip(1)
+                .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[temp_pole_index].1, item)))
+                .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i);
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, metric(&items[left_pole_index].1, item)))
+                .max_by_key(|&(i, d)| crate::utils::MaxItem(i, d))
+                .map_or_else(|| unreachable!("items has at least two elements"), |(_, d)| d)
+        }
+    }
 }
