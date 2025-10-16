@@ -38,10 +38,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     let tree = Tree::new_minimal(data.clone(), metric)?;
 
     println!("Tree Items: {:?}", tree.items_in_cluster(tree.root()));
-    for c in tree.root().subtree_preorder() {
-        println!("{c}");
-        println!("Indices in cluster: {:?}", c.subtree_indices().collect::<Vec<_>>());
-    }
+    println!("Tree Structure:\n{}", tree.root());
 
     for radius in [0.5, 1.0, 1.5, 2.0] {
         let expected_hits = tree

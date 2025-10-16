@@ -33,27 +33,42 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut fields = vec![
-            format!("depth: {}", self.depth),
-            format!("center_index: {}", self.center_index),
-            format!("cardinality: {}", self.cardinality),
-            format!("radius: {}", self.radius),
-            format!("lfd: {:.6}", self.lfd),
-            format!(
+            format!("d: {}", self.depth),
+            format!("c: {}", self.center_index),
+            format!("car: {}", self.cardinality),
+            format!("r: {}", self.radius),
+            format!("LFD: {:.3}", self.lfd),
+        ];
+        if self.cardinality == 1 {
+            fields.push("singleton".to_string());
+        } else {
+            fields.push(format!(
                 "indices: {}..{}",
                 self.center_index + 1,
                 self.center_index + self.cardinality
-            ),
-        ];
-        if let Some(annotation) = &self.annotation {
-            fields.push(format!("annotation: {:?}", annotation));
-        }
-        if let Some((children, span)) = &self.children {
-            fields.push(format!("span: {}", span));
-            fields.push(format!("children: {}", children.len()));
+            ));
         }
 
-        let joined = fields.join(", ");
-        write!(f, "Cluster({})", joined)
+        if let Some(annotation) = &self.annotation {
+            fields.push(format!("annotation: {annotation:?}"));
+        }
+        let name = if let Some((children, span)) = &self.children {
+            fields.push(format!("span: {span}"));
+
+            let indent = (0..(self.depth)).map(|_| "|  ").collect::<String>();
+            let indented_children = children
+                .iter()
+                .map(|child| format!("{indent}|--{child}"))
+                .collect::<Vec<_>>();
+            let children = indented_children.join("\n");
+            fields.push(format!("\n{children}"));
+
+            "P"
+        } else {
+            "L"
+        };
+
+        write!(f, "{name}: {}", fields.join(", "))
     }
 }
 

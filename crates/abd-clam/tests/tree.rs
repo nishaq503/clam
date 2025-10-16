@@ -34,13 +34,9 @@ fn new() -> Result<(), String> {
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
     let subtree = root.subtree_preorder();
-
-    let tree_line = subtree.iter().map(|c| format!("{c}")).collect::<Vec<_>>().join("\n");
     if subtree.len() != 3 {
-        eprintln!("Subtree:\n{tree_line}");
-        eprintln!("Items: {:?}", tree.items_in_cluster(tree.root()));
+        eprintln!("{}", tree.root());
     }
-
     assert_eq!(
         subtree.len(),
         3, // Because both children will have cardinality == 2, and so will not be partitioned further
@@ -78,11 +74,13 @@ fn par_new() -> Result<(), String> {
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
     let subtree = root.subtree_preorder();
+    if subtree.len() != 3 {
+        eprintln!("{}", tree.root());
+    }
     assert_eq!(
         subtree.len(),
         3, // Because both children will have cardinality == 2, and so will not be partitioned further
-        "Subtree cardinality mismatch: [{:?}]",
-        subtree.iter().map(|c| format!("{c}")).collect::<Vec<_>>().join(" :: "),
+        "Subtree cardinality mismatch",
     );
 
     Ok(())

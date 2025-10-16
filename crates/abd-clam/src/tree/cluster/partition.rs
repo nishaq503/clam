@@ -45,8 +45,6 @@ impl<T, A> Cluster<T, A> {
             return cluster;
         }
 
-        println!("Parent as {} items: {:?}", items.len(), items);
-
         let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
 
         let child_items = if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
@@ -105,11 +103,6 @@ impl<T, A> Cluster<T, A> {
                 Some(current)
             })
             .collect::<Vec<_>>();
-
-        println!("Center index: {center_index}, Child center indices: {center_indices:?}");
-        for c_items in &child_items {
-            println!("Child has {} items: {:?}", c_items.len(), c_items);
-        }
 
         let children = child_items
             .into_iter()
@@ -384,8 +377,6 @@ where
     // TODO(Najib): After testing, use unsafe code to remove bounds checks while indexing
     let mut n_swaps = 0;
     while left < right {
-        // println!("Start of loop: left={}, right={}", left, right);
-
         // Increment `left` until we find an item for the right pole
         while left < distances.len() && distances[left].0 <= distances[left].1 {
             left += 1;
