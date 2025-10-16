@@ -40,7 +40,8 @@ where
             format!("LFD: {:.3}", self.lfd),
         ];
         if self.cardinality == 1 {
-            fields.push("singleton".to_string());
+        } else if self.cardinality == 2 {
+            fields.push(format!("non center: {}", self.center_index + 1));
         } else {
             fields.push(format!(
                 "indices: {}..{}",
@@ -55,10 +56,9 @@ where
         let name = if let Some((children, span)) = &self.children {
             fields.push(format!("span: {span}"));
 
-            let indent = (0..(self.depth)).map(|_| "|  ").collect::<String>();
             let indented_children = children
                 .iter()
-                .map(|child| format!("{indent}|--{child}"))
+                .map(|child| format!("|--{}", format!("{child}").replace('\n', "\n|  ")))
                 .collect::<Vec<_>>();
             let children = indented_children.join("\n");
             fields.push(format!("\n{children}"));

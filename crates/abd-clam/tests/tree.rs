@@ -43,6 +43,16 @@ fn new() -> Result<(), String> {
         "Subtree cardinality mismatch",
     );
 
+    for child in &subtree[1..] {
+        assert_eq!(child.cardinality(), 2, "Child cardinality mismatch: {child}");
+        assert!(child.is_leaf(), "Child should be a leaf: {child}");
+    }
+    match subtree[1].radius() {
+        4 => assert_eq!(subtree[2].radius(), 8, "Child radius mismatch: {}", subtree[2]),
+        8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {}", subtree[2]),
+        r => panic!("Unexpected child radius: {r}, {}", subtree[1]),
+    }
+
     Ok(())
 }
 
@@ -83,22 +93,51 @@ fn par_new() -> Result<(), String> {
         "Subtree cardinality mismatch",
     );
 
+    for child in &subtree[1..] {
+        assert_eq!(child.cardinality(), 2, "Child cardinality mismatch: {child}");
+        assert!(child.is_leaf(), "Child should be a leaf: {child}");
+    }
+    match subtree[1].radius() {
+        4 => assert_eq!(subtree[2].radius(), 8, "Child radius mismatch: {}", subtree[2]),
+        8 => assert_eq!(subtree[2].radius(), 4, "Child radius mismatch: {}", subtree[2]),
+        r => panic!("Unexpected child radius: {r}, {}", subtree[1]),
+    }
+
     Ok(())
 }
 
+#[test_case(10, 2 ; "10x2")]
 #[test_case(1_000, 10 ; "1_000x10")]
 #[test_case(1_000, 100 ; "1_000x100")]
 #[test_case(10_000, 10 ; "10_000x10")]
 #[test_case(10_000, 100 ; "10_000x100")]
 fn big(car: usize, dim: usize) -> Result<(), String> {
-    let metric = common::metrics::euclidean::<_, _, f32>;
+    let metric = |a: &Vec<f32>, b: &Vec<f32>| {
+        let d = common::metrics::euclidean::<_, _, f32>(a, b);
+        (d * 1000.0).trunc() / 1000.0 // Truncate to 3 decimal places to help debugging
+    };
     let (min, max) = (-1.0, 1.0);
-    let hypot = ((4 * dim) as f32).sqrt();
+    let max_hypot = ((4 * dim) as f32).sqrt();
 
     let mut ratios = Vec::new();
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
-        let tree = Tree::par_new_minimal(data, metric)?;
+        let data = data
+            .into_iter()
+            .map(|v| {
+                v.into_iter()
+                    .map(|f| (f * 1000.0).trunc() / 1000.0) // Truncate to 3 decimal places to help debugging
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let tree = Tree::new_minimal(data, metric)?;
+
+        let items = tree
+            .items_in_cluster(tree.root())
+            .iter()
+            .map(|(_, item)| item)
+            .collect::<Vec<_>>();
+        let metric = tree.metric();
 
         let n_clusters = tree.all_clusters_preorder().len();
 
@@ -118,7 +157,35 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
-        assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
+        assert!(
+            root.radius() <= max_hypot / 2.0,
+            "Radius too large: {:.6}",
+            root.radius()
+        );
+
+        println!(
+            "Items: [\n{}\n]",
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| format!("  {i}  {item:?}"))
+                .collect::<Vec<_>>()
+                .join(",\n")
+        );
+        println!("Checking radii of {} clusters in Root:\n{}", n_clusters, root);
+
+        for c in root.subtree_preorder() {
+            let center = items[c.center_index()];
+            let exp_radius = ((c.center_index() + 1)..(c.center_index() + c.cardinality()))
+                .map(|i| metric(center, items[i]))
+                .fold(0.0_f32, f32::max);
+            assert!(
+                (c.radius() - exp_radius).abs() < 1e-5,
+                "Radius mismatch:\n{c}\nExpected: {:.6} but got: {:.6}",
+                exp_radius,
+                c.radius()
+            );
+        }
     }
 
     Ok(())
