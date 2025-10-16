@@ -13,7 +13,12 @@ use crate::{
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnBranch(pub usize);
 
-impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for KnnBranch {
+impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnBranch
+where
+    T: DistanceValue,
+    A: core::fmt::Debug,
+    M: Fn(&I, &I) -> T,
+{
     fn name(&self) -> String {
         format!("KnnBranch(k={})", self.0)
     }

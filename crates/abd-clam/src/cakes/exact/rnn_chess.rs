@@ -12,6 +12,7 @@ pub struct RnnChess<T: DistanceValue>(pub T);
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for RnnChess<T>
 where
     T: DistanceValue,
+    A: core::fmt::Debug,
     M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {
@@ -21,22 +22,33 @@ where
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let (mut hits, subsumed, straddlers) = tree_search(tree, tree.root(), query, self.0);
 
+        let _ = hits
+            .iter()
+            .inspect(|(i, d)| println!("Added center hit: i={i}, d={d}"))
+            .count();
+
         // Add all items from fully subsumed clusters
         hits.extend(
             subsumed
                 .into_iter()
+                .inspect(|cluster| println!("Subsumed cluster: {}", cluster))
                 .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster))
-                .inspect(|item| println!("Adding subsumed hit: {:?}", item)),
+                .inspect(|(i, d)| println!("Adding subsumed hit: i={i}, d={d}")),
         );
 
         // Check all items from straddling clusters
-        hits.extend(straddlers.into_iter().flat_map(|cluster| {
-            tree.distances_to_items_in_subtree(query, cluster)
+        hits.extend(
+            straddlers
                 .into_iter()
-                .inspect(|item| println!("Checking straddling hit: {:?}", item))
-                .filter(|(_, dist)| *dist <= self.0)
-                .inspect(|item| println!("Adding straddling hit: {:?}", item))
-        }));
+                .inspect(|cluster| println!("Straddling cluster: {}", cluster))
+                .flat_map(|cluster| {
+                    tree.distances_to_items_in_subtree(query, cluster)
+                        .into_iter()
+                        .inspect(|(i, d)| println!("Checking straddling hit: i={i}, d={d}"))
+                        .filter(|(_, dist)| *dist <= self.0)
+                        .inspect(|(i, d)| println!("Adding straddling hit: i={i}, d={d}"))
+                }),
+        );
 
         hits
     }
