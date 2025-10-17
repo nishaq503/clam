@@ -132,11 +132,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             .collect::<Vec<_>>();
         let tree = Tree::new_minimal(data, metric)?;
 
-        let items = tree
-            .items_in_cluster(tree.root())
-            .iter()
-            .map(|(_, item)| item)
-            .collect::<Vec<_>>();
+        let items = tree.items_in_cluster(tree.root());
         let metric = tree.metric();
 
         let n_clusters = tree.all_clusters_preorder().len();
@@ -175,9 +171,9 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         println!("Checking radii of {} clusters in Root:\n{}", n_clusters, root);
 
         for c in root.subtree_preorder() {
-            let center = items[c.center_index()];
+            let center = &items[c.center_index()].1;
             let exp_radius = ((c.center_index() + 1)..(c.center_index() + c.cardinality()))
-                .map(|i| metric(center, items[i]))
+                .map(|i| metric(center, &items[i].1))
                 .fold(0.0_f32, f32::max);
             assert!(
                 (c.radius() - exp_radius).abs() < 1e-5,

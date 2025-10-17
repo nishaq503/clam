@@ -91,6 +91,7 @@ where
     where
         Id: core::fmt::Debug,
         I: core::fmt::Debug,
+        A: core::fmt::Debug,
         P: Fn(&Cluster<T, A>) -> bool,
     {
         if items.is_empty() {
