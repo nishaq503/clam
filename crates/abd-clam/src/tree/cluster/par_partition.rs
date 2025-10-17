@@ -50,68 +50,81 @@ impl<T, A> Cluster<T, A> {
         }
 
         let ([l_items, r_items], span) = par_bipolar_split(&mut items[1..], metric, Some(radius_index));
+        let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
 
         let child_items = if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
             let mut child_items = SizedHeap::new(Some(n_children));
+
             let nl = l_items.len();
-            child_items.push((l_items, nl));
             let nr = r_items.len();
-            child_items.push((r_items, nr));
+
+            child_items.push((l_items, (nl, lci)));
+            child_items.push((r_items, (nr, rci)));
 
             while !child_items.is_full() {
-                let (items, n) = child_items
-                    .pop()
-                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
-                if n <= 2 {
-                    break;
-                }
-                let ([l_items, r_items], _) = par_bipolar_split(items, metric, None);
-                let nl = l_items.len();
-                child_items.push((l_items, nl));
-                let nr = r_items.len();
-                child_items.push((r_items, nr));
-            }
-
-            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
-        } else {
-            let max_span = strategy.span_reduction.max_child_span_for(span);
-
-            let mut child_items = SizedHeap::new(None);
-            let l_span = par_span_estimate(l_items, metric);
-            child_items.push((l_items, l_span));
-            let r_span = par_span_estimate(r_items, metric);
-            child_items.push((r_items, r_span));
-
-            while child_items.peek().is_some_and(|(_, s)| *s > max_span) {
-                let (items, _) = child_items
+                let (items, (_, ci)) = child_items
                     .pop()
                     .unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() <= 2 {
                     break;
                 }
                 let ([l_items, r_items], _) = par_bipolar_split(items, metric, None);
-                let l_span = par_span_estimate(l_items, metric);
-                child_items.push((l_items, l_span));
-                let r_span = par_span_estimate(r_items, metric);
-                child_items.push((r_items, r_span));
+
+                let nl = l_items.len();
+                let nr = r_items.len();
+                let lci = ci;
+                let rci = ci + nl;
+
+                child_items.push((l_items, (nl, lci)));
+                child_items.push((r_items, (nr, rci)));
             }
 
-            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
-        };
+            child_items
+                .take_items()
+                .map(|(c_items, (_, ci))| (ci, c_items))
+                .collect::<Vec<_>>()
+        } else {
+            let max_span = strategy.span_reduction.max_child_span_for(span);
 
-        let center_indices = child_items
-            .iter()
-            .scan(1 + center_index, |state, items| {
-                let current = *state;
-                *state += items.len();
-                Some(current)
-            })
-            .collect::<Vec<_>>();
+            let mut child_items = SizedHeap::new(None);
+
+            let (l_span, r_span) = rayon::join(
+                || par_span_estimate(l_items, metric),
+                || par_span_estimate(r_items, metric),
+            );
+
+            child_items.push((l_items, (l_span, lci)));
+            child_items.push((r_items, (r_span, rci)));
+
+            while child_items.peek().is_some_and(|(_, (s, _))| *s > max_span) {
+                let (items, (_, ci)) = child_items
+                    .pop()
+                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
+                if items.len() <= 2 {
+                    break;
+                }
+                let ([l_items, r_items], _) = par_bipolar_split(items, metric, None);
+
+                let (l_span, r_span) = rayon::join(
+                    || par_span_estimate(l_items, metric),
+                    || par_span_estimate(r_items, metric),
+                );
+                let lci = ci;
+                let rci = ci + l_items.len();
+
+                child_items.push((l_items, (l_span, lci)));
+                child_items.push((r_items, (r_span, rci)));
+            }
+
+            child_items
+                .take_items()
+                .map(|(c_items, (_, ci))| (ci, c_items))
+                .collect::<Vec<_>>()
+        };
 
         let children = child_items
             .into_par_iter()
-            .zip(center_indices)
-            .map(|(c_items, c_index)| Self::par_new(depth + 1, c_index, c_items, metric, strategy))
+            .map(|(c_index, c_items)| Self::par_new(depth + 1, c_index, c_items, metric, strategy))
             .collect::<Vec<_>>()
             .into_boxed_slice();
 

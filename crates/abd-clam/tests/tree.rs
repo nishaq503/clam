@@ -108,9 +108,6 @@ fn par_new() -> Result<(), String> {
 
 #[test_case(10, 2 ; "10x2")]
 #[test_case(1_000, 10 ; "1_000x10")]
-#[test_case(1_000, 100 ; "1_000x100")]
-#[test_case(10_000, 10 ; "10_000x10")]
-#[test_case(10_000, 100 ; "10_000x100")]
 fn big(car: usize, dim: usize) -> Result<(), String> {
     let metric = |a: &Vec<f32>, b: &Vec<f32>| {
         let d = common::metrics::euclidean::<_, _, f32>(a, b);

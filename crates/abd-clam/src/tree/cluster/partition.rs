@@ -57,75 +57,83 @@ impl<T, A> Cluster<T, A> {
         println!("{indent}Partitioning {} items at depth {}", items.len() - 1, depth);
         let ([l_items, r_items], span) =
             bipolar_split(&mut items[1..], metric, Some(radius_index), &indent, center_index + 1);
+        let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
 
         let child_items = if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
             let mut child_items = SizedHeap::new(Some(n_children));
             let nl = l_items.len();
-            child_items.push((l_items, nl));
+            child_items.push((l_items, (nl, lci)));
             let nr = r_items.len();
-            child_items.push((r_items, nr));
+            child_items.push((r_items, (nr, rci)));
 
             while !child_items.is_full() {
-                let (items_to_split, n) = child_items
+                let (items_to_split, (_, ci)) = child_items
                     .pop()
                     .unwrap_or_else(|| unreachable!("child_items is not empty"));
-                if n < 2 {
+                if items_to_split.len() < 2 {
                     break;
                 }
                 let ([next_l_items, next_r_items], _) =
                     bipolar_split(items_to_split, metric, None, &indent, center_index + 1);
+
                 let nl = next_l_items.len();
-                child_items.push((next_l_items, nl));
                 let nr = next_r_items.len();
-                child_items.push((next_r_items, nr));
+                let lci = ci;
+                let rci = ci + nl;
+
+                child_items.push((next_l_items, (nl, lci)));
+                child_items.push((next_r_items, (nr, rci)));
             }
 
-            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
+            child_items
+                .take_items()
+                .map(|(c_items, (_, ci))| (ci, c_items))
+                .collect::<Vec<_>>()
         } else {
             let max_span = strategy.span_reduction.max_child_span_for(span);
 
             let mut child_items = SizedHeap::new(None);
             let l_span = span_estimate(l_items, metric);
-            child_items.push((l_items, l_span));
+            child_items.push((l_items, (l_span, lci)));
             let r_span = span_estimate(r_items, metric);
-            child_items.push((r_items, r_span));
+            child_items.push((r_items, (r_span, rci)));
 
-            while child_items.peek().is_some_and(|(_, s)| *s > max_span) {
-                let (items, _) = child_items
+            while child_items.peek().is_some_and(|(_, (s, _))| *s > max_span) {
+                let (items_to_split, (_, ci)) = child_items
                     .pop()
                     .unwrap_or_else(|| unreachable!("child_items is not empty"));
-                if items.len() < 2 {
+                if items_to_split.len() < 2 {
                     break;
                 }
-                let ([next_l_items, next_r_items], _) = bipolar_split(items, metric, None, &indent, center_index + 1);
+
+                let ([next_l_items, next_r_items], _) =
+                    bipolar_split(items_to_split, metric, None, &indent, center_index + 1);
+
                 let l_span = span_estimate(next_l_items, metric);
-                child_items.push((next_l_items, l_span));
                 let r_span = span_estimate(next_r_items, metric);
-                child_items.push((next_r_items, r_span));
+                let lci = ci;
+                let rci = ci + next_l_items.len();
+
+                child_items.push((next_l_items, (l_span, lci)));
+                child_items.push((next_r_items, (r_span, rci)));
             }
 
-            child_items.take_items().map(|(c_items, _)| c_items).collect::<Vec<_>>()
+            child_items
+                .take_items()
+                .map(|(c_items, (_, ci))| (ci, c_items))
+                .collect::<Vec<_>>()
         };
 
-        let center_indices = child_items
-            .iter()
-            .scan(1 + center_index, |state, items| {
-                let current = *state;
-                *state += items.len();
-                Some(current)
-            })
-            .collect::<Vec<_>>();
+        let center_indices = child_items.iter().map(|(c_index, _)| c_index).collect::<Vec<_>>();
         println!(
-            "{indent}Creating {} children clusters at depth {} with center indices: {:?}",
-            child_items.len(),
-            depth + 1,
-            center_indices
+            "{indent}Child center indices at depth {}: {}",
+            depth,
+            format_vec(&center_indices, &indent, 0)
         );
 
         let children = child_items
             .into_iter()
-            .zip(center_indices)
-            .map(|(c_items, c_index)| Self::new(depth + 1, c_index, c_items, metric, strategy))
+            .map(|(c_index, c_items)| Self::new(depth + 1, c_index, c_items, metric, strategy))
             .collect::<Vec<_>>()
             .into_boxed_slice();
 

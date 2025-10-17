@@ -128,7 +128,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
     let data = common::data_gen::tabular(car, dim, -1.0, 1.0);
     let query = vec![0.0; dim];
 
-    let tree = Tree::new_minimal(data.clone(), metric)?;
+    let tree = Tree::par_new_minimal(data.clone(), metric)?;
 
     for radius in [1.0, 1.5, 2.0] {
         let expected_hits = tree
