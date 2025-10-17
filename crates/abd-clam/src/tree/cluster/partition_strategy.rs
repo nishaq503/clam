@@ -12,7 +12,7 @@ use super::Cluster;
 ///   - If the `branching_factor` is not `Unbounded`, we use the approach described in the [`BranchingFactor`] enum to determine how many children to create.
 ///   - If the `branching_factor` is `Unbounded`, we use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
 ///
-/// The default `PartitionStrategy` will partition any cluster with more than one non-center item, using a span reduction factor of `√2`.
+/// The default `PartitionStrategy` will partition any cluster with more than one non-center item, and make a binary tree.
 #[must_use]
 #[derive(Debug, Clone, Copy)]
 pub struct PartitionStrategy<P> {

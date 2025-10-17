@@ -16,8 +16,8 @@ impl<T, A> Cluster<T, A> {
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        Id: Send + Sync + core::fmt::Debug,
-        I: Send + Sync + core::fmt::Debug,
+        Id: Send + Sync,
+        I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
     {
@@ -39,8 +39,8 @@ impl<T, A> Cluster<T, A> {
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        Id: Send + Sync + core::fmt::Debug,
-        I: Send + Sync + core::fmt::Debug,
+        Id: Send + Sync,
+        I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
     {
@@ -140,8 +140,8 @@ impl<T, A> Cluster<T, A> {
     )]
     fn par_new_leaf<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> (Self, usize)
     where
-        Id: Send + Sync + core::fmt::Debug,
-        I: Send + Sync + core::fmt::Debug,
+        Id: Send + Sync,
+        I: Send + Sync,
         T: DistanceValue + Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
     {
@@ -290,8 +290,8 @@ pub fn par_bipolar_split<'a, Id, I, T, M>(
     left_pole_index: Option<usize>,
 ) -> ([&'a mut [(Id, I)]; 2], T)
 where
-    Id: Send + Sync + core::fmt::Debug,
-    I: Send + Sync + core::fmt::Debug,
+    Id: Send + Sync,
+    I: Send + Sync,
     T: DistanceValue + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
@@ -360,8 +360,8 @@ where
 /// Estimates the Span (maximum distance between any two items) of the given items using a heuristic approach.
 pub fn par_span_estimate<Id, I, T, M>(items: &[(Id, I)], metric: &M) -> T
 where
-    Id: Send + Sync + core::fmt::Debug,
-    I: Send + Sync + core::fmt::Debug,
+    Id: Send + Sync,
+    I: Send + Sync,
     T: DistanceValue + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {

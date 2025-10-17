@@ -38,13 +38,15 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
+    /// # Explanation
+    ///
+    /// This is a minimal constructor that assigns sequential integer IDs (starting from 0) to the items. It will also use the default
+    /// [`PartitionStrategy`](PartitionStrategy).
+    ///
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
-    where
-        I: core::fmt::Debug,
-    {
+    pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
@@ -55,14 +57,14 @@ where
         Ok(Self { items, root, metric })
     }
 
-    /// Parallel version of [`new`](Self::new).
+    /// Parallel version of [`new_minimal`](Self::new_minimal).
     ///
     /// # Errors
     ///
     /// If `items` is empty.
     pub fn par_new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
     where
-        I: Send + Sync + core::fmt::Debug,
+        I: Send + Sync,
         T: Send + Sync,
         M: Send + Sync,
     {
@@ -89,9 +91,6 @@ where
     /// If `items` is empty.
     pub fn new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
     where
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
-        A: core::fmt::Debug,
         P: Fn(&Cluster<T, A>) -> bool,
     {
         if items.is_empty() {
@@ -110,8 +109,8 @@ where
     /// If `items` is empty.
     pub fn par_new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
     where
-        Id: Send + Sync + core::fmt::Debug,
-        I: Send + Sync + core::fmt::Debug,
+        Id: Send + Sync,
+        I: Send + Sync,
         T: Send + Sync,
         M: Send + Sync,
         A: Send + Sync,

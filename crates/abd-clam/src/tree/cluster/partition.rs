@@ -1,7 +1,5 @@
 //! Methods for recursively partitioning a `Cluster` to build a `Tree`.
 
-#![expect(clippy::similar_names, clippy::too_many_lines)]
-
 use crate::{utils::SizedHeap, DistanceValue, PartitionStrategy};
 
 use super::Cluster;
@@ -15,9 +13,6 @@ impl<T, A> Cluster<T, A> {
     pub(crate) fn new_root<Id, I, M, P>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>) -> Self
     where
         T: DistanceValue,
-        A: core::fmt::Debug,
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
     {
@@ -38,25 +33,15 @@ impl<T, A> Cluster<T, A> {
     ) -> Self
     where
         T: DistanceValue,
-        A: core::fmt::Debug,
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
     {
-        let indent = "|--".repeat(depth);
-
-        println!("{indent}Creating cluster at depth {} with {} items", depth, items.len());
-        println!("{indent}Items: {}", format_vec(items, &indent, center_index));
-
-        let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric, &indent);
+        let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric);
         if !strategy.should_partition(&cluster) {
             return cluster;
         }
 
-        println!("{indent}Partitioning {} items at depth {}", items.len() - 1, depth);
-        let ([l_items, r_items], span) =
-            bipolar_split(&mut items[1..], metric, Some(radius_index), &indent, center_index + 1);
+        let ([l_items, r_items], span) = bipolar_split(&mut items[1..], metric, Some(radius_index));
         let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
 
         let child_items = if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
@@ -67,22 +52,21 @@ impl<T, A> Cluster<T, A> {
             child_items.push((r_items, (nr, rci)));
 
             while !child_items.is_full() {
-                let (items_to_split, (_, ci)) = child_items
+                let (items, (_, ci)) = child_items
                     .pop()
                     .unwrap_or_else(|| unreachable!("child_items is not empty"));
-                if items_to_split.len() < 2 {
+                if items.len() < 2 {
                     break;
                 }
-                let ([next_l_items, next_r_items], _) =
-                    bipolar_split(items_to_split, metric, None, &indent, center_index + 1);
+                let ([l_items, r_items], _) = bipolar_split(items, metric, None);
 
-                let nl = next_l_items.len();
-                let nr = next_r_items.len();
+                let nl = l_items.len();
+                let nr = r_items.len();
                 let lci = ci;
                 let rci = ci + nl;
 
-                child_items.push((next_l_items, (nl, lci)));
-                child_items.push((next_r_items, (nr, rci)));
+                child_items.push((l_items, (nl, lci)));
+                child_items.push((r_items, (nr, rci)));
             }
 
             child_items
@@ -99,23 +83,22 @@ impl<T, A> Cluster<T, A> {
             child_items.push((r_items, (r_span, rci)));
 
             while child_items.peek().is_some_and(|(_, (s, _))| *s > max_span) {
-                let (items_to_split, (_, ci)) = child_items
+                let (items, (_, ci)) = child_items
                     .pop()
                     .unwrap_or_else(|| unreachable!("child_items is not empty"));
-                if items_to_split.len() < 2 {
+                if items.len() < 2 {
                     break;
                 }
 
-                let ([next_l_items, next_r_items], _) =
-                    bipolar_split(items_to_split, metric, None, &indent, center_index + 1);
+                let ([l_items, r_items], _) = bipolar_split(items, metric, None);
 
-                let l_span = span_estimate(next_l_items, metric);
-                let r_span = span_estimate(next_r_items, metric);
+                let l_span = span_estimate(l_items, metric);
+                let r_span = span_estimate(r_items, metric);
                 let lci = ci;
-                let rci = ci + next_l_items.len();
+                let rci = ci + l_items.len();
 
-                child_items.push((next_l_items, (l_span, lci)));
-                child_items.push((next_r_items, (r_span, rci)));
+                child_items.push((l_items, (l_span, lci)));
+                child_items.push((r_items, (r_span, rci)));
             }
 
             child_items
@@ -124,51 +107,13 @@ impl<T, A> Cluster<T, A> {
                 .collect::<Vec<_>>()
         };
 
-        let center_indices = child_items.iter().map(|(c_index, _)| c_index).collect::<Vec<_>>();
-        println!(
-            "{indent}Child center indices at depth {}: {}",
-            depth,
-            format_vec(&center_indices, &indent, 0)
-        );
-
         let children = child_items
             .into_iter()
             .map(|(c_index, c_items)| Self::new(depth + 1, c_index, c_items, metric, strategy))
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        let radial_distances = items
-            .iter()
-            .skip(1)
-            .map(|(_, item)| metric(&items[0].1, item))
-            .collect::<Vec<_>>();
-        println!(
-            "{indent}Radial distances after partitioning: {}",
-            format_vec(&radial_distances, &indent, center_index)
-        );
-        let radius = radial_distances
-            .iter()
-            .max_by_key(|&&d| crate::utils::MaxItem((), d))
-            .map_or_else(|| unreachable!("items has enough elements"), |&d| d);
-        assert_eq!(
-            radius, cluster.radius,
-            "Radius mismatch: computed radius = {}, stored radius = {}",
-            radius, cluster.radius
-        );
-        println!(
-            "{indent}Items after partitioning: {}",
-            format_vec(items, &indent, center_index)
-        );
-        assert_eq!(
-            items.len(),
-            cluster.cardinality,
-            "Cardinality mismatch after partitioning: items.len() = {}, cluster.cardinality = {}",
-            items.len(),
-            cluster.cardinality
-        );
-
         cluster.children = Some((children, span));
-        println!("Subtree: \n{cluster}");
         cluster
     }
 
@@ -178,21 +123,11 @@ impl<T, A> Cluster<T, A> {
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation
     )]
-    fn new_leaf<Id, I, M>(
-        depth: usize,
-        center_index: usize,
-        items: &mut [(Id, I)],
-        metric: &M,
-        indent: &str,
-    ) -> (Self, usize)
+    fn new_leaf<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> (Self, usize)
     where
-        Id: core::fmt::Debug,
-        I: core::fmt::Debug,
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
     {
-        assert!(!items.is_empty(), "Cluster::new_leaf called with empty items");
-
         if items.len() == 1 {
             let c = Self {
                 depth,
@@ -220,39 +155,23 @@ impl<T, A> Cluster<T, A> {
 
         if items.len() <= 100 {
             // For small number of items, find the exact geometric median
-            swap_center_to_front(items, metric, indent);
+            swap_center_to_front(items, metric);
         } else {
             let n = 100 + ((items.len() - 100) as f64).sqrt() as usize;
             // For large number of items, find an approximate geometric median using a random sample of size n
-            swap_center_to_front(&mut items[..n], metric, indent);
+            swap_center_to_front(&mut items[..n], metric);
         }
-
-        println!(
-            "{indent}Items before Partition: {}",
-            format_vec(items, indent, center_index)
-        );
 
         let radial_distances = items
             .iter()
             .skip(1)
             .map(|(_, item)| metric(&items[0].1, item))
             .collect::<Vec<_>>();
-        let radial_items = items.iter().skip(1).zip(radial_distances.iter()).collect::<Vec<_>>();
-        println!(
-            "{indent}Radial distances and items: {}",
-            format_vec(&radial_items, indent, center_index + 1)
-        );
-
         let (radius_index, radius) = radial_distances
             .iter()
             .enumerate()
             .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
             .map_or_else(|| unreachable!("items has enough elements"), |(i, &d)| (i, d));
-        println!(
-            "{indent}Radial item = {:?} and radius = {}",
-            &items[radius_index + 1],
-            radius
-        );
         let lfd = lfd_estimate(&radial_distances, radius);
 
         let cluster = Self {
@@ -270,18 +189,13 @@ impl<T, A> Cluster<T, A> {
 }
 
 /// Moves the center item (geometric median) to the 0th index in the slice.
-pub fn swap_center_to_front<Id, I, T, M>(items: &mut [(Id, I)], metric: &M, indent: &str)
+pub fn swap_center_to_front<Id, I, T, M>(items: &mut [(Id, I)], metric: &M)
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
     if items.len() > 2 {
         let center_index = gm_index(items, metric);
-        println!(
-            "{indent}Geometric median index = {} in {} items",
-            center_index,
-            items.len()
-        );
         items.swap(0, center_index);
     }
 }
@@ -366,20 +280,12 @@ pub fn bipolar_split<'a, Id, I, T, M>(
     items: &'a mut [(Id, I)],
     metric: &M,
     left_pole_index: Option<usize>,
-    indent: &str,
-    offset: usize,
 ) -> ([&'a mut [(Id, I)]; 2], T)
 where
-    Id: core::fmt::Debug,
-    I: core::fmt::Debug,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    assert_ne!(items.len(), 0, "bipolar_split called with empty items");
-    assert_ne!(items.len(), 1, "bipolar_split called with only one item");
-
     if items.len() == 2 {
-        println!("{indent}Splitting only 2 items...");
         // If there are only two items, just return them as the two partitions.
         let span = metric(&items[0].1, &items[1].1);
         let (left, right) = items.split_at_mut(1);
@@ -396,11 +302,6 @@ where
             .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
     });
 
-    println!(
-        "{indent}Splitting {} items with Left pole = {:?}",
-        items.len(),
-        &items[left_pole_index]
-    );
     // Move the left pole to the 0th index in the slice
     items.swap(0, left_pole_index);
 
@@ -419,12 +320,7 @@ where
         .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
         .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
 
-    println!(
-        "{indent}Right pole = {:?} and span = {}",
-        &items[right_pole_index], span
-    );
-
-    // Move the right pole and its distance to the end of their respective slices
+    // Move the right pole and its distance to the ends of their respective slices
     let last = items.len() - 1;
     items.swap(right_pole_index, last);
     left_distances.swap(right_pole_index - 1, last - 1);
@@ -439,67 +335,14 @@ where
         .map(|((_, item), l)| (l, metric(right_pole, item)))
         .collect::<Vec<_>>();
 
-    let items_lrds = items
-        .iter()
-        .skip(1)
-        .zip(left_right_distances.iter())
-        .collect::<Vec<_>>();
-    println!(
-        "{indent}Items and distances before reordering: {}",
-        format_vec(&items_lrds, indent, offset + 1)
-    );
-
     // Reorder the items in place by their distances to the two poles
     let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
-    println!(
-        "{indent}Mid index = {} in {} items with last = {}",
-        mid,
-        items.len(),
-        last
-    );
-    let items_lrds_after = items
-        .iter()
-        .skip(1)
-        .zip(left_right_distances.iter())
-        .collect::<Vec<_>>();
-    println!(
-        "{indent}Items and distances after reordering: {}",
-        format_vec(&items_lrds_after, indent, offset + 1)
-    );
-
-    for (i, ((_, item), (ld, rd))) in items.iter().skip(1).zip(left_right_distances.iter()).enumerate() {
-        let exp_ld = metric(&items[0].1, item);
-        let exp_rd = metric(&items[items.len() - 1].1, item);
-        assert_eq!(
-            *ld, exp_ld,
-            "Left distance mismatch at index {}: computed = {}, expected = {}",
-            i, ld, exp_ld
-        );
-        assert_eq!(
-            *rd, exp_rd,
-            "Right distance mismatch at index {}: computed = {}, expected = {}",
-            i, rd, exp_rd
-        );
-    }
 
     // split the items slice into the left and right partitions
     let (left, right) = items.split_at_mut(mid);
-    assert!(!left.is_empty(), "Left partition is empty");
-    assert!(!right.is_empty(), "Right partition is empty");
 
     // Move the right pole to the 0th index in the right slice
     right.swap(0, right.len() - 1);
-
-    println!(
-        "{indent}Left partition size = {} and items = {}",
-        left.len(),
-        format_vec(left, indent, offset)
-    );
-    println!(
-        "{indent}Right partition size = {} and items = {}",
-        right.len(),
-        format_vec(right, indent, offset + mid)
-    );
 
     ([left, right], span)
 }
@@ -512,8 +355,6 @@ where
 /// This assumes that `items` and `distances` have the same length.
 pub fn reorder_items_in_place<Id, I, T>(items: &mut [(Id, I)], distances: &mut [(T, T)]) -> usize
 where
-    Id: core::fmt::Debug,
-    I: core::fmt::Debug,
     T: DistanceValue,
 {
     assert_eq!(
@@ -526,7 +367,6 @@ where
     let mut right = distances.len() - 1;
 
     // TODO(Najib): After testing, use unsafe code to remove bounds checks while indexing
-    let mut n_swaps = 0;
     while left < right {
         // Increment `left` until we find an item for the right pole
         while left < distances.len() && distances[left].0 <= distances[left].1 {
@@ -542,17 +382,15 @@ where
         if left >= right {
             break;
         }
-        assert!(n_swaps < 1 + items.len() / 2, "Finding where the infinite loop is happening: left = {}, distances[left] = {:?}, right = {}, distances[right] = {:?}", left, distances[left], right, distances[right]);
 
         // swap the items at the two indices
         items.swap(left, right);
         distances.swap(left, right);
-        n_swaps += 1;
         left += 1;
         right -= 1;
     }
-    assert!(n_swaps <= items.len() / 2, "Too many swaps: {}", n_swaps);
 
+    // TODO(Najib): Check if this last loop is even necessary
     // Increment `left` until we find the first item for the right pole
     while left < distances.len() && distances[left].0 <= distances[left].1 {
         left += 1;
@@ -564,8 +402,6 @@ where
 /// Estimates the Span (maximum distance between any two items) of the given items using a heuristic approach.
 pub fn span_estimate<Id, I, T, M>(items: &[(Id, I)], metric: &M) -> T
 where
-    Id: core::fmt::Debug,
-    I: core::fmt::Debug,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
@@ -588,16 +424,4 @@ where
                 .map_or_else(|| unreachable!("items has at least two elements"), |(_, d)| d)
         }
     }
-}
-
-/// Formats a slice of items with indices and indentation for better readability in debug output.
-fn format_vec<T: core::fmt::Debug>(items: &[T], indent: &str, offset: usize) -> String {
-    let formatted_items = items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| format!("{indent}  {:3}  {item:?}", i + offset))
-        .collect::<Vec<_>>()
-        .join(",\n");
-
-    format!("{indent}[\n{formatted_items}\n{indent}]")
 }
