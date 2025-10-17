@@ -1,6 +1,6 @@
 //! Benchmarks for CAKES
 
-#![expect(missing_docs, unused_imports)]
+#![expect(missing_docs)]
 
 use std::usize;
 
@@ -36,19 +36,19 @@ fn bench_for_ks<Id, I, T, A, M>(
 
         // Benchmark the exact algorithms
         bench_one_alg(group, tree, &KnnDfs(k), queries, &true_hits, multiplier);
-        // bench_one_alg(group, tree, &KnnBfs(k), queries, &true_hits, multiplier);
-        // bench_one_alg(group, tree, &KnnBranch(k), queries, &true_hits, multiplier);
-        // bench_one_alg(group, tree, &KnnRrnn(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &KnnBfs(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &KnnBranch(k), queries, &true_hits, multiplier);
+        bench_one_alg(group, tree, &KnnRrnn(k), queries, &true_hits, multiplier);
 
-        // // Benchmark the approximate algorithms
-        // for n in [10, 100, 1000] {
-        //     // Varying number of leaves explored
-        //     let l_alg = approximate::KnnDfs(k, n, usize::MAX);
-        //     bench_one_alg(group, tree, &l_alg, queries, &true_hits, multiplier);
-        //     // Varying number of distance computations performed
-        //     let d_alg = approximate::KnnDfs(k, usize::MAX, n * 100);
-        //     bench_one_alg(group, tree, &d_alg, queries, &true_hits, multiplier);
-        // }
+        // Benchmark the approximate algorithms
+        for n in [10, 100, 1000] {
+            // Varying number of leaves explored
+            let l_alg = approximate::KnnDfs(k, n, usize::MAX);
+            bench_one_alg(group, tree, &l_alg, queries, &true_hits, multiplier);
+            // Varying number of distance computations performed
+            let d_alg = approximate::KnnDfs(k, usize::MAX, n * 100);
+            bench_one_alg(group, tree, &d_alg, queries, &true_hits, multiplier);
+        }
     }
 }
 

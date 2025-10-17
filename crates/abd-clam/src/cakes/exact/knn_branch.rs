@@ -16,7 +16,6 @@ pub struct KnnBranch(pub usize);
 impl<Id, I, T, A, M> Search<Id, I, T, A, M> for KnnBranch
 where
     T: DistanceValue,
-    A: core::fmt::Debug,
     M: Fn(&I, &I) -> T,
 {
     fn name(&self) -> String {

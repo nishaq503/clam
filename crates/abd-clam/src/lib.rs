@@ -1,8 +1,6 @@
 //! Redesign of CLAM
 // #![doc = include_str!("../README.md")]
 
-#![expect(clippy::uninlined_format_args)]
-
 use core::fmt::{Debug, Display};
 
 pub mod cakes;
