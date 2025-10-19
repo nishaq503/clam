@@ -72,7 +72,9 @@ where
     x.as_ref()
         .iter()
         .zip(y.as_ref())
-        .map(|(a, &b)| a.abs_sub(b).powf(p))
+        .map(|(&a, &b)| a - b)
+        .map(T::abs)
+        .map(|d| d.powf(p))
         .fold(T::zero(), |acc, v| acc + v)
         .powf(p.recip())
 }

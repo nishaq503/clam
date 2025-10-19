@@ -530,8 +530,11 @@ dependencies = [
 name = "distances-two"
 version = "2.0.0-dev0"
 dependencies = [
+ "float_eq",
  "num-traits",
+ "rand",
  "rust-blas",
+ "test-case",
 ]
 
 [[package]]
@@ -567,6 +570,12 @@ dependencies = [
  "crc32fast",
  "miniz_oxide",
 ]
+
+[[package]]
+name = "float_eq"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28a80e3145d8ad11ba0995949bbcf48b9df2be62772b3d351ef017dff6ecb853"
 
 [[package]]
 name = "from_bytes_or_zeroed"
