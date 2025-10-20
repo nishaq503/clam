@@ -26,3 +26,13 @@ mod traits;
 
 pub(crate) use traits::Naive;
 pub use traits::SIMD;
+
+/// SIMD accelerated squared Euclidean distance between two vectors.
+pub fn euclidean_sq<S: SIMD>(x: S, y: S) -> S::Output {
+    x.squared_euclidean(y)
+}
+
+/// SIMD accelerated Euclidean distance between two vectors.
+pub fn euclidean<S: SIMD>(x: S, y: S) -> S::Output {
+    x.euclidean(y)
+}

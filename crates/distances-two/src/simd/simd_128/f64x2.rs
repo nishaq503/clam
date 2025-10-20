@@ -37,7 +37,11 @@ impl super::super::SIMD for &[f64] {
     type Output = f64;
 
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        F64x2::squared_euclidean(self, other)
+        if self.len() < 2 {
+            super::super::Naive::squared_euclidean(self, other)
+        } else {
+            F64x2::squared_euclidean(self, other)
+        }
     }
 
     fn euclidean(self, other: Self) -> Self::Output {
@@ -49,7 +53,11 @@ impl super::super::SIMD for &Vec<f64> {
     type Output = f64;
 
     fn squared_euclidean(self, other: Self) -> Self::Output {
-        F64x2::squared_euclidean(self, other)
+        if self.len() < 2 {
+            super::super::Naive::squared_euclidean(self, other)
+        } else {
+            F64x2::squared_euclidean(self, other)
+        }
     }
 
     fn euclidean(self, other: Self) -> Self::Output {
