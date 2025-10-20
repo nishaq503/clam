@@ -2,13 +2,18 @@
 
 #![expect(dead_code)]
 
-#[cfg(any(
-    all(feature = "simd-128", feature = "simd-256", feature = "simd-512"),
-    all(feature = "simd-128", feature = "simd-256"),
-    all(feature = "simd-128", feature = "simd-512"),
-    all(feature = "simd-256", feature = "simd-512"),
-))]
-compile_error!("Only one of `simd-128`, `simd-256` and `simd-512` features may be active.");
+/// Ensure that only one SIMD feature is enabled at a time.
+macro_rules! assert_unique_feature {
+    () => {};
+    ($first:tt $(,$rest:tt)*) => {
+        $(
+            #[cfg(all(feature = $first, feature = $rest))]
+            compile_error!(concat!("features \"", $first, "\" and \"", $rest, "\" cannot be used together"));
+        )*
+        assert_unique_feature!($($rest),*);
+    }
+}
+assert_unique_feature!("simd-128", "simd-256", "simd-512", "simd-1024");
 
 #[macro_use]
 mod macros;
@@ -21,6 +26,9 @@ pub(crate) mod simd_256;
 
 #[cfg(feature = "simd-512")]
 pub(crate) mod simd_512;
+
+#[cfg(feature = "simd-1024")]
+pub(crate) mod simd_1024;
 
 mod traits;
 

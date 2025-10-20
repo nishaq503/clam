@@ -34,6 +34,9 @@ fn simd_f32(car: usize, dim: usize) {
 
             #[cfg(feature = "simd-512")]
             check_approx_eq(x, y, 1e-5);
+
+            #[cfg(feature = "simd-1024")]
+            check_approx_eq(x, y, 1e-5);
         }
     }
 }

@@ -31,6 +31,7 @@ jobs:
           cargo test --release --package distances_two --features=simd-128
           cargo test --release --package distances_two --features=simd-256
           cargo test --release --package distances_two --features=simd-512
+          cargo test --release --package distances_two --features=simd-1024
       - name: Run Python tests
         run: |
           uv venv venv

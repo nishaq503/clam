@@ -85,3 +85,8 @@ repos:
         entry: cargo clippy --all --features simd-512 -- -D warnings
         language: system
         pass_filenames: false
+      - id: cargo-clippy-simd-1024
+        name: cargo clippy with simd-1024 feature
+        entry: cargo clippy --all --features simd-1024 -- -D warnings
+        language: system
+        pass_filenames: false

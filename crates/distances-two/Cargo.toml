@@ -35,6 +35,7 @@ blas = ["dep:rust-blas"]
 simd-128 = []
 simd-256 = []
 simd-512 = []
+simd-1024 = []
 default = []
 all = []
 
@@ -57,3 +58,8 @@ required-features = ["simd-256"]
 name = "simd-512"
 harness = false
 required-features = ["simd-512"]
+
+[[bench]]
+name = "simd-1024"
+harness = false
+required-features = ["simd-1024"]
