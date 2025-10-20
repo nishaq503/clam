@@ -26,7 +26,7 @@ jobs:
         uses: pre-commit/action@v3.0.1
       - name: Run Rust tests
         run: |
-          cargo test --release --package abd-clam
+          cargo test --release --package abd-clam --features=serde
           cargo test --release --package distances_two --features=blas
           cargo test --release --package distances_two --features=simd-128
           cargo test --release --package distances_two --features=simd-256
