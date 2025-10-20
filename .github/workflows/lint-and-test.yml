@@ -23,9 +23,9 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
       - name: Compile Rust crates
-        run: cargo build --release --workspace --all-features
+        run: cargo build --release --workspace
       - name: Compile Rust tests
-        run: cargo test --release --workspace --all-features --no-run
+        run: cargo test --release --workspace --no-run
       - name: Build Python packages
         run: |
           uv venv venv
@@ -34,7 +34,12 @@ jobs:
       - name: Run linters
         uses: pre-commit/action@v3.0.1
       - name: Run Rust tests
-        run: cargo test --release --workspace --all-features
+        run: |
+          cargo test --release --workspace
+          cargo test --release --package distances_two --features=blas
+          cargo test --release --package distances_two --features=simd-128
+          cargo test --release --package distances_two --features=simd-256
+          cargo test --release --package distances_two --features=simd-512
       - name: Run Python tests
         run: |
           source venv/bin/activate
