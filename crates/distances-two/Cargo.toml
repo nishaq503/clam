@@ -28,6 +28,7 @@ rust-blas = { workspace = true, optional = true }
 float_eq = "1.0.1"
 rand.workspace = true
 test-case.workspace = true
+criterion.workspace = true
 
 [features]
 blas = ["dep:rust-blas"]
@@ -36,3 +37,23 @@ simd-256 = []
 simd-512 = []
 default = []
 all = []
+
+[[bench]]
+name = "vectors"
+harness = false
+required-features = ["blas"]
+
+[[bench]]
+name = "simd-128"
+harness = false
+required-features = ["simd-128"]
+
+[[bench]]
+name = "simd-256"
+harness = false
+required-features = ["simd-256"]
+
+[[bench]]
+name = "simd-512"
+harness = false
+required-features = ["simd-512"]
