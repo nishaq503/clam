@@ -1,10 +1,10 @@
 //! SIMD accelerated distance functions for vectors.
 
-use distances::{simd, Number};
+use distances::{Number, simd};
 use numpy::{PyArray1, PyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-use crate::utils::{cdist_generic, pdist_generic, Scalar, Vector1, Vector2};
+use crate::utils::{Scalar, Vector1, Vector2, cdist_generic, pdist_generic};
 
 /// Register the SIMD distance functions in a Python module.
 pub fn register(pm: &Bound<'_, PyModule>) -> PyResult<()> {

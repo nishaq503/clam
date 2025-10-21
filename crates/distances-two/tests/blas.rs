@@ -1,5 +1,7 @@
 //! Tests for the `blas` accelerated distance functions.
 
+#![allow(unused_imports)]
+
 use float_eq::assert_float_eq;
 use rand::prelude::*;
 use test_case::test_case;

@@ -1,9 +1,9 @@
 //! Tests for the CAKES search algorithms.
 
 use abd_clam::{
+    DistanceValue, Tree,
     cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
     utils::MaxItem,
-    DistanceValue, Tree,
 };
 use rayon::prelude::*;
 
@@ -52,11 +52,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
             .iter()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
-                if dist <= radius {
-                    Some((*i, dist))
-                } else {
-                    None
-                }
+                if dist <= radius { Some((*i, dist)) } else { None }
             })
             .collect::<Vec<_>>();
         let expected_hits = sort_nondescending(expected_hits);
@@ -136,11 +132,7 @@ fn par_vectors(car: usize, dim: usize) -> Result<(), String> {
             .par_iter()
             .filter_map(|(i, item)| {
                 let dist = metric(item, &query);
-                if dist <= radius {
-                    Some((*i, dist))
-                } else {
-                    None
-                }
+                if dist <= radius { Some((*i, dist)) } else { None }
             })
             .collect::<Vec<_>>();
         let expected_hits = sort_nondescending(expected_hits);

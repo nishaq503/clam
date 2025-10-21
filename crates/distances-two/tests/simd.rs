@@ -1,5 +1,7 @@
 //! Tests for the `simd` accelerated distance functions.
 
+#![allow(unused_variables, unused_imports)]
+
 use float_eq::assert_float_eq;
 use rand::prelude::*;
 use test_case::test_case;
@@ -7,6 +9,12 @@ use test_case::test_case;
 mod naive_impls;
 
 /// Tests for SIMD accelerated Euclidean distance functions.
+#[cfg(any(
+    feature = "simd-128",
+    feature = "simd-256",
+    feature = "simd-512",
+    feature = "simd-1024"
+))]
 #[test_case(10, 2; "10x2")]
 #[test_case(100, 10; "100x10")]
 #[test_case(100, 100; "100x100")]
@@ -41,6 +49,12 @@ fn simd_f32(car: usize, dim: usize) {
     }
 }
 
+#[cfg(any(
+    feature = "simd-128",
+    feature = "simd-256",
+    feature = "simd-512",
+    feature = "simd-1024"
+))]
 fn check_approx_eq(x: &[f32], y: &[f32], tol: f32) {
     let e_l2_sq = naive_impls::l2_sq(x, y);
 

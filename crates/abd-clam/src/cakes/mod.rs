@@ -8,8 +8,8 @@ pub mod approximate;
 mod exact;
 pub mod selection;
 
-pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
+pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 
 /// A Nearest Neighbor Search algorithm.
 pub trait Search<Id, I, T, A, M>

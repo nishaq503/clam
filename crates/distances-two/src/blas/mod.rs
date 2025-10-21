@@ -51,11 +51,7 @@ where
         let xx = rust_blas::Nrm2::nrm2(x);
         let yy = rust_blas::Nrm2::nrm2(y);
         let denom = xx * yy;
-        if denom.is_zero() {
-            T::zero()
-        } else {
-            xy / denom
-        }
+        if denom.is_zero() { T::zero() } else { xy / denom }
     }
 }
 

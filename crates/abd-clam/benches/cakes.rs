@@ -5,18 +5,18 @@
 use std::usize;
 
 use abd_clam::{
-    cakes::{approximate, search_quality_stats, KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, Search},
     BranchingFactor, Cluster, DistanceValue, PartitionStrategy, SpanReductionFactor, Tree,
+    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, Search, approximate, search_quality_stats},
 };
 use rand::prelude::*;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use deepsize::DeepSizeOf;
 use rayon::prelude::*;
 
 mod utils;
 
-use utils::ann_benchmarks::{base_dir, AnnDataset};
+use utils::ann_benchmarks::{AnnDataset, base_dir};
 
 fn bench_for_ks<Id, I, T, A, M>(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,

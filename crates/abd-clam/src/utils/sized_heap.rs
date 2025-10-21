@@ -50,11 +50,11 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     pub fn push(&mut self, (a, item): (A, T)) {
         if self.heap.len() < self.k {
             self.heap.push(MinItem(a, item));
-        } else if let Some(top) = self.heap.peek() {
-            if item < top.1 {
-                self.heap.pop();
-                self.heap.push(MinItem(a, item));
-            }
+        } else if let Some(top) = self.heap.peek()
+            && item < top.1
+        {
+            self.heap.pop();
+            self.heap.push(MinItem(a, item));
         }
     }
 

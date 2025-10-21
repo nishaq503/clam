@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    number::{Float, Int},
     Number,
+    number::{Float, Int},
 };
 
 /// Jaccard distance.

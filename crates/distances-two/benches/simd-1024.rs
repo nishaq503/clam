@@ -1,5 +1,7 @@
 //! Benchmarks for vector distances.
 
+#![allow(missing_docs)]
+
 use std::hint::black_box;
 
 use criterion::*;
@@ -9,7 +11,6 @@ use distances_two::simd;
 
 fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>, car: usize) {
     let n_elements = car * car;
-    group.sample_size(100);
     group.throughput(criterion::Throughput::Elements(n_elements as u64));
 
     let plot_config = criterion::PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
@@ -21,7 +22,7 @@ fn simd_1024_f32(c: &mut Criterion) {
 
     let seed = 42;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let (car, min_val, max_val) = (100, -10_f32, 10_f32);
+    let (car, min_val, max_val) = (1000, -10_f32, 10_f32);
     config_group(&mut group, car);
 
     for d in 0..=3 {

@@ -1,6 +1,6 @@
 //! Strategy for partitioning a `Cluster` into child clusters.
 
-use crate::{utils::MinItem, DistanceValue};
+use crate::{DistanceValue, utils::MinItem};
 
 use super::Cluster;
 

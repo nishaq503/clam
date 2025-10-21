@@ -7,9 +7,9 @@ use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
+    Number,
     number::Float,
     vectors::{euclidean, l3_norm, l4_norm, manhattan, minkowski},
-    Number,
 };
 
 fn bench_one<T: Number, U: Float>(

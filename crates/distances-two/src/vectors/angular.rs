@@ -37,11 +37,7 @@ where
         let sq_norm_a = super::norm_l2(a);
         let sq_norm_b = super::norm_l2(b);
         let denom = (sq_norm_a * sq_norm_b).sqrt();
-        if denom.is_zero() {
-            T::zero()
-        } else {
-            dot / denom
-        }
+        if denom.is_zero() { T::zero() } else { dot / denom }
     }
 }
 

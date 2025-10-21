@@ -3,8 +3,8 @@
 use rayon::prelude::*;
 
 use crate::{
-    cakes::{KnnBfs, KnnDfs, Search},
     DistanceValue, Tree,
+    cakes::{KnnBfs, KnnDfs, Search},
 };
 
 /// Measures the throughput (Queries per Second) of a CAKES algorithm on the given root cluster with the given metric.

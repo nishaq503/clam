@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{cakes::Search, Cluster, DistanceValue, Tree};
+use crate::{Cluster, DistanceValue, Tree, cakes::Search};
 
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 ///

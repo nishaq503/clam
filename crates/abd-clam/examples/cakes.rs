@@ -3,9 +3,9 @@
 use std::path::Path;
 
 use abd_clam::{
+    Tree,
     cakes::{KnnBfs, KnnDfs, KnnRrnn, RnnChess, Search},
     utils::MaxItem,
-    Tree,
 };
 use rayon::prelude::*;
 

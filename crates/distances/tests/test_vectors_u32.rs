@@ -4,8 +4,8 @@ use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
-    vectors::{chebyshev, dot_product, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan},
     Number,
+    vectors::{chebyshev, dot_product, euclidean, euclidean_sq, l3_norm, l4_norm, manhattan},
 };
 
 fn l1(x: &[u32], y: &[u32]) -> u32 {

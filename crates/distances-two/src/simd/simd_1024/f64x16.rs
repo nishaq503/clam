@@ -2,8 +2,12 @@
 
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-define_ty!(F64x16, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64);
-impl_minimal!(F64x16, f64, 16, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15);
+define_ty!(
+    F64x16, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64
+);
+impl_minimal!(
+    F64x16, f64, 16, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15
+);
 
 impl F64x16 {
     /// Create a new `F64x16` from a slice.

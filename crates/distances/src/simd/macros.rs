@@ -274,11 +274,7 @@ macro_rules! impl_distances {
                     1 as $ty
                 } else {
                     let d = 1 as $ty - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as $ty
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as $ty } else { d }
                 }
             }
         }
@@ -321,11 +317,7 @@ macro_rules! impl_naive {
                     1 as Self::Output
                 } else {
                     let d = 1 as Self::Output - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as Self::Output
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as Self::Output } else { d }
                 }
             }
 
@@ -372,11 +364,7 @@ macro_rules! impl_naive {
                     1 as Self::Output
                 } else {
                     let d = 1 as Self::Output - xy / (xx * yy).sqrt();
-                    if d < eps {
-                        0 as Self::Output
-                    } else {
-                        d
-                    }
+                    if d < eps { 0 as Self::Output } else { d }
                 }
             }
 

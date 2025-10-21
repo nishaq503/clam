@@ -1,8 +1,8 @@
 //! Angular distances between vectors.
 
 use crate::{
-    number::{Float, Int, UInt},
     Number,
+    number::{Float, Int, UInt},
 };
 
 /// Computes the Cosine distance between two vectors.
@@ -47,11 +47,7 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
         U::ONE
     } else {
         let d = U::ONE - xy * (xx * yy).inv_sqrt();
-        if d < U::EPSILON {
-            U::ZERO
-        } else {
-            d
-        }
+        if d < U::EPSILON { U::ZERO } else { d }
     }
 }
 
@@ -92,7 +88,7 @@ pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
 ///
 /// * [Hamming distance](https://en.wikipedia.org/wiki/Hamming_distance)
 pub fn hamming<T: Int, U: UInt>(x: &[T], y: &[T]) -> U {
-    U::from(x.iter().zip(y.iter()).filter(|(&a, &b)| a != b).count())
+    U::from(x.iter().zip(y.iter()).filter(|&(a, b)| a != b).count())
 }
 
 /// Computes the Canberra distance between two vectors.

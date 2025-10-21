@@ -6,11 +6,7 @@ use abd_clam::DistanceValue;
 use num_traits::Float;
 
 pub fn absolute_difference<T: DistanceValue>(a: &T, b: &T) -> T {
-    if a < b {
-        *b - *a
-    } else {
-        *a - *b
-    }
+    if a < b { *b - *a } else { *a - *b }
 }
 
 pub fn manhattan<I: AsRef<[T]>, T: DistanceValue>(a: &I, b: &I) -> T {

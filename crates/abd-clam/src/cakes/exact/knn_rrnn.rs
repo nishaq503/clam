@@ -1,10 +1,10 @@
 //! K-Nearest Neighbor (KNN) search using the Repeated Radius Nearest Neighbor (RRNN) algorithm.
 
 use crate::{
+    Cluster, DistanceValue, Tree,
     cakes::Search,
     tree::lfd_estimate,
     utils::{MaxItem, SizedHeap},
-    Cluster, DistanceValue, Tree,
 };
 
 use super::rnn_chess::tree_search;

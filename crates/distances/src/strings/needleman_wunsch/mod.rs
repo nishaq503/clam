@@ -9,8 +9,8 @@ use crate::number::UInt;
 use super::Penalties;
 
 pub use helpers::{
-    aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table, trace_back_iterative,
-    trace_back_recursive, unaligned_x_to_y, x2y_helper, x_to_y_alignment, Edit,
+    Edit, aligned_x_to_y, aligned_x_to_y_no_sub, apply_edits, compute_edits, compute_table, trace_back_iterative,
+    trace_back_recursive, unaligned_x_to_y, x_to_y_alignment, x2y_helper,
 };
 
 /// Use a custom set of penalties to create a function to that calculates the

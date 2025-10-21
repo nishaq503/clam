@@ -1,9 +1,9 @@
 //! K-Nearest Neighbors (KNN) search using the Breadth-First Sieve algorithm.
 
 use crate::{
-    cakes::{d_max, Search},
-    utils::SizedHeap,
     Cluster, DistanceValue, Tree,
+    cakes::{Search, d_max},
+    utils::SizedHeap,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
@@ -87,11 +87,7 @@ fn filter_candidates<T: DistanceValue, A>(
         .filter_map(|(cluster, d)| {
             let diam = cluster.radius() + cluster.radius();
             let d_min = if d <= diam { T::zero() } else { d - diam };
-            if d_min <= threshold {
-                Some((cluster, d))
-            } else {
-                None
-            }
+            if d_min <= threshold { Some((cluster, d)) } else { None }
         })
         .collect()
 }

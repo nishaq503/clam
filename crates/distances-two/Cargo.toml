@@ -25,7 +25,7 @@ num-traits.workspace = true
 rust-blas = { workspace = true, optional = true }
 
 [dev-dependencies]
-float_eq = "1.0.1"
+float_eq.workspace = true
 rand.workspace = true
 test-case.workspace = true
 criterion.workspace = true

@@ -3,9 +3,9 @@
 use std::cmp::Reverse;
 
 use crate::{
-    cakes::{d_max, d_min, RnnChess, Search},
-    utils::SizedHeap,
     DistanceValue, Tree,
+    cakes::{RnnChess, Search, d_max, d_min},
+    utils::SizedHeap,
 };
 
 /// K-nearest neighbors (KNN) search using the Greedy Branch algorithm.

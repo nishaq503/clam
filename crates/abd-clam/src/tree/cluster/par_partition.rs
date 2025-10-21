@@ -2,9 +2,9 @@
 
 use rayon::prelude::*;
 
-use crate::{utils::SizedHeap, DistanceValue, PartitionStrategy};
+use crate::{DistanceValue, PartitionStrategy, utils::SizedHeap};
 
-use super::{lfd_estimate, reorder_items_in_place, Cluster};
+use super::{Cluster, lfd_estimate, reorder_items_in_place};
 
 impl<T, A> Cluster<T, A> {
     /// Creates a new `Cluster` and recursively partitions it if it has more than two items.

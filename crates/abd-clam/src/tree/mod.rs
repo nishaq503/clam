@@ -7,7 +7,7 @@ use crate::DistanceValue;
 
 mod cluster;
 
-pub use cluster::{lfd_estimate, BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor};
+pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, lfd_estimate};
 
 /// A tree structure used in CLAM for organizing items based on a given metric.
 pub struct Tree<Id, I, T, A, M> {

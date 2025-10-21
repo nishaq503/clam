@@ -8,8 +8,8 @@ use rand::prelude::*;
 use symagen::random_data;
 
 use distances::{
-    vectors::{cosine, euclidean, l3_norm, l4_norm, manhattan},
     Number,
+    vectors::{cosine, euclidean, l3_norm, l4_norm, manhattan},
 };
 
 fn cosine_f32(x: &[f32], y: &[f32]) -> f32 {

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use distances::strings::{levenshtein_custom, Penalties};
+use distances::strings::{Penalties, levenshtein_custom};
 use symagen::random_edits::{are_we_there_yet, create_batch};
 
 #[test]

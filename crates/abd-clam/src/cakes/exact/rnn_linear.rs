@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{cakes::Search, DistanceValue, Tree};
+use crate::{DistanceValue, Tree, cakes::Search};
 
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 ///

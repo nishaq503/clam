@@ -1,6 +1,6 @@
 //! Methods for recursively partitioning a `Cluster` to build a `Tree`.
 
-use crate::{utils::SizedHeap, DistanceValue, PartitionStrategy};
+use crate::{DistanceValue, PartitionStrategy, utils::SizedHeap};
 
 use super::Cluster;
 

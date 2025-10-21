@@ -22,21 +22,13 @@ pub trait Addition:
     /// Returns the absolute value of `self`.
     #[must_use]
     fn abs(self) -> Self {
-        if self < Self::ZERO {
-            self.neg()
-        } else {
-            self
-        }
+        if self < Self::ZERO { self.neg() } else { self }
     }
 
     /// Returns the absolute difference between `self` and `other`.
     #[must_use]
     fn abs_diff(self, other: Self) -> Self {
-        if self < other {
-            other - self
-        } else {
-            self - other
-        }
+        if self < other { other - self } else { self - other }
     }
 }
 

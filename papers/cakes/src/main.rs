@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{cakes::selection, BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
+use abd_clam::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree, cakes::selection};
 use clap::Parser;
 use rand::prelude::*;
 

@@ -1,6 +1,6 @@
 //! Provides functions for calculating correlations between vectors.
 
-use crate::{number::Float, Number};
+use crate::{Number, number::Float};
 
 /// Pearson distance.
 ///

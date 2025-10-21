@@ -1,6 +1,6 @@
 //! K-Nearest Neighbor (KNN) search with a naive linear scan.
 
-use crate::{cakes::Search, utils::SizedHeap, DistanceValue, Tree};
+use crate::{DistanceValue, Tree, cakes::Search, utils::SizedHeap};
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
 ///

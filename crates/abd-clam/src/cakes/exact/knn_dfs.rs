@@ -3,9 +3,9 @@
 use core::cmp::Reverse;
 
 use crate::{
-    cakes::{d_max, d_min, Search},
-    utils::SizedHeap,
     Cluster, DistanceValue, Tree,
+    cakes::{Search, d_max, d_min},
+    utils::SizedHeap,
 };
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
