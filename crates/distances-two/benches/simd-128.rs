@@ -22,7 +22,7 @@ fn simd_128_f32(c: &mut Criterion) {
 
     let seed = 42;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let (car, min_val, max_val) = (1000, -10_f32, 10_f32);
+    let (car, min_val, max_val) = (200, -10_f32, 10_f32);
     config_group(&mut group, car);
 
     for d in 0..=3 {
