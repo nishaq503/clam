@@ -42,24 +42,3 @@ all = []
 [[bench]]
 name = "vectors"
 harness = false
-required-features = ["blas"]
-
-[[bench]]
-name = "simd-128"
-harness = false
-required-features = ["simd-128"]
-
-[[bench]]
-name = "simd-256"
-harness = false
-required-features = ["simd-256"]
-
-[[bench]]
-name = "simd-512"
-harness = false
-required-features = ["simd-512"]
-
-[[bench]]
-name = "simd-1024"
-harness = false
-required-features = ["simd-1024"]
