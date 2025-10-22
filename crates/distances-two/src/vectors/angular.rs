@@ -30,14 +30,13 @@ where
     S: AsRef<[T]>,
     T: num_traits::Float,
 {
-    let dot = dot_product(a, b);
-    if dot.is_zero() {
+    let ab = dot_product(a, b);
+    if ab.is_zero() {
         T::zero()
     } else {
-        let sq_norm_a = super::norm_l2(a);
-        let sq_norm_b = super::norm_l2(b);
-        let denom = (sq_norm_a * sq_norm_b).sqrt();
-        if denom.is_zero() { T::zero() } else { dot / denom }
+        let aa_sq = super::sq_norm_l2(a);
+        let bb_sq = super::sq_norm_l2(b);
+        ab / (aa_sq * bb_sq).sqrt()
     }
 }
 

@@ -79,15 +79,20 @@ where
         .powf(p.recip())
 }
 
+/// Squared L2-norm (Squared Euclidean norm) of a vector.
+pub fn sq_norm_l2<S, T>(x: &S) -> T
+where
+    S: AsRef<[T]>,
+    T: num_traits::Float,
+{
+    x.as_ref().iter().map(|&a| a * a).fold(T::zero(), |acc, v| acc + v)
+}
+
 /// L2-norm (Euclidean norm) of a vector.
 pub fn norm_l2<S, T>(x: &S) -> T
 where
     S: AsRef<[T]>,
     T: num_traits::Float,
 {
-    x.as_ref()
-        .iter()
-        .map(|&a| a * a)
-        .fold(T::zero(), |acc, v| acc + v)
-        .sqrt()
+    sq_norm_l2(x).sqrt()
 }
