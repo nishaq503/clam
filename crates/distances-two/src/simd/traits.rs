@@ -18,10 +18,13 @@ pub trait Naive: private::Sealed {
 
     /// Squared Euclidean distance between two vectors.
     fn squared_euclidean(self, other: Self) -> Self::Output;
+
+    /// Dot product between two vectors.
+    fn dot_product(self, other: Self) -> Self::Output;
 }
 
-impl_naive!(f64);
 impl_naive!(f32);
+impl_naive!(f64);
 
 /// Trait for SIMD accelerated distance functions.
 pub trait SIMD: private::Sealed {
@@ -33,4 +36,7 @@ pub trait SIMD: private::Sealed {
 
     /// Euclidean distance between two vectors.
     fn euclidean(self, other: Self) -> Self::Output;
+
+    /// Dot product between two vectors.
+    fn dot_product(self, other: Self) -> Self::Output;
 }

@@ -55,34 +55,5 @@ impl_op16!(assn SubAssign, sub_assign, F64x16, -=);
 
 impl_distances!(F64x16, f64);
 
-impl super::super::SIMD for &[f64] {
-    type Output = f64;
-
-    fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() < 16 {
-            super::super::Naive::squared_euclidean(self, other)
-        } else {
-            F64x16::squared_euclidean(self, other)
-        }
-    }
-
-    fn euclidean(self, other: Self) -> Self::Output {
-        super::super::SIMD::squared_euclidean(self, other).sqrt()
-    }
-}
-
-impl super::super::SIMD for &Vec<f64> {
-    type Output = f64;
-
-    fn squared_euclidean(self, other: Self) -> Self::Output {
-        if self.len() < 16 {
-            super::super::Naive::squared_euclidean(self, other)
-        } else {
-            F64x16::squared_euclidean(self, other)
-        }
-    }
-
-    fn euclidean(self, other: Self) -> Self::Output {
-        super::super::SIMD::squared_euclidean(self, other).sqrt()
-    }
-}
+impl_simd!(F64x16, f64, &[f64]);
+impl_simd!(F64x16, f64, &Vec<f64>);

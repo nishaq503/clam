@@ -3,7 +3,7 @@
 /// Macro to implement naive distance functions for a given underlying scalar type
 macro_rules! impl_naive {
     ($ty1:ty) => {
-        impl Naive for &[$ty1] {
+        impl crate::simd::Naive for &[$ty1] {
             type Output = $ty1;
 
             fn squared_euclidean(self, other: Self) -> Self::Output {
@@ -16,9 +16,19 @@ macro_rules! impl_naive {
                 }
                 sum
             }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                assert_eq!(self.len(), other.len());
+
+                let mut sum = 0.0;
+                for i in 0..self.len() {
+                    sum += self[i] * other[i];
+                }
+                sum
+            }
         }
 
-        impl Naive for &Vec<$ty1> {
+        impl crate::simd::Naive for &Vec<$ty1> {
             type Output = $ty1;
 
             fn squared_euclidean(self, other: Self) -> $ty1 {
@@ -31,6 +41,16 @@ macro_rules! impl_naive {
                 }
                 sum
             }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                assert_eq!(self.len(), other.len());
+
+                let mut sum = 0.0;
+                for i in 0..self.len() {
+                    sum += self[i] * other[i];
+                }
+                sum
+            }
         }
     };
 }
@@ -38,11 +58,9 @@ macro_rules! impl_naive {
 /// Macro to implement SIMD distance functions for a given SIMD type and underlying scalar type
 macro_rules! impl_distances {
     ($name:ident, $ty:ty) => {
-        use crate::simd::Naive;
-
         impl $name {
             /// Calculate the squared distance between two SIMD lane-slices
-            pub fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
+            fn euclidean_inner(a: &[$ty], b: &[$ty]) -> $name {
                 let i = $name::from_slice(a);
                 let j = $name::from_slice(b);
                 let u = i - j;
@@ -54,7 +72,7 @@ macro_rules! impl_distances {
             pub fn squared_euclidean(a: &[$ty], b: &[$ty]) -> $ty {
                 assert_eq!(a.len(), b.len());
                 if a.len() < $name::lanes() {
-                    return Naive::squared_euclidean(a, b);
+                    return crate::simd::Naive::squared_euclidean(a, b);
                 }
 
                 let mut i = 0;
@@ -66,9 +84,64 @@ macro_rules! impl_distances {
 
                 let mut sum = sum.horizontal_add();
                 if i < a.len() {
-                    sum += Naive::squared_euclidean(&a[i..], &b[i..]);
+                    sum += crate::simd::Naive::squared_euclidean(&a[i..], &b[i..]);
                 }
                 sum
+            }
+
+            fn dot_inner(a: &[$ty], b: &[$ty]) -> $name {
+                let i = $name::from_slice(a);
+                let j = $name::from_slice(b);
+                i * j
+            }
+
+            pub fn dot_product(a: &[$ty], b: &[$ty]) -> $ty {
+                assert_eq!(a.len(), b.len());
+                if a.len() < $name::lanes() {
+                    return crate::simd::Naive::dot_product(a, b);
+                }
+
+                let mut i = 0;
+                let mut sum = $name::splat(0.0);
+                while a.len() - $name::lanes() >= i {
+                    sum += $name::dot_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
+                    i += $name::lanes();
+                }
+
+                let mut sum = sum.horizontal_add();
+                if i < a.len() {
+                    sum += crate::simd::Naive::dot_product(&a[i..], &b[i..]);
+                }
+                sum
+            }
+        }
+    };
+}
+
+/// Macro to implement the SIMD trait for a given SIMD type, underlying scalar type, and array type
+macro_rules! impl_simd {
+    ($name:ident, $ty:ty, $arr:ty) => {
+        impl crate::simd::SIMD for $arr {
+            type Output = $ty;
+
+            fn squared_euclidean(self, other: Self) -> Self::Output {
+                if self.len() < $name::lanes() {
+                    crate::simd::Naive::squared_euclidean(self, other)
+                } else {
+                    $name::squared_euclidean(self, other)
+                }
+            }
+
+            fn euclidean(self, other: Self) -> Self::Output {
+                crate::simd::SIMD::squared_euclidean(self, other).sqrt()
+            }
+
+            fn dot_product(self, other: Self) -> Self::Output {
+                if self.len() < $name::lanes() {
+                    crate::simd::Naive::dot_product(self, other)
+                } else {
+                    $name::dot_product(self, other)
+                }
             }
         }
     };
