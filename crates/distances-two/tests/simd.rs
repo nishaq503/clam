@@ -1,11 +1,11 @@
 //! Tests for the `simd` accelerated distance functions.
 
-#![allow(unused_variables, unused_imports)]
+#![allow(unused_imports)]
 
 use float_eq::assert_float_eq;
-use rand::prelude::*;
 use test_case::test_case;
 
+#[macro_use]
 mod naive_impls;
 
 /// Tests for SIMD accelerated Euclidean distance functions.
@@ -19,32 +19,42 @@ mod naive_impls;
 #[test_case(100, 10; "100x10")]
 #[test_case(100, 100; "100x100")]
 #[test_case(100, 1000; "100x1000")]
-fn simd_f32(car: usize, dim: usize) {
+fn simd_distances(car: usize, dim: usize) {
     let seed = 42;
-    let (min_val, max_val) = (-1_f32, 1_f32);
 
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let data: Vec<Vec<f32>> = (0..car)
-        .map(|_| {
-            (0..dim)
-                .map(|_| rand::Rng::random_range(&mut rng, min_val..=max_val))
-                .collect()
-        })
-        .collect();
-
+    let data = naive_impls::gen_data::<f32>(car, dim, -1.0, 1.0, seed);
+    let tol = 1e-5;
     for x in &data {
         for y in &data {
             #[cfg(feature = "simd-128")]
-            check_approx_eq(x, y, 1e-5);
+            check_approx_eq_f32(x, y, tol);
 
             #[cfg(feature = "simd-256")]
-            check_approx_eq(x, y, 1e-5);
+            check_approx_eq_f32(x, y, tol);
 
             #[cfg(feature = "simd-512")]
-            check_approx_eq(x, y, 1e-5);
+            check_approx_eq_f32(x, y, tol);
 
             #[cfg(feature = "simd-1024")]
-            check_approx_eq(x, y, 1e-5);
+            check_approx_eq_f32(x, y, tol);
+        }
+    }
+
+    let data = naive_impls::gen_data::<f64>(car, dim, -1.0, 1.0, seed);
+    let tol = 1e-5;
+    for x in &data {
+        for y in &data {
+            #[cfg(feature = "simd-128")]
+            check_approx_eq_f64(x, y, tol);
+
+            #[cfg(feature = "simd-256")]
+            check_approx_eq_f64(x, y, tol);
+
+            #[cfg(feature = "simd-512")]
+            check_approx_eq_f64(x, y, tol);
+
+            #[cfg(feature = "simd-1024")]
+            check_approx_eq_f64(x, y, tol);
         }
     }
 }
@@ -55,23 +65,18 @@ fn simd_f32(car: usize, dim: usize) {
     feature = "simd-512",
     feature = "simd-1024"
 ))]
-fn check_approx_eq(x: &[f32], y: &[f32], tol: f32) {
-    let e_l2_sq = naive_impls::l2_sq(x, y);
+fn check_approx_eq_f32(x: &[f32], y: &[f32], tol: f32) {
+    assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
+    assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);
+}
 
-    let a_l2_sq: f32 = distances_two::simd::euclidean_sq(x, y);
-    let ratio = if e_l2_sq != 0.0 {
-        (e_l2_sq - a_l2_sq).abs() / e_l2_sq.abs()
-    } else {
-        0.0
-    };
-    assert_float_eq!(ratio, 0.0, abs <= tol);
-
-    let e_l2 = naive_impls::l2(x, y);
-    let a_l2: f32 = distances_two::simd::euclidean(x, y);
-    let ratio = if e_l2 != 0.0 {
-        (e_l2 - a_l2).abs() / e_l2.abs()
-    } else {
-        0.0
-    };
-    assert_float_eq!(ratio, 0.0, abs <= tol);
+#[cfg(any(
+    feature = "simd-128",
+    feature = "simd-256",
+    feature = "simd-512",
+    feature = "simd-1024"
+))]
+fn check_approx_eq_f64(x: &[f64], y: &[f64], tol: f64) {
+    assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
+    assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);
 }
