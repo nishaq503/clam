@@ -69,6 +69,7 @@ fn check_approx_eq_f32(x: &[f32], y: &[f32], tol: f32) {
     assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
     assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);
     assert_dist_eq!(x, y, cosine, distances_two::simd::cosine, tol);
+    assert_dist_eq!(x, y, cosine, distances_two::simd::cosine_tri_fold, tol);
     assert_self_dist_eq!(x, norm_l2, distances_two::simd::norm_l2, tol);
     assert_self_dist_eq!(y, norm_l2, distances_two::simd::norm_l2, tol);
 }
@@ -83,6 +84,7 @@ fn check_approx_eq_f64(x: &[f64], y: &[f64], tol: f64) {
     assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
     assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);
     assert_dist_eq!(x, y, cosine, distances_two::simd::cosine, tol);
+    assert_dist_eq!(x, y, cosine, distances_two::simd::cosine_tri_fold, tol);
     assert_self_dist_eq!(x, norm_l2, distances_two::simd::norm_l2, tol);
     assert_self_dist_eq!(y, norm_l2, distances_two::simd::norm_l2, tol);
 }

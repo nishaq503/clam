@@ -42,6 +42,12 @@ pub trait Simd: private::Sealed {
 
     /// Cosine similarity between two vectors that have unit L2 norm.
     fn cosine_similarity_normalized(self, other: Self) -> Self::Inner;
+
+    /// Cosine distance between two vectors using a single pass over the vectors.
+    fn cosine_tri_fold(self, other: Self) -> Self::Inner;
+
+    /// Cosine similarity between two vectors using a single pass over the vectors.
+    fn cosine_similarity_tri_fold(self, other: Self) -> Self::Inner;
 }
 
 /// Macro to implement the SIMD trait for a given SIMD type, underlying scalar type, and array type
@@ -130,6 +136,46 @@ macro_rules! impl_simd {
 
             fn cosine_similarity_normalized(self, other: Self) -> Self::Inner {
                 self.dot_product(other)
+            }
+
+            fn cosine_tri_fold(self, other: Self) -> Self::Inner {
+                1.0 - self.cosine_similarity_tri_fold(other)
+            }
+
+            fn cosine_similarity_tri_fold(self, other: Self) -> Self::Inner {
+                let mut a_chunks = self.chunks_exact(<$outer>::lanes());
+                let mut b_chunks = other.chunks_exact(<$outer>::lanes());
+
+                let (ab, aa_sq, bb_sq) = a_chunks
+                    .by_ref()
+                    .map(<$outer>::from_slice)
+                    .zip(b_chunks.by_ref().map(<$outer>::from_slice))
+                    .fold(
+                        (<$outer>::splat(0.0), <$outer>::splat(0.0), <$outer>::splat(0.0)),
+                        |(ab, aa_sq, bb_sq), (a, b)| (ab + a * b, aa_sq + a * a, bb_sq + b * b),
+                    );
+
+                let (ab, aa_sq, bb_sq) = (
+                    ab.horizontal_add(),
+                    aa_sq.horizontal_add(),
+                    bb_sq.horizontal_add(),
+                );
+
+                let (rem_ab, rem_aa_sq, rem_bb_sq) = a_chunks
+                    .remainder()
+                    .iter()
+                    .zip(b_chunks.remainder().iter())
+                    .fold((0.0, 0.0, 0.0), |(ab, aa_sq, bb_sq), (&a, &b)| {
+                        (a.mul_add(b, ab), a.mul_add(a, aa_sq), b.mul_add(b, bb_sq))
+                    });
+
+                let (ab, aa_sq, bb_sq) = (ab + rem_ab, aa_sq + rem_aa_sq, bb_sq + rem_bb_sq);
+
+                if ab == 0.0 {
+                    0.0
+                } else {
+                    ab / (aa_sq * bb_sq).sqrt()
+                }
             }
         }
     };

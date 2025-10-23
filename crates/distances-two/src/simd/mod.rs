@@ -76,3 +76,13 @@ pub fn cosine_normalized<S: Simd>(x: S, y: S) -> S::Inner {
 pub fn cosine_similarity_normalized<S: Simd>(x: S, y: S) -> S::Inner {
     x.cosine_similarity_normalized(y)
 }
+
+/// SIMD accelerated Cosine distance between two vectors using a single pass over the vectors.
+pub fn cosine_tri_fold<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine_tri_fold(y)
+}
+
+/// SIMD accelerated Cosine similarity between two vectors using a single pass over the vectors.
+pub fn cosine_similarity_tri_fold<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine_similarity_tri_fold(y)
+}
