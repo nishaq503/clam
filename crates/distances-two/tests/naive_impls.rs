@@ -51,7 +51,6 @@ macro_rules! check_distances {
 
         assert_dist_eq!($x, $y, dot, distances_two::vectors::dot_product, $tol);
         assert_dist_eq!($x, $y, cosine, distances_two::vectors::cosine, $tol);
-        assert_dist_eq!($x, $y, cosine, distances_two::vectors::cosine_tri_fold, $tol);
 
         let e_norm_l2_x = naive_impls::norm_l2($x);
         let a_norm_l2_x = distances_two::vectors::norm_l2($x);

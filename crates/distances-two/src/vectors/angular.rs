@@ -11,15 +11,6 @@ where
     T::one() - cosine_similarity(a, b)
 }
 
-/// The cosine distance between two vectors using a single pass over the vectors.
-pub fn cosine_tri_fold<S, T>(a: &S, b: &S) -> T
-where
-    S: AsRef<[T]>,
-    T: num_traits::Float,
-{
-    T::one() - cosine_similarity_tri_fold(a, b)
-}
-
 /// The cosine distance between two vectors that have been L2-normalized.
 ///
 /// If the vectors have not been normalized, the result will be nonsensical. Use [`cosine`] instead.
@@ -35,24 +26,6 @@ where
 ///
 /// This is defined as the dot product of the vectors divided by the product of their magnitudes.
 pub fn cosine_similarity<S, T>(a: &S, b: &S) -> T
-where
-    S: AsRef<[T]>,
-    T: num_traits::Float,
-{
-    let ab = dot_product(a, b);
-    if ab.is_zero() {
-        T::zero()
-    } else {
-        let aa_sq = super::norm_l2_sq(a);
-        let bb_sq = super::norm_l2_sq(b);
-        ab / (aa_sq * bb_sq).sqrt()
-    }
-}
-
-/// The cosine similarity between two vectors using a single pass over the vectors.
-///
-/// This is defined as the dot product of the vectors divided by the product of their magnitudes.
-pub fn cosine_similarity_tri_fold<S, T>(a: &S, b: &S) -> T
 where
     S: AsRef<[T]>,
     T: num_traits::Float,
