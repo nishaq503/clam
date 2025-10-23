@@ -35,8 +35,8 @@ pub fn gen_data<F: num_traits::Float + SampleUniform>(
         .collect()
 }
 
-/// Helper macro to benchmark one distance function.
-macro_rules! bench_one_dist_fn {
+/// Helper macro to benchmark a distance function between two vectors.
+macro_rules! bench_dual_dist_fn {
     ($id:expr, $dim:expr, $group:expr, $data:expr, $distance_fn:expr) => {
         let id = BenchmarkId::new($id, $dim);
         $group.bench_with_input(id, &$dim, |b, _| {
@@ -55,19 +55,39 @@ macro_rules! bench_one_dist_fn {
     };
 }
 
+/// Helper macro to benchmark a distance function for a single vector.
+macro_rules! bench_self_dist_fn {
+    ($id:expr, $dim:expr, $group:expr, $data:expr, $distance_fn:expr) => {
+        let car = $data.len();
+        $group.throughput(criterion::Throughput::Elements(car as u64));
+
+        let id = BenchmarkId::new($id, $dim);
+        $group.bench_with_input(id, &$dim, |b, _| {
+            b.iter_with_large_drop(|| {
+                $data
+                    .iter()
+                    .map(|x| std::hint::black_box($distance_fn(x)))
+                    .collect::<Vec<_>>()
+            });
+        });
+
+        $group.throughput(criterion::Throughput::Elements((car * car) as u64));
+    };
+}
+
 /// Helper macro to benchmark SIMD distance functions.
 macro_rules! bench_simd_fns {
     ($feature:expr, $dim:expr, $group:expr, $data:expr) => {
         #[cfg(feature = $feature)]
         {
-            let simd_l2_sq_id = format!("l2_sq_{}", $feature);
-            bench_one_dist_fn!(&simd_l2_sq_id, $dim, $group, $data, distances_two::simd::euclidean_sq);
-
             let simd_l2_id = format!("l2_{}", $feature);
-            bench_one_dist_fn!(&simd_l2_id, $dim, $group, $data, distances_two::simd::euclidean);
+            bench_dual_dist_fn!(&simd_l2_id, $dim, $group, $data, distances_two::simd::euclidean);
 
             let simd_dot_id = format!("dot_{}", $feature);
-            bench_one_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
+            bench_dual_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
+
+            let simd_norm_id = format!("norm_{}", $feature);
+            bench_self_dist_fn!(&simd_norm_id, $dim, $group, $data, distances_two::simd::norm_l2);
         }
     };
 }
@@ -86,21 +106,15 @@ macro_rules! bench_many_dist_fns {
 
         for &dim in &dims {
             let data = gen_data::<$type>($car, dim, 1.0, 2.0, $seed);
-            bench_one_dist_fn!(
-                "l2_sq_naive",
-                dim,
-                &mut group,
-                data,
-                distances_two::vectors::euclidean_sq
-            );
-            bench_one_dist_fn!("l2_naive", dim, &mut group, data, distances_two::vectors::euclidean);
-            bench_one_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
+            bench_dual_dist_fn!("l2_naive", dim, &mut group, data, distances_two::vectors::euclidean);
+            bench_dual_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
+            bench_self_dist_fn!("norm_naive", dim, &mut group, data, distances_two::vectors::norm_l2);
 
             #[cfg(feature = "blas")]
             {
-                bench_one_dist_fn!("l2_sq_blas", dim, &mut group, data, distances_two::blas::euclidean_sq);
-                bench_one_dist_fn!("l2_blas", dim, &mut group, data, distances_two::blas::euclidean);
-                bench_one_dist_fn!("dot_blas", dim, &mut group, data, distances_two::blas::dot_product);
+                bench_dual_dist_fn!("l2_blas", dim, &mut group, data, distances_two::blas::euclidean);
+                bench_dual_dist_fn!("dot_blas", dim, &mut group, data, distances_two::blas::dot_product);
+                bench_self_dist_fn!("norm_blas", dim, &mut group, data, distances_two::blas::norm_l2);
             }
 
             bench_simd_fns!("simd-128", dim, &mut group, data);

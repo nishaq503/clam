@@ -46,3 +46,13 @@ pub fn euclidean<S: Simd>(x: S, y: S) -> S::Inner {
 pub fn dot_product<S: Simd>(x: S, y: S) -> S::Inner {
     x.dot_product(y)
 }
+
+/// SIMD accelerated Squared L2 norm of a vector.
+pub fn norm_l2_sq<S: Simd>(x: S) -> S::Inner {
+    x.norm_l2_sq()
+}
+
+/// SIMD accelerated L2 norm of a vector.
+pub fn norm_l2<S: Simd>(x: S) -> S::Inner {
+    x.norm_l2()
+}

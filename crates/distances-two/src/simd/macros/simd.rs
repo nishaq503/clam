@@ -24,6 +24,12 @@ pub trait Simd: private::Sealed {
 
     /// Dot product between two vectors.
     fn dot_product(self, other: Self) -> Self::Inner;
+
+    /// Squared L2 norm of a vector.
+    fn norm_l2_sq(self) -> Self::Inner;
+
+    /// L2 norm of a vector.
+    fn norm_l2(self) -> Self::Inner;
 }
 
 /// Macro to implement the SIMD trait for a given SIMD type, underlying scalar type, and array type
@@ -42,11 +48,8 @@ macro_rules! impl_simd {
                     .by_ref()
                     .map(<$outer>::from_slice)
                     .zip(b_chunks.by_ref().map(<$outer>::from_slice))
-                    .map(|(a, b)| {
-                        let diff = a - b;
-                        diff * diff
-                    })
-                    .fold(<$outer>::splat(0.0), |acc, x| acc + x)
+                    .map(|(a, b)| a - b)
+                    .fold(<$outer>::splat(0.0), |acc, diff| diff * diff + acc)
                     .horizontal_add();
 
                 let rem = crate::vectors::euclidean_sq(&a_chunks.remainder(), &b_chunks.remainder());
@@ -55,7 +58,7 @@ macro_rules! impl_simd {
             }
 
             fn euclidean(self, other: Self) -> Self::Inner {
-                crate::simd::Simd::squared_euclidean(self, other).sqrt()
+                self.squared_euclidean(other).sqrt()
             }
 
             fn dot_product(self, other: Self) -> Self::Inner {
@@ -68,13 +71,30 @@ macro_rules! impl_simd {
                     .by_ref()
                     .map(<$outer>::from_slice)
                     .zip(b_chunks.by_ref().map(<$outer>::from_slice))
-                    .map(|(a, b)| a * b)
-                    .fold(<$outer>::splat(0.0), |acc, x| acc + x)
+                    .fold(<$outer>::splat(0.0), |acc, (a, b)| a * b + acc)
                     .horizontal_add();
 
                 let rem = crate::vectors::dot_product(&a_chunks.remainder(), &b_chunks.remainder());
 
                 sum + rem
+            }
+
+            fn norm_l2_sq(self) -> Self::Inner {
+                let mut chunks = self.chunks_exact(<$outer>::lanes());
+
+                let sum = chunks
+                    .by_ref()
+                    .map(<$outer>::from_slice)
+                    .fold(<$outer>::splat(0.0), |acc, a| a * a + acc)
+                    .horizontal_add();
+
+                let rem = crate::vectors::norm_l2_sq(&chunks.remainder());
+
+                sum + rem
+            }
+
+            fn norm_l2(self) -> Self::Inner {
+                self.norm_l2_sq().sqrt()
             }
         }
     };

@@ -18,6 +18,20 @@ macro_rules! assert_dist_eq {
     }};
 }
 
+/// A macro that expands to distance equality assertions.
+macro_rules! assert_self_dist_eq {
+    ($x:expr, $naive_fn:ident, $dist_fn:expr, $tol:expr) => {{
+        let e_dist = naive_impls::$naive_fn($x);
+        let a_dist = $dist_fn($x);
+        let ratio = if e_dist == 0.0 {
+            0.0
+        } else {
+            (e_dist - a_dist).abs() / e_dist.abs()
+        };
+        assert_float_eq!(ratio, 0.0, abs <= $tol);
+    }};
+}
+
 /// Asserts that several distance functions produce approximately equal results.
 macro_rules! check_distances {
     ($x:expr, $y:expr, $tol:expr) => {

@@ -21,16 +21,20 @@ fn blas_distances(car: usize, dim: usize) {
     let data = naive_impls::gen_data::<f32>(car, dim, -1.0, 1.0, seed);
     for x in &data {
         for y in &data {
-            assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5_f32);
-            assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5_f32);
+            assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5);
+            assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5);
+            assert_self_dist_eq!(x, norm_l2, distances_two::blas::norm_l2, 1e-5);
+            assert_self_dist_eq!(y, norm_l2, distances_two::blas::norm_l2, 1e-5);
         }
     }
 
     let data = naive_impls::gen_data::<f64>(car, dim, -1.0, 1.0, seed);
     for x in &data {
         for y in &data {
-            assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5_f64);
-            assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5_f64);
+            assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5);
+            assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5);
+            assert_self_dist_eq!(x, norm_l2, distances_two::blas::norm_l2, 1e-5);
+            assert_self_dist_eq!(y, norm_l2, distances_two::blas::norm_l2, 1e-5);
         }
     }
 }

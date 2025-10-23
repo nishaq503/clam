@@ -34,8 +34,8 @@ where
     if ab.is_zero() {
         T::zero()
     } else {
-        let aa_sq = super::sq_norm_l2(a);
-        let bb_sq = super::sq_norm_l2(b);
+        let aa_sq = super::norm_l2_sq(a);
+        let bb_sq = super::norm_l2_sq(b);
         ab / (aa_sq * bb_sq).sqrt()
     }
 }

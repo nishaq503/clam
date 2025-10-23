@@ -80,7 +80,7 @@ where
 }
 
 /// Squared L2-norm (Squared Euclidean norm) of a vector.
-pub fn sq_norm_l2<S, T>(x: &S) -> T
+pub fn norm_l2_sq<S, T>(x: &S) -> T
 where
     S: AsRef<[T]>,
     T: num_traits::Float,
@@ -94,5 +94,5 @@ where
     S: AsRef<[T]>,
     T: num_traits::Float,
 {
-    sq_norm_l2(x).sqrt()
+    norm_l2_sq(x).sqrt()
 }
