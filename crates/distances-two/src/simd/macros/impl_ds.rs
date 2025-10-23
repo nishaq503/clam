@@ -125,11 +125,25 @@ macro_rules! impl_simd {
             type Output = $ty;
 
             fn squared_euclidean(self, other: Self) -> Self::Output {
-                if self.len() < $name::lanes() {
-                    crate::simd::Naive::squared_euclidean(self, other)
-                } else {
-                    $name::squared_euclidean(self, other)
-                }
+                debug_assert_eq!(self.len(), other.len());
+
+                let mut a_chunks = self.chunks_exact($name::lanes());
+                let mut b_chunks = other.chunks_exact($name::lanes());
+
+                let sum = a_chunks
+                    .by_ref()
+                    .map($name::from_slice)
+                    .zip(b_chunks.by_ref().map($name::from_slice))
+                    .map(|(a, b)| {
+                        let diff = a - b;
+                        diff * diff
+                    })
+                    .fold($name::splat(0.0), |acc, x| acc + x)
+                    .horizontal_add();
+
+                let rem = crate::vectors::euclidean_sq(&a_chunks.remainder(), &b_chunks.remainder());
+
+                sum + rem
             }
 
             fn euclidean(self, other: Self) -> Self::Output {
@@ -137,11 +151,22 @@ macro_rules! impl_simd {
             }
 
             fn dot_product(self, other: Self) -> Self::Output {
-                if self.len() < $name::lanes() {
-                    crate::simd::Naive::dot_product(self, other)
-                } else {
-                    $name::dot_product(self, other)
-                }
+                debug_assert_eq!(self.len(), other.len());
+
+                let mut a_chunks = self.chunks_exact($name::lanes());
+                let mut b_chunks = other.chunks_exact($name::lanes());
+
+                let sum = a_chunks
+                    .by_ref()
+                    .map($name::from_slice)
+                    .zip(b_chunks.by_ref().map($name::from_slice))
+                    .map(|(a, b)| a * b)
+                    .fold($name::splat(0.0), |acc, x| acc + x)
+                    .horizontal_add();
+
+                let rem = crate::vectors::dot_product(&a_chunks.remainder(), &b_chunks.remainder());
+
+                sum + rem
             }
         }
     };

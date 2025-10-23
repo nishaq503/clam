@@ -10,6 +10,8 @@ pub fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measure
     let n_elements = car * car;
     group.throughput(criterion::Throughput::Elements(n_elements as u64));
 
+    group.sample_size(30);
+
     let plot_config = criterion::PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
     group.plot_config(plot_config);
 }
@@ -58,11 +60,14 @@ macro_rules! bench_simd_fns {
     ($feature:expr, $dim:expr, $group:expr, $data:expr) => {
         #[cfg(feature = $feature)]
         {
-            let simd_sq_id = format!("l2_sq_{}", $feature);
-            bench_one_dist_fn!(&simd_sq_id, $dim, $group, $data, distances_two::simd::euclidean_sq);
+            let simd_l2_sq_id = format!("l2_sq_{}", $feature);
+            bench_one_dist_fn!(&simd_l2_sq_id, $dim, $group, $data, distances_two::simd::euclidean_sq);
 
-            let simd_id = format!("l2_{}", $feature);
-            bench_one_dist_fn!(&simd_id, $dim, $group, $data, distances_two::simd::euclidean);
+            let simd_l2_id = format!("l2_{}", $feature);
+            bench_one_dist_fn!(&simd_l2_id, $dim, $group, $data, distances_two::simd::euclidean);
+
+            let simd_dot_id = format!("dot_{}", $feature);
+            bench_one_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
         }
     };
 }
@@ -89,11 +94,13 @@ macro_rules! bench_many_dist_fns {
                 distances_two::vectors::euclidean_sq
             );
             bench_one_dist_fn!("l2_naive", dim, &mut group, data, distances_two::vectors::euclidean);
+            bench_one_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
 
             #[cfg(feature = "blas")]
             {
                 bench_one_dist_fn!("l2_sq_blas", dim, &mut group, data, distances_two::blas::euclidean_sq);
                 bench_one_dist_fn!("l2_blas", dim, &mut group, data, distances_two::blas::euclidean);
+                bench_one_dist_fn!("dot_blas", dim, &mut group, data, distances_two::blas::dot_product);
             }
 
             bench_simd_fns!("simd-128", dim, &mut group, data);
@@ -108,8 +115,8 @@ macro_rules! bench_many_dist_fns {
 
 fn vector_distances(c: &mut Criterion) {
     let seed = 42_u64;
-    let car = 200; // Number of vectors to compare. The number of distance computations is car^2.
-    let max_dim_pow = 3_u32; // Up to 8000 dimensions.
+    let car = 500; // Number of vectors to compare. The number of distance computations is car^2.
+    let max_dim_pow = 0_u32; // Max dimension is 1000 * 2^max_dim_pow.
 
     bench_many_dist_fns!(seed, car, max_dim_pow, f32, c);
     bench_many_dist_fns!(seed, car, max_dim_pow, f64, c);

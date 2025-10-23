@@ -44,3 +44,8 @@ pub fn euclidean_sq<S: SIMD>(x: S, y: S) -> S::Output {
 pub fn euclidean<S: SIMD>(x: S, y: S) -> S::Output {
     x.euclidean(y)
 }
+
+/// SIMD accelerated dot product between two vectors.
+pub fn dot_product<S: SIMD>(x: S, y: S) -> S::Output {
+    x.dot_product(y)
+}

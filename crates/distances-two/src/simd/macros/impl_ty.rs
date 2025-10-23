@@ -10,16 +10,11 @@ macro_rules! define_ty {
 
 /// Macros for implementing minimal SIMD type functionality
 macro_rules! impl_minimal {
-    ($id:ident, $elem_ty:ident, $elem_count:expr, $($elem_name:ident),+) => {
+    ($id:ident, $elem_ty:ty, $n_lanes:expr, $($elem_name:ident),+) => {
         impl $id {
             #[inline]
-            pub const fn new($($elem_name: $elem_ty),*) -> Self {
-                $id($($elem_name),*)
-            }
-
-            #[inline]
             pub const fn lanes() -> usize {
-                $elem_count
+                $n_lanes
             }
 
              pub const fn splat(value: $elem_ty) -> Self {
