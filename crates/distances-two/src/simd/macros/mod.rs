@@ -3,10 +3,10 @@
 #![expect(unused_macros)]
 
 #[macro_use]
-pub mod impl_ds;
+pub mod ops;
 
 #[macro_use]
-pub mod impl_op;
+pub mod simd;
 
 #[macro_use]
-pub mod impl_ty;
+pub mod types;

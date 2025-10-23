@@ -18,6 +18,8 @@ assert_unique_feature!("simd-128", "simd-256", "simd-512", "simd-1024");
 #[macro_use]
 mod macros;
 
+pub(crate) use macros::simd::Simd;
+
 #[cfg(feature = "simd-128")]
 pub(crate) mod simd_128;
 
@@ -30,22 +32,17 @@ pub(crate) mod simd_512;
 #[cfg(feature = "simd-1024")]
 pub(crate) mod simd_1024;
 
-mod traits;
-
-pub(crate) use traits::Naive;
-pub use traits::SIMD;
-
 /// SIMD accelerated squared Euclidean distance between two vectors.
-pub fn euclidean_sq<S: SIMD>(x: S, y: S) -> S::Output {
+pub fn euclidean_sq<S: Simd>(x: S, y: S) -> S::Inner {
     x.squared_euclidean(y)
 }
 
 /// SIMD accelerated Euclidean distance between two vectors.
-pub fn euclidean<S: SIMD>(x: S, y: S) -> S::Output {
+pub fn euclidean<S: Simd>(x: S, y: S) -> S::Inner {
     x.euclidean(y)
 }
 
 /// SIMD accelerated dot product between two vectors.
-pub fn dot_product<S: SIMD>(x: S, y: S) -> S::Output {
+pub fn dot_product<S: Simd>(x: S, y: S) -> S::Inner {
     x.dot_product(y)
 }

@@ -2,10 +2,10 @@
 
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-define_ty!(
+define_type!(
     F64x16, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64, f64
 );
-impl_minimal!(
+impl_type!(
     F64x16, f64, 16, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15
 );
 
@@ -52,8 +52,6 @@ impl_op16!(Add, add, F64x16, +);
 impl_op16!(assn AddAssign, add_assign, F64x16, +=);
 impl_op16!(Sub, sub, F64x16, -);
 impl_op16!(assn SubAssign, sub_assign, F64x16, -=);
-
-impl_distances!(F64x16, f64);
 
 impl_simd!(F64x16, f64, &[f64]);
 impl_simd!(F64x16, f64, &Vec<f64>);

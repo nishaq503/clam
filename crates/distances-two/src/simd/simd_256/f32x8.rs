@@ -2,8 +2,8 @@
 
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-define_ty!(F32x8, f32, f32, f32, f32, f32, f32, f32, f32);
-impl_minimal!(F32x8, f32, 8, x0, x1, x2, x3, x4, x5, x6, x7);
+define_type!(F32x8, f32, f32, f32, f32, f32, f32, f32, f32);
+impl_type!(F32x8, f32, 8, x0, x1, x2, x3, x4, x5, x6, x7);
 
 impl F32x8 {
     /// Create a new `F32x8` from a slice.
@@ -32,8 +32,6 @@ impl_op8!(Add, add, F32x8, +);
 impl_op8!(assn AddAssign, add_assign, F32x8, +=);
 impl_op8!(Sub, sub, F32x8, -);
 impl_op8!(assn SubAssign, sub_assign, F32x8, -=);
-
-impl_distances!(F32x8, f32);
 
 impl_simd!(F32x8, f32, &[f32]);
 impl_simd!(F32x8, f32, &Vec<f32>);

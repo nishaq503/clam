@@ -2,8 +2,8 @@
 
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-define_ty!(F64x4, f64, f64, f64, f64);
-impl_minimal!(F64x4, f64, 4, x0, x1, x2, x3);
+define_type!(F64x4, f64, f64, f64, f64);
+impl_type!(F64x4, f64, 4, x0, x1, x2, x3);
 
 impl F64x4 {
     /// Create a new `F64x4` from a slice.
@@ -30,8 +30,6 @@ impl_op4!(Add, add, F64x4, +);
 impl_op4!(assn AddAssign, add_assign, F64x4, +=);
 impl_op4!(Sub, sub, F64x4, -);
 impl_op4!(assn SubAssign, sub_assign, F64x4, -=);
-
-impl_distances!(F64x4, f64);
 
 impl_simd!(F64x4, f64, &[f64]);
 impl_simd!(F64x4, f64, &Vec<f64>);
