@@ -56,3 +56,23 @@ pub fn norm_l2_sq<S: Simd>(x: S) -> S::Inner {
 pub fn norm_l2<S: Simd>(x: S) -> S::Inner {
     x.norm_l2()
 }
+
+/// SIMD accelerated Cosine distance between two vectors.
+pub fn cosine<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine(y)
+}
+
+/// SIMD accelerated Cosine similarity between two vectors.
+pub fn cosine_similarity<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine_similarity(y)
+}
+
+/// SIMD accelerated Cosine distance between two vectors that have unit L2 norm.
+pub fn cosine_normalized<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine_normalized(y)
+}
+
+/// SIMD accelerated Cosine similarity between two vectors that have unit L2 norm.
+pub fn cosine_similarity_normalized<S: Simd>(x: S, y: S) -> S::Inner {
+    x.cosine_similarity_normalized(y)
+}

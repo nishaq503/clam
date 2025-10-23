@@ -86,6 +86,9 @@ macro_rules! bench_simd_fns {
             let simd_dot_id = format!("dot_{}", $feature);
             bench_dual_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
 
+            let simd_cosine_id = format!("cosine_{}", $feature);
+            bench_dual_dist_fn!(&simd_cosine_id, $dim, $group, $data, distances_two::simd::cosine);
+
             let simd_norm_id = format!("norm_{}", $feature);
             bench_self_dist_fn!(&simd_norm_id, $dim, $group, $data, distances_two::simd::norm_l2);
         }
@@ -108,12 +111,14 @@ macro_rules! bench_many_dist_fns {
             let data = gen_data::<$type>($car, dim, 1.0, 2.0, $seed);
             bench_dual_dist_fn!("l2_naive", dim, &mut group, data, distances_two::vectors::euclidean);
             bench_dual_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
+            bench_dual_dist_fn!("cosine_naive", dim, &mut group, data, distances_two::vectors::cosine);
             bench_self_dist_fn!("norm_naive", dim, &mut group, data, distances_two::vectors::norm_l2);
 
             #[cfg(feature = "blas")]
             {
                 bench_dual_dist_fn!("l2_blas", dim, &mut group, data, distances_two::blas::euclidean);
                 bench_dual_dist_fn!("dot_blas", dim, &mut group, data, distances_two::blas::dot_product);
+                bench_dual_dist_fn!("cosine_blas", dim, &mut group, data, distances_two::blas::cosine);
                 bench_self_dist_fn!("norm_blas", dim, &mut group, data, distances_two::blas::norm_l2);
             }
 

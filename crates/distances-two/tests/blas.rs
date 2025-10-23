@@ -23,6 +23,7 @@ fn blas_distances(car: usize, dim: usize) {
         for y in &data {
             assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5);
             assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5);
+            assert_dist_eq!(x, y, cosine, distances_two::blas::cosine, 1e-5);
             assert_self_dist_eq!(x, norm_l2, distances_two::blas::norm_l2, 1e-5);
             assert_self_dist_eq!(y, norm_l2, distances_two::blas::norm_l2, 1e-5);
         }
@@ -33,6 +34,7 @@ fn blas_distances(car: usize, dim: usize) {
         for y in &data {
             assert_dist_eq!(x, y, l2_sq, distances_two::blas::euclidean_sq, 1e-5);
             assert_dist_eq!(x, y, l2, distances_two::blas::euclidean, 1e-5);
+            assert_dist_eq!(x, y, cosine, distances_two::blas::cosine, 1e-5);
             assert_self_dist_eq!(x, norm_l2, distances_two::blas::norm_l2, 1e-5);
             assert_self_dist_eq!(y, norm_l2, distances_two::blas::norm_l2, 1e-5);
         }

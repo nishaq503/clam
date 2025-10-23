@@ -30,6 +30,18 @@ pub trait Simd: private::Sealed {
 
     /// L2 norm of a vector.
     fn norm_l2(self) -> Self::Inner;
+
+    /// Cosine distance between two vectors.
+    fn cosine(self, other: Self) -> Self::Inner;
+
+    /// Cosine similarity between two vectors.
+    fn cosine_similarity(self, other: Self) -> Self::Inner;
+
+    /// Cosine distance between two vectors that have unit L2 norm.
+    fn cosine_normalized(self, other: Self) -> Self::Inner;
+
+    /// Cosine similarity between two vectors that have unit L2 norm.
+    fn cosine_similarity_normalized(self, other: Self) -> Self::Inner;
 }
 
 /// Macro to implement the SIMD trait for a given SIMD type, underlying scalar type, and array type
@@ -95,6 +107,29 @@ macro_rules! impl_simd {
 
             fn norm_l2(self) -> Self::Inner {
                 self.norm_l2_sq().sqrt()
+            }
+
+            fn cosine(self, other: Self) -> Self::Inner {
+                1.0 - self.cosine_similarity(other)
+            }
+
+            fn cosine_similarity(self, other: Self) -> Self::Inner {
+                let ab = self.dot_product(other);
+                if ab == 0.0 {
+                    0.0
+                } else {
+                    let aa = self.norm_l2_sq();
+                    let bb = other.norm_l2_sq();
+                    ab / (aa * bb).sqrt()
+                }
+            }
+
+            fn cosine_normalized(self, other: Self) -> Self::Inner {
+                1.0 - self.cosine_similarity_normalized(other)
+            }
+
+            fn cosine_similarity_normalized(self, other: Self) -> Self::Inner {
+                self.dot_product(other)
             }
         }
     };
