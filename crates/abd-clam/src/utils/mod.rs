@@ -11,11 +11,11 @@ pub use ord_items::{MaxItem, MinItem};
 pub use sized_heap::SizedHeap;
 
 /// The golden ratio `φ = (1 + √5) / 2`
-#[expect(clippy::excessive_precision)]
+#[allow(clippy::excessive_precision)]
 pub const PHI_F64: f64 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f64;
 
 /// The golden ratio `φ = (1 + √5) / 2`
-#[expect(clippy::excessive_precision)]
+#[allow(clippy::excessive_precision)]
 pub const PHI_F32: f32 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f32;
 
 // /// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.

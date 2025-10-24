@@ -18,6 +18,58 @@ macro_rules! assert_dist_eq {
     }};
 }
 
+/// A macro that expands to distance equality assertions with SIMD lanes.
+macro_rules! assert_dist_lanes_eq {
+    ($x:expr, $y:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty, $lanes:expr) => {{
+        let e_dist = naive_impls::$naive_fn::<$ty>($x, $y);
+        let a_dist = distances_two::std_simd::$dist_fn::<$ty, _, $lanes>($x, $y);
+        let ratio = if e_dist == 0.0 {
+            0.0
+        } else {
+            (e_dist - a_dist).abs() / e_dist.abs()
+        };
+        assert_float_eq!(ratio, 0.0, abs <= $tol);
+    }};
+}
+
+/// A macro that expands to distance equality assertions with SIMD lanes.
+macro_rules! assert_self_dist_lanes_eq {
+    ($x:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty, $lanes:expr) => {{
+        let e_dist = naive_impls::$naive_fn::<$ty>($x);
+        let a_dist = distances_two::std_simd::$dist_fn::<$ty, _, $lanes>($x);
+        let ratio = if e_dist == 0.0 {
+            0.0
+        } else {
+            (e_dist - a_dist).abs() / e_dist.abs()
+        };
+        assert_float_eq!(ratio, 0.0, abs <= $tol);
+    }};
+}
+
+/// A macro that expands to distance equality assertions with SIMD lanes.
+macro_rules! assert_simd_dist_eq {
+    ($x:expr, $y:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty) => {{
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 2);
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 4);
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 8);
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 16);
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 32);
+        assert_dist_lanes_eq!($x, $y, $naive_fn, $dist_fn, $tol, $ty, 64);
+    }};
+}
+
+/// A macro that expands to distance equality assertions with SIMD lanes.
+macro_rules! assert_simd_self_dist_eq {
+    ($x:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty) => {{
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 2);
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 4);
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 8);
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 16);
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 32);
+        assert_self_dist_lanes_eq!($x, $naive_fn, $dist_fn, $tol, $ty, 64);
+    }};
+}
+
 /// A macro that expands to distance equality assertions.
 macro_rules! assert_self_dist_eq {
     ($x:expr, $naive_fn:ident, $dist_fn:expr, $tol:expr) => {{

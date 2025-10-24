@@ -1,5 +1,7 @@
 //! Strategy for partitioning a `Cluster` into child clusters.
 
+#![allow(clippy::derivable_impls)]
+
 use crate::{DistanceValue, utils::MinItem};
 
 use super::Cluster;

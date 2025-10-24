@@ -10,7 +10,7 @@ pub fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measure
     let n_elements = car * car;
     group.throughput(criterion::Throughput::Elements(n_elements as u64));
 
-    group.sample_size(30);
+    group.sample_size(10);
 
     let plot_config = criterion::PlotConfiguration::default().summary_scale(criterion::AxisScale::Logarithmic);
     group.plot_config(plot_config);
@@ -55,6 +55,26 @@ macro_rules! bench_dual_dist_fn {
     };
 }
 
+/// Helper macro to benchmark a distance function between two vectors.
+macro_rules! bench_dual_dist_lanes_fn {
+    ($id:expr, $dim:expr, $group:expr, $data:expr, $distance_fn:ident, $lanes:expr) => {
+        let id = BenchmarkId::new($id, $dim);
+        $group.bench_with_input(id, &$dim, |b, _| {
+            b.iter_with_large_drop(|| {
+                $data
+                    .iter()
+                    .map(|x| {
+                        $data
+                            .iter()
+                            .map(|y| std::hint::black_box(distances_two::std_simd::$distance_fn::<_, _, $lanes>(x, y)))
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            });
+        });
+    };
+}
+
 /// Helper macro to benchmark a distance function for a single vector.
 macro_rules! bench_self_dist_fn {
     ($id:expr, $dim:expr, $group:expr, $data:expr, $distance_fn:expr) => {
@@ -83,14 +103,21 @@ macro_rules! bench_simd_fns {
             let simd_l2_id = format!("l2_{}", $feature);
             bench_dual_dist_fn!(&simd_l2_id, $dim, $group, $data, distances_two::simd::euclidean);
 
-            let simd_dot_id = format!("dot_{}", $feature);
-            bench_dual_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
+            // let simd_dot_id = format!("dot_{}", $feature);
+            // bench_dual_dist_fn!(&simd_dot_id, $dim, $group, $data, distances_two::simd::dot_product);
 
-            let simd_cosine_id = format!("cosine_{}", $feature);
-            bench_dual_dist_fn!(&simd_cosine_id, $dim, $group, $data, distances_two::simd::cosine);
+            // let simd_cosine_id = format!("cosine_{}", $feature);
+            // bench_dual_dist_fn!(&simd_cosine_id, $dim, $group, $data, distances_two::simd::cosine);
 
-            let simd_norm_id = format!("norm_{}", $feature);
-            bench_self_dist_fn!(&simd_norm_id, $dim, $group, $data, distances_two::simd::norm_l2);
+            // let simd_norm_id = format!("norm_{}", $feature);
+            // bench_self_dist_fn!(&simd_norm_id, $dim, $group, $data, distances_two::simd::norm_l2);
+
+            // Lane-specific benchmarks.
+            bench_dual_dist_lanes_fn!("l2_lanes_4", $dim, $group, $data, euclidean, 4);
+            bench_dual_dist_lanes_fn!("l2_lanes_8", $dim, $group, $data, euclidean, 8);
+            bench_dual_dist_lanes_fn!("l2_lanes_16", $dim, $group, $data, euclidean, 16);
+            bench_dual_dist_lanes_fn!("l2_lanes_32", $dim, $group, $data, euclidean, 32);
+            bench_dual_dist_lanes_fn!("l2_lanes_64", $dim, $group, $data, euclidean, 64);
         }
     };
 }
@@ -110,9 +137,9 @@ macro_rules! bench_many_dist_fns {
         for &dim in &dims {
             let data = gen_data::<$type>($car, dim, 1.0, 2.0, $seed);
             bench_dual_dist_fn!("l2_naive", dim, &mut group, data, distances_two::vectors::euclidean);
-            bench_dual_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
-            bench_dual_dist_fn!("cosine_naive", dim, &mut group, data, distances_two::vectors::cosine);
-            bench_self_dist_fn!("norm_naive", dim, &mut group, data, distances_two::vectors::norm_l2);
+            // bench_dual_dist_fn!("dot_naive", dim, &mut group, data, distances_two::vectors::dot_product);
+            // bench_dual_dist_fn!("cosine_naive", dim, &mut group, data, distances_two::vectors::cosine);
+            // bench_self_dist_fn!("norm_naive", dim, &mut group, data, distances_two::vectors::norm_l2);
 
             #[cfg(feature = "blas")]
             {
@@ -134,8 +161,8 @@ macro_rules! bench_many_dist_fns {
 
 fn vector_distances(c: &mut Criterion) {
     let seed = 42_u64;
-    let car = 500; // Number of vectors to compare. The number of distance computations is car^2.
-    let max_dim_pow = 0_u32; // Max dimension is 1000 * 2^max_dim_pow.
+    let car = 100; // Number of vectors to compare. The number of distance computations is car^2.
+    let max_dim_pow = 5_u32; // Max dimension is 1000 * 2^max_dim_pow.
 
     bench_many_dist_fns!(seed, car, max_dim_pow, f32, c);
     bench_many_dist_fns!(seed, car, max_dim_pow, f64, c);
