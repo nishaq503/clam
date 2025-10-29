@@ -89,8 +89,8 @@ def gen_ratios(
         ratios_df.to_parquet(ratios_path)
     else:
         typer.echo(f"Loading memos and ratios from {data_dir}")
-        memos_df = pandas.read_parquet(memos_path)  # type: ignore
-        ratios_df = pandas.read_parquet(ratios_path)  # type: ignore
+        memos_df = pandas.read_parquet(memos_path)
+        ratios_df = pandas.read_parquet(ratios_path)
 
     typer.echo(f"Memos shape: {memos_df.shape}, Ratios shape: {ratios_df.shape}")
     typer.echo(f"Memos info:\n{memos_df.info()}")
