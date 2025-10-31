@@ -1,6 +1,5 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
-use rand::prelude::*;
 use rayon::prelude::*;
 
 use crate::DistanceValue;
@@ -12,11 +11,11 @@ pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFact
 /// A tree structure used in CLAM for organizing items based on a given metric.
 pub struct Tree<Id, I, T, A, M> {
     /// The items stored in the tree, each paired with its identifier.
-    items: Vec<(Id, I)>,
+    pub(crate) items: Vec<(Id, I)>,
     /// The root cluster of the tree.
-    root: Cluster<T, A>,
+    pub(crate) root: Cluster<T, A>,
     /// The metric used to compute distances between items.
-    metric: M,
+    pub(crate) metric: M,
 }
 
 impl<I, T, M> Tree<usize, I, T, (), M>
@@ -200,6 +199,11 @@ where
         &self.root
     }
 
+    /// Returns the number of items stored in the tree.
+    pub const fn cardinality(&self) -> usize {
+        self.items.len()
+    }
+
     /// Returns a reference to the metric used in the tree.
     pub const fn metric(&self) -> &M {
         &self.metric
@@ -217,26 +221,8 @@ where
         }
     }
 
-    /// Returns the number of items stored in the tree.
-    pub const fn cardinality(&self) -> usize {
-        self.items.len()
-    }
-
     /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
     pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
         self.root.subtree_preorder()
-    }
-
-    /// Clones and returns a random subset of `n` items from the tree.
-    ///
-    /// If `n` is greater than the number of items in the tree, all items are returned.
-    ///
-    /// The order of items in the returned vector is random.
-    pub fn random_subset<R: rand::Rng>(&self, n: usize, rng: &mut R) -> Vec<&I> {
-        let n = n.min(self.items.len());
-        let mut indices = (0..self.items.len()).collect::<Vec<_>>();
-        indices.shuffle(rng);
-        indices.truncate(n);
-        indices.iter().map(|&i| &self.items[i].1).collect()
     }
 }

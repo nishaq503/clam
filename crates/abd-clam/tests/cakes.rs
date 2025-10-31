@@ -2,7 +2,7 @@
 
 use abd_clam::{
     DistanceValue, Tree,
-    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
+    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
     utils::MaxItem,
 };
 

@@ -1,6 +1,10 @@
 //! K-Nearest Neighbor (KNN) search with a naive linear scan.
 
-use crate::{DistanceValue, Tree, cakes::Search, utils::SizedHeap};
+use crate::{
+    DistanceValue, Tree,
+    cakes::{ParSearch, Search},
+    utils::SizedHeap,
+};
 
 /// K-Nearest Neighbor (KNN) search with a naive linear scan.
 ///
@@ -21,7 +25,16 @@ where
         heap.extend(tree.distances_to_items_in_cluster(query, tree.root()));
         heap.take_items().collect()
     }
+}
 
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnLinear
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
     where
         Self: Send + Sync,

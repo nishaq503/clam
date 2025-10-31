@@ -2,7 +2,10 @@
 
 use std::path::PathBuf;
 
-use abd_clam::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree, cakes::selection};
+use abd_clam::{
+    BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree,
+    cakes::{KnnBfs, KnnDfs, ParSearch, selection},
+};
 use clap::Parser;
 use rand::prelude::*;
 
@@ -138,7 +141,7 @@ fn main() -> Result<(), String> {
             })?;
         }
 
-        let metric = dataset.metric_by_ip();
+        let metric = dataset.metric();
 
         ftlog::info!("Reading dataset '{}'", dataset.name());
         let mut items = dataset
@@ -148,6 +151,15 @@ fn main() -> Result<(), String> {
             .enumerate()
             .collect();
         // let mut items = utils::precompute_ips(items).into_iter().enumerate().collect();
+
+        let algorithms: Vec<Box<dyn ParSearch<_, _, _, (), _>>> = vec![
+            Box::new(KnnDfs(args.k)),
+            Box::new(KnnBfs(args.k)),
+            // Box::new(KnnRrnn(k)),
+            // Box::new(KnnBranch(k)),
+        ];
+        let algorithms = algorithms.iter().map(|alg| alg.as_ref()).collect::<Vec<_>>();
+        // let algorithms = algorithms.as_slice();
 
         for strategy in &strategies {
             let strategy = strategy.with_predicate(|b: &Cluster<f32, ()>| b.radius() > 1e-6);
@@ -171,7 +183,7 @@ fn main() -> Result<(), String> {
 
                 ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
                 let (best_alg, expected_throughput) =
-                    selection::par_select_fastest_algorithm(&tree, args.q, args.k, args.selection_time);
+                    selection::par_select_fastest_algorithm(&tree, args.q, args.selection_time, algorithms.as_slice());
                 ftlog::info!(
                     "Selected algorithm {} with expected throughput {expected_throughput:.8} queries/sec",
                     best_alg.name()

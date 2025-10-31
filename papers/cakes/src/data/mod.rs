@@ -43,9 +43,9 @@ impl AnnDataset {
         }
     }
 
-    /// Returns the metric used by the dataset, assuming the data points are represented as `(inner-product, vec)` tuples.
+    /// Returns the metric used by the dataset.
     #[allow(clippy::type_complexity)]
-    pub const fn metric_by_ip(&self) -> fn(&Vec<f32>, &Vec<f32>) -> f32 {
+    pub const fn metric(&self) -> fn(&Vec<f32>, &Vec<f32>) -> f32 {
         match self {
             Self::FashionMnist | Self::Mnist | Self::Sift | Self::Gist => |x, y| distances::simd::euclidean_f32(x, y),
             _ => |x, y| distances::simd::cosine_f32(x, y),

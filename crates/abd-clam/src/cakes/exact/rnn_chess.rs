@@ -2,7 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{Cluster, DistanceValue, Tree, cakes::Search};
+use crate::{
+    Cluster, DistanceValue, Tree,
+    cakes::{ParSearch, Search},
+};
 
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 ///
@@ -37,16 +40,17 @@ where
 
         hits
     }
+}
 
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for RnnChess<T>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let (mut hits, subsumed, straddlers) = par_tree_search(tree, tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters

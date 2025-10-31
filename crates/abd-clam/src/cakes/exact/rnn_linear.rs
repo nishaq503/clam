@@ -2,7 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, cakes::Search};
+use crate::{
+    DistanceValue, Tree,
+    cakes::{ParSearch, Search},
+};
 
 /// Ranged Nearest Neighbor (RNN) search with a naive linear scan.
 ///
@@ -24,16 +27,17 @@ where
             .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })
             .collect()
     }
+}
 
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        M: Send + Sync,
-        A: Send + Sync,
-    {
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for RnnLinear<T>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         tree.par_distances_to_items_in_cluster(query, tree.root())
             .into_par_iter()
             .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })

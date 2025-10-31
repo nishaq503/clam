@@ -4,7 +4,7 @@ use std::path::Path;
 
 use abd_clam::{
     Tree,
-    cakes::{KnnBfs, KnnDfs, KnnRrnn, RnnChess, Search},
+    cakes::{KnnBfs, KnnDfs, KnnRrnn, ParSearch, RnnChess},
     utils::MaxItem,
 };
 use rayon::prelude::*;

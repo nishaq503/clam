@@ -28,51 +28,92 @@ where
     /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
 
-    /// Parallel version of [`Search::search`].
-    ///
-    /// The default implementation offers no parallelism. This method should be overridden for algorithms that will actually benefit from parallelism when
-    /// searching for a single query.
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        M: Send + Sync,
-        A: Send + Sync,
-    {
-        self.search(tree, query)
-    }
-
     /// Batched version of [`Search::search`].
     fn batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries.iter().map(|query| self.search(tree, query)).collect()
     }
+}
+
+// Blanket implementations of `Search` for references and boxes.
+impl<Id, I, T, A, M, Alg> Search<Id, I, T, A, M> for &Alg
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+    Alg: Search<Id, I, T, A, M>,
+{
+    fn name(&self) -> String {
+        (**self).name()
+    }
+
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        (**self).search(tree, query)
+    }
+}
+
+impl<Id, I, T, A, M, Alg> Search<Id, I, T, A, M> for Box<Alg>
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+    Alg: Search<Id, I, T, A, M>,
+{
+    fn name(&self) -> String {
+        (**self).name()
+    }
+
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        (**self).search(tree, query)
+    }
+}
+
+/// Parallel version of [`Search`].
+pub trait ParSearch<Id, I, T, A, M>: Search<Id, I, T, A, M> + Send + Sync
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    /// Parallel version of [`Search::search`].
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
 
     /// Parallel version of [`Search::batch_search`].
-    fn par_batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        M: Send + Sync,
-        A: Send + Sync,
-    {
+    fn par_batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries.par_iter().map(|query| self.search(tree, query)).collect()
     }
 
     /// Parallel batched version of [`Search::par_search`].
-    fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>>
-    where
-        Self: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: Send + Sync,
-        M: Send + Sync,
-        A: Send + Sync,
-    {
+    fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries.par_iter().map(|query| self.par_search(tree, query)).collect()
+    }
+}
+
+// Blanket implementations of `ParSearch` for references and boxes.
+impl<Id, I, T, A, M, Alg> ParSearch<Id, I, T, A, M> for &Alg
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    Alg: ParSearch<Id, I, T, A, M>,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        (**self).par_search(tree, query)
+    }
+}
+
+impl<Id, I, T, A, M, Alg> ParSearch<Id, I, T, A, M> for Box<Alg>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+    Alg: ParSearch<Id, I, T, A, M>,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        (**self).par_search(tree, query)
     }
 }
 

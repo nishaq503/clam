@@ -4,7 +4,7 @@ use std::cmp::Reverse;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{RnnChess, Search, d_max, d_min},
+    cakes::{ParSearch, RnnChess, Search, d_max, d_min},
     utils::SizedHeap,
 };
 
@@ -72,5 +72,19 @@ where
             }
         }
         hits
+    }
+}
+
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnBranch
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        // For now, just call the single-threaded search.
+        self.search(tree, query)
     }
 }

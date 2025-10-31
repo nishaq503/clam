@@ -6,7 +6,7 @@ use std::usize;
 
 use abd_clam::{
     BranchingFactor, Cluster, DistanceValue, PartitionStrategy, SpanReductionFactor, Tree,
-    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, Search, approximate, search_quality_stats},
+    cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, approximate, search_quality_stats},
 };
 use rand::prelude::*;
 
@@ -64,7 +64,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
-    Alg: Search<Id, I, T, A, M> + Send + Sync,
+    Alg: ParSearch<Id, I, T, A, M>,
 {
     let id = BenchmarkId::new(alg.name(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));

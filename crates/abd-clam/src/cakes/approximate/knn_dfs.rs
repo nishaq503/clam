@@ -4,7 +4,7 @@ use core::cmp::Reverse;
 
 use crate::{
     Cluster, DistanceValue, Tree,
-    cakes::{Search, d_max, d_min, leaf_into_hits, pop_till_leaf},
+    cakes::{ParSearch, Search, d_max, d_min, leaf_into_hits, pop_till_leaf},
     utils::SizedHeap,
 };
 
@@ -78,5 +78,19 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         }
 
         hits.take_items().collect()
+    }
+}
+
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for KnnDfs
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        // For now, just call the single-threaded search.
+        self.search(tree, query)
     }
 }
