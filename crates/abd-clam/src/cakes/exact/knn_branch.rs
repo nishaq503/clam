@@ -23,20 +23,22 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        let root = &tree.root;
+
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, tree.root());
+            return tree.distances_to_items_in_cluster(query, root);
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = tree.distance_to_center(query, tree.root());
-        candidate_radii.push((1, Reverse(d_min(tree.root(), d))));
+        let d = tree.distance_to_center(query, root);
+        candidate_radii.push((1, Reverse(d_min(root, d))));
         candidate_radii.push((tree.cardinality().half() + 1, Reverse(d)));
-        candidate_radii.push((tree.cardinality(), Reverse(d_max(tree.root(), d))));
+        candidate_radii.push((tree.cardinality(), Reverse(d_max(root, d))));
 
-        let mut latest = tree.root();
+        let mut latest = root;
         while !latest.is_leaf() {
             let (child, d) = latest
                 .children()

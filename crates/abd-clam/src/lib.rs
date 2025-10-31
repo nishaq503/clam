@@ -5,8 +5,9 @@ use core::fmt::{Debug, Display};
 
 pub mod cakes;
 pub mod codec;
+pub mod musals;
 mod tree;
-pub mod utils; // Intended for private use, but made public for testing purposes
+pub mod utils; // Intended for private use, but made public for testing
 
 pub use tree::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
 

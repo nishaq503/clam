@@ -234,7 +234,7 @@ fn aligned_x_to_y<S: AsRef<[u8]>>(x: &S, y: &S) -> Edits {
         .iter()
         .zip(y.as_ref().iter())
         .enumerate()
-        .filter(|(_, (&xc, &yc))| xc != yc)
+        .filter(|(_, (xc, yc))| xc != yc)
         .fold((0, Vec::new()), |(mut modifier, mut edits), (i, (&xc, &yc))| {
             let i = i - modifier;
             if xc == b'-' {

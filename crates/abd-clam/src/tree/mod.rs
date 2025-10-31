@@ -199,6 +199,11 @@ where
         &self.root
     }
 
+    /// Returns a mutable reference to the root cluster of the tree.
+    pub const fn root_mut(&mut self) -> &mut Cluster<T, A> {
+        &mut self.root
+    }
+
     /// Returns the number of items stored in the tree.
     pub const fn cardinality(&self) -> usize {
         self.items.len()

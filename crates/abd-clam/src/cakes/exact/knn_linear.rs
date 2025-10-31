@@ -22,7 +22,7 @@ where
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(tree.distances_to_items_in_cluster(query, tree.root()));
+        heap.extend(tree.distances_to_items_in_cluster(query, &tree.root));
         heap.take_items().collect()
     }
 }
@@ -45,7 +45,7 @@ where
         M: Send + Sync,
     {
         let mut heap = SizedHeap::new(Some(self.0));
-        heap.extend(tree.par_distances_to_items_in_cluster(query, tree.root()));
+        heap.extend(tree.par_distances_to_items_in_cluster(query, &tree.root));
         heap.take_items().collect()
     }
 }

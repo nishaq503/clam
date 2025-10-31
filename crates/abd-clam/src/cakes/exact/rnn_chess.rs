@@ -22,7 +22,7 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let (mut hits, subsumed, straddlers) = tree_search(tree, tree.root(), query, self.0);
+        let (mut hits, subsumed, straddlers) = tree_search(tree, &tree.root, query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.extend(
@@ -51,7 +51,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let (mut hits, subsumed, straddlers) = par_tree_search(tree, tree.root(), query, self.0);
+        let (mut hits, subsumed, straddlers) = par_tree_search(tree, &tree.root, query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.par_extend(

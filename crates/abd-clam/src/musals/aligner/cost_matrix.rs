@@ -8,7 +8,8 @@ use num::Integer;
 
 use crate::DistanceValue;
 
-use super::super::NUM_CHARS;
+/// The number of characters in the substitution matrix.
+const NUM_CHARS: usize = 256;
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 ///
@@ -336,11 +337,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
             let (min, max) = costs.iter().flatten().fold((i8::MAX, i8::MIN), |(min, max), &cost| {
                 (Ord::min(min, cost), Ord::max(max, cost))
             });
-            if max > min {
-                max - min
-            } else {
-                min - max
-            }
+            if max > min { max - min } else { min - max }
         };
 
         // The amino acid codes.

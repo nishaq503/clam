@@ -12,6 +12,7 @@ dependencies = [
  "distances",
  "ndarray",
  "ndarray-npy",
+ "num",
  "num-traits",
  "profi",
  "rand",
