@@ -72,25 +72,6 @@ where
     }
 }
 
-impl<T, A> deepsize::DeepSizeOf for Cluster<T, A>
-where
-    T: deepsize::DeepSizeOf,
-    A: deepsize::DeepSizeOf,
-{
-    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
-        core::mem::size_of::<usize>()  // for self.depth
-            + core::mem::size_of::<usize>()  // for self.center_index
-            + core::mem::size_of::<usize>()  // for self.cardinality
-            + self.radius.deep_size_of_children(context)
-            + core::mem::size_of::<f64>()  // for self.lfd
-            + self.children.as_ref().map_or(0, |(children, span)| {
-                span.deep_size_of_children(context)
-                    + children.iter().map(|child| child.deep_size_of_children(context)).sum::<usize>()
-            })
-            + self.annotation.deep_size_of_children(context)
-    }
-}
-
 impl<T, A> Cluster<T, A> {
     /// Returns the depth of this cluster in the tree.
     pub const fn depth(&self) -> usize {

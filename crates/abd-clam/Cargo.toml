@@ -36,7 +36,6 @@ profi = { workspace = true, default-features = false, features = ["rayon"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 bitcode = { workspace = true, features = ["derive"], optional = true }
 csv = { workspace = true, optional = true }
-deepsize = { workspace = true }  # TODO(Najib): Consider removing this dependency later.
 
 # For:
 #  - CHAODA

@@ -11,7 +11,6 @@ use abd_clam::{
 use rand::prelude::*;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use deepsize::DeepSizeOf;
 use rayon::prelude::*;
 
 mod utils;
@@ -181,21 +180,12 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
             if shuffle {
                 items.shuffle(rng);
             }
-            let items_size = items.deep_size_of();
-            println!(
-                "Dataset has cardinality {} and memory size {items_size} bytes",
-                items.len()
-            );
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
             let tree = Tree::par_new_minimal(items, metric).unwrap();
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
-            let tree_size = tree.deep_size_of();
-            println!("Tree has memory size {tree_size} bytes");
-            let tree_overhead = tree_size as f64 / items_size as f64;
-            println!("Tree overhead ratio: {tree_overhead:.8}");
 
             bench_for_ks(&mut group, &tree, &queries, multiplier, ks);
 

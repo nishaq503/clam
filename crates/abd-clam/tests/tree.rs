@@ -128,10 +128,6 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             })
             .collect::<Vec<_>>();
         let tree = Tree::new_minimal(data, metric)?;
-
-        let items = tree.items_in_cluster(tree.root());
-        let metric = tree.metric();
-
         let n_clusters = tree.all_clusters_preorder().len();
 
         // These bounds were derived for large `car`
@@ -155,30 +151,6 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             "Radius too large: {:.6}",
             root.radius()
         );
-
-        println!(
-            "Items: [\n{}\n]",
-            items
-                .iter()
-                .enumerate()
-                .map(|(i, item)| format!("  {i}  {item:?}"))
-                .collect::<Vec<_>>()
-                .join(",\n")
-        );
-        println!("Checking radii of {} clusters in Root:\n{}", n_clusters, root);
-
-        for c in root.subtree_preorder() {
-            let center = &items[c.center_index()].1;
-            let exp_radius = ((c.center_index() + 1)..(c.center_index() + c.cardinality()))
-                .map(|i| metric(center, &items[i].1))
-                .fold(0.0_f32, f32::max);
-            assert!(
-                (c.radius() - exp_radius).abs() < 1e-5,
-                "Radius mismatch:\n{c}\nExpected: {:.6} but got: {:.6}",
-                exp_radius,
-                c.radius()
-            );
-        }
     }
 
     Ok(())

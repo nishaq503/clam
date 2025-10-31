@@ -19,18 +19,6 @@ pub struct Tree<Id, I, T, A, M> {
     metric: M,
 }
 
-impl<Id, I, T, A, M> deepsize::DeepSizeOf for Tree<Id, I, T, A, M>
-where
-    Id: deepsize::DeepSizeOf,
-    I: deepsize::DeepSizeOf,
-    T: deepsize::DeepSizeOf,
-    A: deepsize::DeepSizeOf,
-{
-    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
-        self.items.deep_size_of_children(context) + self.root.deep_size_of_children(context) + core::mem::size_of::<M>()
-    }
-}
-
 impl<I, T, M> Tree<usize, I, T, (), M>
 where
     T: DistanceValue,
@@ -127,38 +115,22 @@ where
 
     /// Returns a reference to the identifier of the center item of the given cluster.
     pub fn center_id_of_cluster(&self, cluster: &Cluster<T, A>) -> &Id {
-        // SAFETY: cluster.center_index() is always a valid index into self.items
-        #[allow(unsafe_code)]
-        unsafe {
-            &self.items.get_unchecked(cluster.center_index()).0
-        }
+        &self.items[cluster.center_index()].0
     }
 
     /// Returns a reference to the center item of the given cluster.
     pub fn center_of_cluster(&self, cluster: &Cluster<T, A>) -> &I {
-        // SAFETY: cluster.center_index() is always a valid index into self.items
-        #[allow(unsafe_code)]
-        unsafe {
-            &self.items.get_unchecked(cluster.center_index()).1
-        }
+        &self.items[cluster.center_index()].1
     }
 
     /// Returns a slice of the items in the given cluster, excluding the cluster's center.
     pub fn items_in_subtree(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
-        // SAFETY: cluster.subtree_indices() are always valid indices into self.items
-        #[allow(unsafe_code)]
-        unsafe {
-            self.items.get_unchecked(cluster.subtree_indices())
-        }
+        &self.items[cluster.subtree_indices()]
     }
 
     /// Returns a slice of the items in the given cluster, including the cluster's center.
-    pub fn items_in_cluster(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
-        // SAFETY: cluster.all_items_indices() are always valid indices into self.items
-        #[allow(unsafe_code)]
-        unsafe {
-            self.items.get_unchecked(cluster.all_items_indices())
-        }
+    fn items_in_cluster(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
+        &self.items[cluster.all_items_indices()]
     }
 
     /// Returns the distance between the query item and the center of the given cluster.
