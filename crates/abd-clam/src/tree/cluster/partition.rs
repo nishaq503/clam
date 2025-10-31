@@ -10,13 +10,19 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new_root<Id, I, M, P>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>) -> Self
+    pub(crate) fn new_root<Id, I, M, P, Post>(
+        items: &mut [(Id, I)],
+        metric: &M,
+        strategy: &PartitionStrategy<P>,
+        post_process: &Post,
+    ) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
+        Post: Fn(&mut Self, &mut [(Id, I)], &M) -> Option<A>,
     {
-        Self::new(0, 0, items, metric, strategy)
+        Self::new(0, 0, items, metric, strategy, post_process)
     }
 
     /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
@@ -24,17 +30,19 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    fn new<Id, I, M, P>(
+    fn new<Id, I, M, P, Post>(
         depth: usize,
         center_index: usize,
         items: &mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,
+        post_process: &Post,
     ) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
+        Post: Fn(&mut Self, &mut [(Id, I)], &M) -> Option<A>,
     {
         let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric);
         if !strategy.should_partition(&cluster) {
@@ -109,11 +117,13 @@ impl<T, A> Cluster<T, A> {
 
         let children = child_items
             .into_iter()
-            .map(|(c_index, c_items)| Self::new(depth + 1, c_index, c_items, metric, strategy))
+            .map(|(c_index, c_items)| Self::new(depth + 1, c_index, c_items, metric, strategy, post_process))
             .collect::<Vec<_>>()
             .into_boxed_slice();
-
         cluster.children = Some((children, span));
+
+        cluster.annotation = post_process(&mut cluster, items, metric);
+
         cluster
     }
 

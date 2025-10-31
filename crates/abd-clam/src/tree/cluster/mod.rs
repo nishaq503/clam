@@ -191,8 +191,11 @@ impl<T, A> Cluster<T, A> {
     /// Changes the annotations, and their types, of this cluster and all its descendants by applying the given closure recursively in pre-order.
     ///
     /// The closure is called with a reference to each cluster before its children are processed and its return value becomes the new annotation for that cluster.
-    pub fn annotate_pre_order<B, F: FnMut(&Self) -> Option<B>>(mut self, f: &mut F) -> Cluster<T, B> {
-        let annotation = f(&self);
+    pub fn annotate_pre_order<B, F>(mut self, f: &F) -> Cluster<T, B>
+    where
+        F: Fn(&mut Self) -> Option<B>,
+    {
+        let annotation = f(&mut self);
 
         let children = self.children.take().map(|(boxed_children, span)| {
             let new_children = boxed_children
@@ -217,12 +220,12 @@ impl<T, A> Cluster<T, A> {
 
     /// Changes the annotations, and their types, of this cluster and all its descendants by applying the given closure recursively in post-order.
     ///
-    /// The closure is called with a reference to each cluster after its children have been processed, along with the previous annotation (if any). The closure's
-    /// return value becomes the new annotation for that cluster.
-    pub fn annotate_post_order<B, F: FnMut(&Cluster<T, B>, Option<A>) -> Option<B>>(
-        mut self,
-        f: &mut F,
-    ) -> Cluster<T, B> {
+    /// The closure is called with a reference to each cluster after its children have been processed, along with the previous annotation (if any). The
+    /// closure's return value becomes the new annotation for that cluster.
+    pub fn annotate_post_order<B, F>(mut self, f: &F) -> Cluster<T, B>
+    where
+        F: Fn(&mut Cluster<T, B>, Option<A>) -> B,
+    {
         let old_annotation = self.annotation.take();
 
         let children = self.children.take().map(|(boxed_children, span)| {
@@ -245,8 +248,31 @@ impl<T, A> Cluster<T, A> {
             annotation: None,
         };
 
-        cluster.annotation = f(&cluster, old_annotation);
+        cluster.annotation = Some(f(&mut cluster, old_annotation));
 
         cluster
+    }
+
+    /// Clears the annotation of this cluster and all its descendants.
+    pub fn clear_annotations(self) -> Cluster<T, ()> {
+        let children = self.children.map(|(boxed_children, span)| {
+            let new_children = boxed_children
+                .into_vec()
+                .into_iter()
+                .map(Self::clear_annotations)
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            (new_children, span)
+        });
+
+        Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius,
+            lfd: self.lfd,
+            children,
+            annotation: None,
+        }
     }
 }

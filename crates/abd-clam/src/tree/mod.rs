@@ -39,7 +39,7 @@ where
         }
 
         let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Cluster::new_root(&mut items, &metric, &PartitionStrategy::default());
+        let root = Cluster::new_root(&mut items, &metric, &PartitionStrategy::default(), &|_, _, _| None);
 
         Ok(Self { items, root, metric })
     }
@@ -60,7 +60,7 @@ where
         }
 
         let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Cluster::par_new_root(&mut items, &metric, &PartitionStrategy::default());
+        let root = Cluster::par_new_root(&mut items, &metric, &PartitionStrategy::default(), &|_, _, _| None);
 
         Ok(Self { items, root, metric })
     }
@@ -73,18 +73,33 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
+    /// # Arguments
+    ///
+    /// * `items` - A vector of tuples, each containing an identifier and an item.
+    /// * `metric` - A function that computes the distance between two items.
+    /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
+    /// * `post_process` - A function that computes auxiliary data for each cluster after partitioning, and may have side effects on the items. This will be
+    ///   called for each cluster after it has been partitioned and its children have been assigned. It will receive a reference to the cluster, a mutable slice
+    ///   of the items in the cluster, and a reference to the metric. It should return an `Option<A>` containing the auxiliary data for the cluster, or `None`
+    ///
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
+    pub fn new<P, Post>(
+        mut items: Vec<(Id, I)>,
+        metric: M,
+        strategy: &PartitionStrategy<P>,
+        post_process: &Post,
+    ) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
+        Post: Fn(&mut Cluster<T, A>, &mut [(Id, I)], &M) -> Option<A>,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Cluster::new_root(&mut items, &metric, strategy);
+        let root = Cluster::new_root(&mut items, &metric, strategy, post_process);
 
         Ok(Self { items, root, metric })
     }
@@ -94,7 +109,12 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn par_new<P>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>) -> Result<Self, &'static str>
+    pub fn par_new<P, Post>(
+        mut items: Vec<(Id, I)>,
+        metric: M,
+        strategy: &PartitionStrategy<P>,
+        post_process: &Post,
+    ) -> Result<Self, &'static str>
     where
         Id: Send + Sync,
         I: Send + Sync,
@@ -102,12 +122,13 @@ where
         M: Send + Sync,
         A: Send + Sync,
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
+        Post: Fn(&mut Cluster<T, A>, &mut [(Id, I)], &M) -> Option<A> + Send + Sync,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
-        let root = Cluster::par_new_root(&mut items, &metric, strategy);
+        let root = Cluster::par_new_root(&mut items, &metric, strategy, post_process);
 
         Ok(Self { items, root, metric })
     }

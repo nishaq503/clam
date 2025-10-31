@@ -14,7 +14,7 @@ fn new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
-    let tree = Tree::new(items.clone(), metric, &strategy)?;
+    let tree = Tree::new(items.clone(), metric, &strategy, &|_, _, _| None)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -26,7 +26,7 @@ fn new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::new(items, metric, &strategy)?;
+    let tree = Tree::new(items, metric, &strategy, &|_, _, _| None)?;
     let root: &Cluster<i32, ()> = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -65,7 +65,7 @@ fn par_new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
-    let tree = Tree::par_new(items.clone(), metric, &strategy)?;
+    let tree = Tree::par_new(items.clone(), metric, &strategy, &|_, _, _| None)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -76,7 +76,7 @@ fn par_new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::par_new(items, metric, &strategy)?;
+    let tree = Tree::par_new(items, metric, &strategy, &|_, _, _| None)?;
     let root: &Cluster<i32, ()> = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
