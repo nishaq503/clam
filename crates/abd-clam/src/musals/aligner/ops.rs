@@ -38,29 +38,17 @@ impl core::fmt::Debug for Edit {
 #[must_use]
 pub struct Edits(Vec<(usize, Edit)>);
 
-impl From<Vec<(usize, Edit)>> for Edits {
-    fn from(edits: Vec<(usize, Edit)>) -> Self {
+impl Edits {
+    /// Create a new `Edits` from a vector.
+    pub const fn new(edits: Vec<(usize, Edit)>) -> Self {
         Self(edits)
     }
 }
 
-impl AsRef<[(usize, Edit)]> for Edits {
-    fn as_ref(&self) -> &[(usize, Edit)] {
+impl core::ops::Deref for Edits {
+    type Target = Vec<(usize, Edit)>;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl IntoIterator for Edits {
-    type Item = (usize, Edit);
-    type IntoIter = std::vec::IntoIter<(usize, Edit)>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl FromIterator<(usize, Edit)> for Edits {
-    fn from_iter<I: IntoIterator<Item = (usize, Edit)>>(iter: I) -> Self {
-        Self(iter.into_iter().collect())
     }
 }

@@ -8,13 +8,12 @@ use ops::{Direction, Edit, Edits};
 
 use crate::DistanceValue;
 
-/// A table of edit distances between prefixes of two sequences.
+use super::Sequence;
+
+/// A table of edit distances between prefixes of two `Sequence`s.
 type NwTable<T> = Vec<Vec<(T, Direction)>>;
 
-/// A Needleman-Wunsch aligner.
-///
-/// This works with any sequence of bytes, and also provides helpers for working
-/// with strings.
+/// A Needleman-Wunsch aligner for global sequence alignment of `Sequence`s.
 #[derive(Clone, Debug, bitcode::Encode, bitcode::Decode, serde::Serialize, serde::Deserialize)]
 pub struct Aligner<T: DistanceValue> {
     /// The cost matrix for the alignment.
@@ -48,10 +47,8 @@ impl<T: DistanceValue> Aligner<T> {
 
     /// Compute the dynamic programming table for the Needleman-Wunsch algorithm.
     ///
-    /// The DP table is a 2D array of edit distances between prefixes of the two
-    /// sequences. The value at position `(i, j)` is the edit distance between
-    /// the first `i` characters of the first sequence and the first `j`
-    /// characters of the second sequence.
+    /// The DP table is a 2D array of edit distances between prefixes of the two sequences. The value at position `(i, j)` is the edit distance between the
+    /// first `i` characters of the first sequence and the first `j` characters of the second sequence.
     ///
     /// This implementation will minimize the edit distance.
     ///
@@ -63,21 +60,19 @@ impl<T: DistanceValue> Aligner<T> {
     /// # Returns
     ///
     /// The DP table.
-    pub fn dp_table<S: AsRef<[u8]>>(&self, x: &S, y: &S) -> NwTable<T> {
+    pub fn dp_table<S: Sequence>(&self, x: &S, y: &S) -> NwTable<T> {
         let (x, y) = (x.as_ref(), y.as_ref());
 
         // Initialize the DP table.
         let mut table = vec![vec![(T::zero(), Direction::Diagonal); x.len() + 1]; y.len() + 1];
 
-        // Initialize the first row to the cost of inserting characters from the
-        // first sequence.
+        // Initialize the first row to the cost of inserting characters from the first sequence.
         for i in 1..table[0].len() {
             let cost = table[0][i - 1].0 + self.matrix.gap_ext_cost();
             table[0][i] = (cost, Direction::Left);
         }
 
-        // Initialize the first column to the cost of inserting characters from
-        // the second sequence.
+        // Initialize the first column to the cost of inserting characters from the second sequence.
         for j in 1..table.len() {
             let cost = table[j - 1][0].0 + self.matrix.gap_ext_cost();
             table[j][0] = (cost, Direction::Up);
@@ -103,9 +98,8 @@ impl<T: DistanceValue> Aligner<T> {
                         _ => self.matrix.gap_open_cost(),
                     };
 
-                // Choose the operation with the minimum cost. If there is a tie,
-                // prefer the diagonal operation so that the aligned sequences
-                // are as short as possible.
+                // Choose the operation with the minimum cost.
+                // If there is a tie, prefer the diagonal operation so that the aligned sequences are as short as possible.
                 table[i + 1][j + 1] = if diag_cost <= up_cost && diag_cost <= left_cost {
                     (diag_cost, Direction::Diagonal)
                 } else if up_cost <= left_cost {
@@ -128,8 +122,8 @@ impl<T: DistanceValue> Aligner<T> {
     ///
     /// # Returns
     ///
-    /// The alignment distance and the aligned sequences as bytes.
-    pub fn align<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Vec<u8>; 2] {
+    /// The aligned sequences with gaps inserted.
+    pub fn align<S: Sequence>(&self, x: &S, y: &S, table: &NwTable<T>) -> [S; 2] {
         let (x, y) = (x.as_ref(), y.as_ref());
         let [mut row_i, mut col_i] = [y.len(), x.len()];
         let [mut x_aligned, mut y_aligned] = [
@@ -161,22 +155,12 @@ impl<T: DistanceValue> Aligner<T> {
         x_aligned.reverse();
         y_aligned.reverse();
 
-        [x_aligned, y_aligned]
-    }
-
-    /// Align two strings using the Needleman-Wunsch algorithm.
-    pub fn align_str<S: AsRef<str>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [String; 2] {
-        let [x_aligned, y_aligned] = self.align(&x.as_ref(), &y.as_ref(), table);
-        [
-            String::from_utf8(x_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
-            String::from_utf8(y_aligned).unwrap_or_else(|e| unreachable!("We only added gaps: {e}")),
-        ]
+        [S::from_vec(x_aligned), S::from_vec(y_aligned)]
     }
 
     /// Returns the `Edits` needed to align two sequences.
     ///
-    /// Both sequences will need their respective `Edits` applied to them before
-    /// they are in alignment.
+    /// Both sequences will need their respective `Edits` applied to them before they are in alignment.
     ///
     /// # Arguments
     ///
@@ -186,7 +170,7 @@ impl<T: DistanceValue> Aligner<T> {
     /// # Returns
     ///
     /// The `Edits` needed to align the two sequences.
-    pub fn edits<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Edits; 2] {
+    pub fn alignment_edits<S: Sequence>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Edits; 2] {
         let [x_aligned, y_aligned] = self.align(x, y, table);
         [
             aligned_x_to_y(&x_aligned, &y_aligned),
@@ -194,9 +178,8 @@ impl<T: DistanceValue> Aligner<T> {
         ]
     }
 
-    /// Returns the indices where gaps need to be inserted to align two
-    /// sequences.
-    pub fn alignment_gaps<S: AsRef<[u8]>>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Vec<usize>; 2] {
+    /// Returns the indices in each sequence where gaps need to be inserted to align two sequences.
+    pub fn gap_indices<S: Sequence>(&self, x: &S, y: &S, table: &NwTable<T>) -> [Vec<usize>; 2] {
         let (x, y) = (x.as_ref(), y.as_ref());
 
         let [mut row_i, mut col_i] = [y.len(), x.len()];
@@ -226,26 +209,25 @@ impl<T: DistanceValue> Aligner<T> {
     }
 }
 
-/// A helper function to create a sequence of `Edits` needed to align one
-/// sequence to another.
-fn aligned_x_to_y<S: AsRef<[u8]>>(x: &S, y: &S) -> Edits {
+/// Given two aligned sequences, produce the edits needed to convert `x` into `y`.
+fn aligned_x_to_y<S: Sequence>(x: &S, y: &S) -> Edits {
     let (_, edits) = x
         .as_ref()
         .iter()
         .zip(y.as_ref().iter())
         .enumerate()
         .filter(|(_, (xc, yc))| xc != yc)
-        .fold((0, Vec::new()), |(mut modifier, mut edits), (i, (&xc, &yc))| {
-            let i = i - modifier;
+        .fold((0, Vec::new()), |(mut offset, mut edits), (i, (&xc, &yc))| {
+            let i = i - offset;
             if xc == b'-' {
                 edits.push((i, Edit::Ins(yc)));
             } else if yc == b'-' {
                 edits.push((i, Edit::Del));
-                modifier += 1;
+                offset += 1;
             } else {
                 edits.push((i, Edit::Sub(yc)));
             }
-            (modifier, edits)
+            (offset, edits)
         });
-    Edits::from(edits)
+    Edits::new(edits)
 }
