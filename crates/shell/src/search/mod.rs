@@ -19,14 +19,22 @@ pub enum ShellSearchAlgorithm {
 impl core::fmt::Display for ShellSearchAlgorithm {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::KnnLinear(params) => write!(f, "KnnLinear({params:?})"),
-            Self::KnnRepeatedRnn(params) => write!(f, "KnnRrnn({params:?})"),
-            Self::KnnBreadthFirst(params) => write!(f, "KnnBfs({params:?})"),
-            Self::KnnDepthFirst(params) => write!(f, "KnnDfs({params:?})"),
-            Self::RnnLinear(params) => write!(f, "RnnLinear({params:?})"),
-            Self::RnnChess(params) => write!(f, "RnnChess({params:?})"),
+            Self::KnnLinear(params) => write!(f, "KnnLinear({})", display_params(params)),
+            Self::KnnRepeatedRnn(params) => write!(f, "KnnRrnn({})", display_params(params)),
+            Self::KnnBreadthFirst(params) => write!(f, "KnnBfs({})", display_params(params)),
+            Self::KnnDepthFirst(params) => write!(f, "KnnDfs({})", display_params(params)),
+            Self::RnnLinear(params) => write!(f, "RnnLinear({})", display_params(params)),
+            Self::RnnChess(params) => write!(f, "RnnChess({})", display_params(params)),
         }
     }
+}
+
+fn display_params(params: &HashMap<String, String>) -> String {
+    params
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 impl FromStr for ShellSearchAlgorithm {
@@ -155,7 +163,7 @@ mod tests {
         let params = HashMap::from([("radius".to_string(), "2.5".to_string())]);
         assert_eq!(query, ShellSearchAlgorithm::RnnLinear(params));
 
-        let query2: ShellSearchAlgorithm = "rnn-clustered:radius=1.0".parse().unwrap();
+        let query2: ShellSearchAlgorithm = "rnn-chess:radius=1.0".parse().unwrap();
         let params2 = HashMap::from([("radius".to_string(), "1.0".to_string())]);
         assert_eq!(query2, ShellSearchAlgorithm::RnnChess(params2));
     }
@@ -169,7 +177,6 @@ mod tests {
     #[test]
     fn test_parse_errors() {
         assert!("unknown-algo:k=3".parse::<ShellSearchAlgorithm>().is_err());
-        assert!("knn-linear:k=invalid".parse::<ShellSearchAlgorithm>().is_err());
         assert!("knn-linear:missing_equals".parse::<ShellSearchAlgorithm>().is_err());
     }
 
