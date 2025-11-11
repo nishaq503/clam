@@ -93,9 +93,9 @@ where
     /// * `items` - A vector of tuples, each containing an identifier and an item.
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
-    /// * `post_process` - A function that computes auxiliary data for each cluster after partitioning, and may have side effects on the items. This will be
-    ///   called for each cluster after it has been partitioned and its children have been assigned. It will receive a reference to the cluster, a mutable slice
-    ///   of the items in the cluster, and a reference to the metric. It should return an `Option<A>` containing the auxiliary data for the cluster, or `None`
+    /// * `post_process` - A function that computes annotations for each cluster after partitioning, and may have side effects on the items. This will be
+    ///   called for each cluster after it has been partitioned and its children have been assigned. It will receive a mutable reference to the cluster, a
+    ///   mutable slice of the items in the cluster, and a reference to the metric. It should return an `Option<A>` containing the annotation for the cluster.
     ///
     /// # Errors
     ///
