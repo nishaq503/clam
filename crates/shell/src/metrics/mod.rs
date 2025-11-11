@@ -28,7 +28,10 @@ impl Metric {
 }
 
 pub fn levenshtein<I: AsRef<[u8]>, T: Int>(a: &I, b: &I) -> T {
-    T::from(stringzilla::sz::edit_distance(a, b))
+    let sz_device = stringzilla::szs::DeviceScope::default().unwrap();
+    let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).unwrap();
+    let distances = sz_engine.compute(&sz_device, &[a], &[b]).unwrap();
+    T::from(distances[0])
 }
 
 pub fn euclidean<I: AsRef<[T]>, T: Number, U: Float>(a: &I, b: &I) -> U {

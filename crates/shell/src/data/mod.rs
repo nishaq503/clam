@@ -7,7 +7,7 @@ mod fasta;
 pub mod npy;
 
 /// Reads the data from the file at the given path.
-pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellData, String> {
+pub fn read<P: AsRef<Path> + core::fmt::Debug>(path: P) -> Result<ShellData, String> {
     match Format::from(&path) {
         Format::Npy => npy::NpyType::read(path),
         Format::Fasta => fasta::read(path).map(ShellData::String),

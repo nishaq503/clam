@@ -47,8 +47,6 @@ impl ShellTree {
     ///
     /// - `inp_data`: The input data to build the tree from.
     /// - `metric`: The distance metric to use for the tree.
-    /// - `seed`: The random seed to use.
-    /// - `permuted`: Whether to apply depth-first-reordering to the data.
     ///
     /// # Returns
     ///
@@ -61,7 +59,6 @@ impl ShellTree {
     ///   - String data with Levenshtein metric.
     ///   - Float or Integer data with Euclidean or Cosine metrics.
     pub fn new(inp_data: ShellData, metric: &Metric) -> Result<ShellTree, String> {
-        // TODO Najib: Implement a macro to handle the match arms more elegantly.
         match metric {
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {

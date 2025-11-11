@@ -58,7 +58,7 @@ numpy = "0.26"
 pyo3 = "0.26"
 csv = "1.4.0"
 num = "0.4"
-bio = "2.0"
+bio = "3.0"
 # Dev dependencies.
 test-case = "3.2.1"
 criterion = "0.7.0"
