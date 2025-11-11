@@ -3,19 +3,21 @@
 use std::fs;
 use std::path::Path;
 
-use abd_clam::cakes::Searchable;
-use abd_clam::{Cluster, FlatVec, Metric};
-use distances::Number;
+use abd_clam::{DistanceValue, Tree};
+use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-use crate::trees::{ShellBall, ShellPermutedBall};
-use crate::{data::ShellFlatVec, metrics::ShellMetric, trees::ShellTree};
+use crate::{
+    data::ShellData,
+    metrics::Metric,
+    trees::{ShellTree, VectorTree},
+};
 
 /// Represents the complete search results for all queries and algorithms.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchResults {
     /// Results for each query
-    pub queries: Vec<QueryResult>,
+    pub results: Vec<QueryResult>,
 }
 
 /// Represents the result for a single query across all algorithms.
@@ -69,17 +71,14 @@ impl OutputFormat {
 /// * `tree_path` - The path to the tree to search.
 /// * `instances` - The instances to search for.
 /// * `query_algorithms` - The query algorithms to apply.
-/// * `metric` - The metric to use for searching.
 /// * `output_path` - The path to the output file (format determined by extension).
 ///
 /// # Returns
 /// A `Result` containing either `Ok(())` if the search was successful, or `Err(String)` if an error occurred.
 pub fn search_tree<P: AsRef<Path>, O: AsRef<Path>>(
-    inp_data: ShellFlatVec,
     tree_path: P,
-    instances: ShellFlatVec,
+    instances: ShellData,
     query_algorithms: Vec<crate::search::QueryAlgorithm<f64>>,
-    metric: ShellMetric,
     output_path: O,
 ) -> Result<(), String> {
     // Determine output format from file extension
@@ -91,9 +90,9 @@ pub fn search_tree<P: AsRef<Path>, O: AsRef<Path>>(
     }
 
     let tree = ShellTree::read_from(tree_path)?;
-    match (&inp_data, &tree, &instances, &metric) {
-        (ShellFlatVec::F32(d), ShellTree::Ball(ShellBall::F32(c)), ShellFlatVec::F32(i), ShellMetric::Euclidean(m)) => {
-            search(d, m, c, i, &query_algorithms, &output_path, format)
+    match (&tree, &instances) {
+        (ShellTree::Euclidean(VectorTree::F32(tree)), ShellData::F32(queries)) => {
+            search(tree, queries, &query_algorithms, &output_path, format)
         }
         (ShellFlatVec::F64(d), ShellTree::Ball(ShellBall::F64(c)), ShellFlatVec::F64(i), ShellMetric::Euclidean(m)) => {
             search(d, m, c, i, &query_algorithms, &output_path, format)
@@ -133,37 +132,38 @@ pub fn search_tree<P: AsRef<Path>, O: AsRef<Path>>(
 }
 
 fn search<
+    Id: std::fmt::Debug,
     I: std::fmt::Debug,
-    T: Number + 'static,
-    C: Cluster<T>,
-    M: Metric<I, T>,
-    D: Searchable<I, T, C, M>,
+    T: DistanceValue + 'static,
+    A,
+    M: Fn(&I, &I) -> T + 'static,
     P: AsRef<Path>,
 >(
-    data: &D,
-    metric: &M,
-    root: &C,
-    instances: &FlatVec<I, usize>,
-    algs: &[crate::search::QueryAlgorithm<f64>],
+    tree: &Tree<Id, I, T, A, M>,
+    queries: &[I],
+    algs: &[crate::search::QueryAlgorithm<T>],
     output_path: P,
     format: OutputFormat,
 ) -> Result<(), String> {
-    let mut all_results = SearchResults { queries: Vec::new() };
+    let mut all_results = SearchResults { results: Vec::new() };
 
-    for (query_index, instance) in instances.items().iter().enumerate() {
-        println!("Processing query {query_index}: {instance:?}");
+    for (i, query) in queries.iter().enumerate() {
+        println!("Processing query {i}: {query:?}");
 
         let mut query_result = QueryResult {
-            query_index,
+            query_index: i,
             algorithms: Vec::new(),
         };
 
         for alg in algs {
-            let result = alg.get().search(data, metric, root, instance);
+            let result = alg.get().search(tree, query);
             println!("Result {alg}: {result:?}");
 
             // Convert result to f64 for serialization consistency
-            let neighbors: Vec<(usize, f64)> = result.into_iter().map(|(idx, dist)| (idx, dist.as_f64())).collect();
+            let neighbors: Vec<(usize, f64)> = result
+                .into_iter()
+                .map(|(idx, dist)| (idx, dist.to_f64().unwrap()))
+                .collect();
 
             query_result.algorithms.push(AlgorithmResult {
                 algorithm: alg.to_string(),
@@ -171,7 +171,7 @@ fn search<
             });
         }
 
-        all_results.queries.push(query_result);
+        all_results.results.push(query_result);
     }
 
     // Save all results to the specified file

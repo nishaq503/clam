@@ -2,9 +2,23 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-use abd_clam::cakes::{self, SearchAlgorithm, Searchable};
-use abd_clam::{Cluster, Metric};
-use distances::Number;
+use abd_clam::cakes::Search;
+use abd_clam::{DistanceValue, cakes};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ShellQueryAlgorithm {
+    String(QueryAlgorithm<u32>),
+    F32(QueryAlgorithm<f32>),
+    F64(QueryAlgorithm<f64>),
+    U8(QueryAlgorithm<u8>),
+    U16(QueryAlgorithm<u16>),
+    U32(QueryAlgorithm<u32>),
+    U64(QueryAlgorithm<u64>),
+    I8(QueryAlgorithm<i8>),
+    I16(QueryAlgorithm<i16>),
+    I32(QueryAlgorithm<i32>),
+    I64(QueryAlgorithm<i64>),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnnParams {
@@ -18,45 +32,31 @@ impl fmt::Display for KnnParams {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct KnnRepeatedRnnParams<T: Number> {
-    pub k: usize,
-    pub multiplier: T,
-}
-
-impl<T: Number> fmt::Display for KnnRepeatedRnnParams<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "k={},multiplier={}", self.k, self.multiplier)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RnnParams<T: Number> {
+pub struct RnnParams<T: DistanceValue> {
     pub radius: T,
 }
 
-impl<T: Number> fmt::Display for RnnParams<T> {
+impl<T: DistanceValue> fmt::Display for RnnParams<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "radius={}", self.radius)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum QueryAlgorithm<T: Number> {
+pub enum QueryAlgorithm<T: DistanceValue> {
     KnnLinear(KnnParams),
-    KnnRepeatedRnn(KnnRepeatedRnnParams<T>),
+    KnnRepeatedRnn(KnnParams),
     KnnBreadthFirst(KnnParams),
     KnnDepthFirst(KnnParams),
     RnnLinear(RnnParams<T>),
     RnnClustered(RnnParams<T>),
 }
 
-impl<T: Number> std::fmt::Display for QueryAlgorithm<T> {
+impl<T: DistanceValue> std::fmt::Display for QueryAlgorithm<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             QueryAlgorithm::KnnLinear(params) => write!(f, "knn-linear({params})"),
-            QueryAlgorithm::KnnRepeatedRnn(params) => {
-                write!(f, "knn-repeated-rnn(k={},multiplier={})", params.k, params.multiplier)
-            }
+            QueryAlgorithm::KnnRepeatedRnn(params) => write!(f, "knn-repeated-rnn(k={})", params.k),
             QueryAlgorithm::KnnBreadthFirst(params) => write!(f, "knn-breadth-first({params})"),
             QueryAlgorithm::KnnDepthFirst(params) => write!(f, "knn-depth-first({params})"),
             QueryAlgorithm::RnnLinear(params) => write!(f, "rnn-linear({params})"),
@@ -65,23 +65,19 @@ impl<T: Number> std::fmt::Display for QueryAlgorithm<T> {
     }
 }
 
-impl<T: Number + 'static> QueryAlgorithm<T> {
-    pub fn get<I, R, C, M, D>(&self) -> Box<dyn SearchAlgorithm<I, R, C, M, D>>
+impl<T: DistanceValue + 'static> QueryAlgorithm<T> {
+    pub fn get<Id, I, A, M>(&self) -> Box<dyn Search<Id, I, T, A, M>>
     where
-        R: Number + 'static,
-        C: Cluster<R>,
-        M: Metric<I, R>,
-        D: Searchable<I, R, C, M>,
+        T: DistanceValue + 'static,
+        M: Fn(&I, &I) -> T + 'static,
     {
         match self {
             QueryAlgorithm::KnnLinear(params) => Box::new(cakes::KnnLinear(params.k)),
-            QueryAlgorithm::KnnRepeatedRnn(params) => {
-                Box::new(cakes::KnnRepeatedRnn(params.k, R::from(params.multiplier)))
-            }
-            QueryAlgorithm::KnnBreadthFirst(params) => Box::new(cakes::KnnBreadthFirst(params.k)),
-            QueryAlgorithm::KnnDepthFirst(params) => Box::new(cakes::KnnDepthFirst(params.k)),
-            QueryAlgorithm::RnnLinear(params) => Box::new(cakes::RnnLinear(R::from(params.radius))),
-            QueryAlgorithm::RnnClustered(params) => Box::new(cakes::RnnClustered(R::from(params.radius))),
+            QueryAlgorithm::KnnRepeatedRnn(params) => Box::new(cakes::KnnRrnn(params.k)),
+            QueryAlgorithm::KnnBreadthFirst(params) => Box::new(cakes::KnnBfs(params.k)),
+            QueryAlgorithm::KnnDepthFirst(params) => Box::new(cakes::KnnDfs(params.k)),
+            QueryAlgorithm::RnnLinear(params) => Box::new(cakes::RnnLinear(T::from(params.radius))),
+            QueryAlgorithm::RnnClustered(params) => Box::new(cakes::RnnChess(T::from(params.radius))),
         }
     }
 }
@@ -105,7 +101,7 @@ fn parse_parameters(params_str: &str) -> Result<HashMap<String, String>, String>
     Ok(params)
 }
 
-impl<T: Number> FromStr for QueryAlgorithm<T> {
+impl<T: DistanceValue> FromStr for QueryAlgorithm<T> {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -124,17 +120,12 @@ impl<T: Number> FromStr for QueryAlgorithm<T> {
                     .parse()
                     .map_err(|_| "Invalid k value")?,
             })),
-            "knn-repeated-rnn" => Ok(QueryAlgorithm::KnnRepeatedRnn(KnnRepeatedRnnParams {
+            "knn-repeated-rnn" => Ok(QueryAlgorithm::KnnRepeatedRnn(KnnParams {
                 k: params
                     .get("k")
                     .unwrap_or(&"1".to_string())
                     .parse()
                     .map_err(|_| "Invalid k value")?,
-                multiplier: params
-                    .get("multiplier")
-                    .unwrap_or(&"2.0".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid multiplier value")?,
             })),
             "knn-breadth-first" => Ok(QueryAlgorithm::KnnBreadthFirst(KnnParams {
                 k: params
@@ -171,6 +162,8 @@ impl<T: Number> FromStr for QueryAlgorithm<T> {
 
 #[cfg(test)]
 mod tests {
+    use crate::metrics::euclidean;
+
     use super::*;
 
     #[test]
@@ -181,11 +174,8 @@ mod tests {
 
     #[test]
     fn test_parse_knn_repeated_rnn() {
-        let query: QueryAlgorithm<f64> = "knn-repeated-rnn:k=5,multiplier=2.5".parse().unwrap();
-        assert_eq!(
-            query,
-            QueryAlgorithm::KnnRepeatedRnn(KnnRepeatedRnnParams { k: 5, multiplier: 2.5 })
-        );
+        let query: QueryAlgorithm<f64> = "knn-repeated-rnn:k=5".parse().unwrap();
+        assert_eq!(query, QueryAlgorithm::KnnRepeatedRnn(KnnParams { k: 5 }));
     }
 
     #[test]
@@ -214,25 +204,17 @@ mod tests {
     fn test_search_algorithm_wrapper_creation() {
         // Test that we can create a SearchAlgorithmWrapper from a QueryAlgorithm
         let query: QueryAlgorithm<f64> = QueryAlgorithm::KnnLinear(KnnParams { k: 5 });
-        let alg = query
-            .get::<Vec<f64>, f64, abd_clam::Ball<f64>, abd_clam::metric::Euclidean, abd_clam::FlatVec<Vec<f64>, usize>>(
-            );
+        let alg = query.get::<usize, Vec<f64>, (), euclidean>();
 
         // Test that the wrapper implements the SearchAlgorithm trait correctly
-        assert_eq!(alg.name(), "KnnLinear");
-        assert_eq!(alg.k(), Some(5));
-        assert_eq!(alg.radius(), None);
+        assert_eq!(alg.name(), "KnnLinear(k=5)");
     }
 
     #[test]
     fn test_rnn_wrapper_creation() {
         let query = QueryAlgorithm::RnnLinear(RnnParams { radius: 2.5 });
-        let alg = query
-            .get::<Vec<f64>, f64, abd_clam::Ball<f64>, abd_clam::metric::Euclidean, abd_clam::FlatVec<Vec<f64>, usize>>(
-            );
+        let alg = query.get::<usize, Vec<f64>, (), euclidean>();
 
-        assert_eq!(alg.name(), "RnnLinear");
-        assert_eq!(alg.k(), None);
-        assert_eq!(alg.radius(), Some(2.5));
+        assert_eq!(alg.name(), "RnnLinear(radius=2.5)");
     }
 }

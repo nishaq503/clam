@@ -16,28 +16,13 @@ use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 ///
 /// - `inp_data`: The input data to build the tree from.
 /// - `metric`: The distance metric to use for the tree.
-/// - `seed`: The random seed to use.
-/// - `balanced`: Whether to build a balanced tree.
-/// - `permuted`: Whether to apply depth-first-reordering to the data.
 /// - `out_dir`: The output directory to write the tree and data to.
 ///
 /// # Errors
 ///
 /// - If the dataset and metric are deemed an incompatible combination. See
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
-pub fn build_new_tree<P: AsRef<Path>>(
-    inp_data: ShellData,
-    metric: Metric,
-    permuted: bool,
-    out_dir: P,
-) -> Result<(), String> {
-    let (ball, data) = ShellTree::new(inp_data, &metric, permuted)?;
-
-    let tree_path = out_dir.as_ref().join("tree.bin");
-    ball.write_to(tree_path)?;
-
-    let data_path = out_dir.as_ref().join("data.bin");
-    data.write_to(data_path)?;
-
-    Ok(())
+pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: Metric, out_dir: P) -> Result<(), String> {
+    let tree = ShellTree::new(inp_data, &metric)?;
+    tree.write_to(out_dir.as_ref().join("tree.bin"))
 }

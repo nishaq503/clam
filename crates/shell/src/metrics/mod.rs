@@ -28,7 +28,7 @@ impl Metric {
 }
 
 pub fn levenshtein<I: AsRef<[u8]>, T: Int>(a: &I, b: &I) -> T {
-    T::from(abd_clam::utils::sz_lev_builder()(a, b))
+    T::from(stringzilla::sz::edit_distance(a, b))
 }
 
 pub fn euclidean<I: AsRef<[T]>, T: Number, U: Float>(a: &I, b: &I) -> U {
@@ -37,14 +37,4 @@ pub fn euclidean<I: AsRef<[T]>, T: Number, U: Float>(a: &I, b: &I) -> U {
 
 pub fn cosine<I: AsRef<[T]>, T: Number, U: Float>(a: &I, b: &I) -> U {
     distances::vectors::cosine(a.as_ref(), b.as_ref())
-}
-
-impl std::fmt::Display for ShellMetric {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Levenshtein(_) => write!(f, "Levenshtein"),
-            Self::Euclidean(_) => write!(f, "Euclidean"),
-            Self::Cosine(_) => write!(f, "Cosine"),
-        }
-    }
 }

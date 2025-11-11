@@ -17,10 +17,6 @@ pub enum CakesAction {
         /// from this directory as we need them.
         #[arg(short('o'), long)]
         out_dir: PathBuf,
-
-        /// Whether to permute the dataset.
-        #[arg(short('p'), long, default_value_t = true)]
-        permuted: bool,
     },
     Search {
         /// The path to the tree file.

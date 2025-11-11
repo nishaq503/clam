@@ -1,6 +1,7 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::DistanceValue;
 
@@ -254,5 +255,61 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
     pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
         self.root.subtree_preorder()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+where
+    Id: serde::Serialize + serde::de::DeserializeOwned,
+    I: serde::Serialize + serde::de::DeserializeOwned,
+    T: serde::Serialize + serde::de::DeserializeOwned,
+    A: serde::Serialize + serde::de::DeserializeOwned,
+{
+    /// Serializes the `Tree` using Serde.
+    pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct SerializableTree<'a, Id, I, T, A> {
+            items: &'a Vec<(Id, I)>,
+            root: &'a Cluster<T, A>,
+        }
+
+        let serializable_tree = SerializableTree {
+            items: &self.items,
+            root: &self.root,
+        };
+
+        serializable_tree.serialize(serializer)
+    }
+
+    /// Deserializes a `Tree` using Serde.
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct SerializableTree<Id, I, T, A> {
+            items: Vec<(Id, I)>,
+            root: Cluster<T, A>,
+        }
+
+        let SerializableTree { items, root } = SerializableTree::deserialize(deserializer)?;
+        Ok(Tree { items, root, metric })
+    }
+}
+#[cfg(feature = "serde")]
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
+where
+    Id: bitcode::Encode + bitcode::Decode,
+    I: bitcode::Encode + bitcode::Decode,
+    T: bitcode::Encode + bitcode::Decode,
+    A: bitcode::Encode + bitcode::Decode,
+{
+    /// Encodes the `Tree` using Bitcode, returning a vector of bytes.
+    pub fn bitcode_encode(&self) -> Result<Vec<u8>, bitcode::Error> {
+        bitcode::encode(&(&self.items, &self.root))
+    }
+
+    /// Decodes a `Tree` using Bitcode, taking a slice of bytes and a metric.
+    pub fn bitcode_decode(bytes: &[u8], metric: M) -> Result<Self, bitcode::Error> {
+        let (items, root) = bitcode::decode(bytes)?;
+        Ok(Tree { items, root, metric })
     }
 }

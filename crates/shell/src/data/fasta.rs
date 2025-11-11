@@ -1,9 +1,5 @@
 use std::path::Path;
 
-use abd_clam::{Dataset, FlatVec};
-
-use super::ShellFlatVec;
-
 /// Reads a FASTA file from the given path.
 #[allow(dead_code, unused_variables)]
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<(String, String)>, String> {
@@ -11,16 +7,15 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<(String, String)>, String> {
 }
 
 /// Writes a FASTA file to the given path.
-pub fn write<P: AsRef<Path>>(path: P, data: &FlatVec<String, usize>) -> Result<(), String> {
+pub fn write<P: AsRef<Path>>(path: P, data: &[(String, String)]) -> Result<(), String> {
     use std::io::Write;
 
     let file = std::fs::File::create(path).map_err(|e| format!("Failed to create FASTA file: {e}"))?;
     let mut writer = std::io::BufWriter::new(file);
 
     // Write each sequence with a simple numeric ID
-    for i in 0..data.cardinality() {
-        let sequence = data.get(i);
-        writeln!(writer, ">sequence_{i}").map_err(|e| format!("Failed to write sequence header: {e}"))?;
+    for (id, sequence) in data {
+        writeln!(writer, ">{id}").map_err(|e| format!("Failed to write sequence header: {e}"))?;
         writeln!(writer, "{sequence}").map_err(|e| format!("Failed to write sequence data: {e}"))?;
     }
 

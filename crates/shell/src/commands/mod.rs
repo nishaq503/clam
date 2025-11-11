@@ -2,7 +2,7 @@
 
 pub mod cakes;
 pub mod generate_data;
-pub mod mbed;
+// pub mod mbed;
 pub mod musals;
 
 use clap::Subcommand;
@@ -19,11 +19,11 @@ pub enum Commands {
         #[clap(subcommand)]
         action: musals::MusalsAction,
     },
-    /// Dimension Reduction with CLAM-MBED
-    Mbed {
-        #[clap(subcommand)]
-        action: mbed::MbedAction,
-    },
+    // /// Dimension Reduction with CLAM-MBED
+    // Mbed {
+    //     #[clap(subcommand)]
+    //     action: mbed::MbedAction,
+    // },
     /// Generate synthetic datasets for testing and benchmarking
     GenerateData {
         #[clap(subcommand)]

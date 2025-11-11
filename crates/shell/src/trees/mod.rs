@@ -2,17 +2,30 @@
 
 use std::path::Path;
 
-use abd_clam::{Ball, DatasetMut, ParPartition, cakes::PermutedBall};
+use abd_clam::{PartitionStrategy, Tree};
 
 use crate::{
     data::ShellData,
     metrics::{Metric, cosine, euclidean, levenshtein},
 };
 
-#[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
+pub enum VectorTree {
+    F32(Tree<usize, Vec<f32>, f32, (), for<'a, 'b> fn(&'a Vec<f32>, &'b Vec<f32>) -> f32>),
+    F64(Tree<usize, Vec<f64>, f64, (), for<'a, 'b> fn(&'a Vec<f64>, &'b Vec<f64>) -> f64>),
+    I8(Tree<usize, Vec<i8>, i8, (), for<'a, 'b> fn(&'a Vec<i8>, &'b Vec<i8>) -> f32>),
+    I16(Tree<usize, Vec<i16>, i16, (), for<'a, 'b> fn(&'a Vec<i16>, &'b Vec<i16>) -> f32>),
+    I32(Tree<usize, Vec<i32>, i32, (), for<'a, 'b> fn(&'a Vec<i32>, &'b Vec<i32>) -> f32>),
+    I64(Tree<usize, Vec<i64>, i64, (), for<'a, 'b> fn(&'a Vec<i64>, &'b Vec<i64>) -> f64>),
+    U8(Tree<usize, Vec<u8>, u8, (), for<'a, 'b> fn(&'a Vec<u8>, &'b Vec<u8>) -> f32>),
+    U16(Tree<usize, Vec<u16>, u16, (), for<'a, 'b> fn(&'a Vec<u16>, &'b Vec<u16>) -> f32>),
+    U32(Tree<usize, Vec<u32>, u32, (), for<'a, 'b> fn(&'a Vec<u32>, &'b Vec<u32>) -> f32>),
+    U64(Tree<usize, Vec<u64>, u64, (), for<'a, 'b> fn(&'a Vec<u64>, &'b Vec<u64>) -> f64>),
+}
+
 pub enum ShellTree {
-    Ball(ShellBall),
-    PermutedBall(ShellPermutedBall),
+    Levenshtein(Tree<String, String, u32, (), fn(&String, &String) -> u32>),
+    Euclidean(VectorTree),
+    Cosine(VectorTree),
 }
 
 impl ShellTree {
@@ -35,129 +48,181 @@ impl ShellTree {
     ///   are:
     ///   - String data with Levenshtein metric.
     ///   - Float or Integer data with Euclidean or Cosine metrics.
-    pub fn new(inp_data: ShellData, metric: &Metric, permuted: bool) -> Result<(ShellTree, ShellData), String> {
+    pub fn new(inp_data: ShellData, metric: &Metric) -> Result<ShellTree, String> {
         // TODO Najib: Implement a macro to handle the match arms more elegantly.
-        match inp_data {
-            ShellData::String(data) => match metric {
-                Metric::Levenshtein => {
-                    let (mut data, mut metadata): (Vec<_>, Vec<_>) = data.into_iter().unzip();
-                    let ball = Ball::par_new_tree(&data, &levenshtein, &|_| true);
-                    if permuted {
-                        let (ball, permutation) = PermutedBall::par_from_cluster_tree(ball, &mut data);
-                        let ball = Self::PermutedBall(ShellPermutedBall::String(ball));
-
-                        metadata.permute(&permutation);
-
-                        let data = ShellData::String(data.into_iter().zip(metadata).collect());
-                        Ok((ball, data))
-                    } else {
-                        Ok((
-                            Self::Ball(ShellBall::String(ball)),
-                            ShellData::String(data.into_iter().zip(metadata).collect()),
-                        ))
-                    }
+        match metric {
+            Metric::Levenshtein => match inp_data {
+                ShellData::String(items) => {
+                    let strategy = PartitionStrategy::default();
+                    let metric = levenshtein::<_, u32>;
+                    let tree: Tree<_, _, _, (), _> = Tree::par_new(items, metric, &strategy, &|_, _, _| None)?;
+                    Ok(ShellTree::Levenshtein(tree))
                 }
-                _ => Err(format!("Metric {} cannot be used for string data", metric.name())),
+                _ => Err("Levenshtein metric can only be used with string data".to_string()),
             },
-            ShellData::F32(mut data) => match metric {
-                Metric::Levenshtein => Err("Levenshtein metric cannot be used for vector data".to_string()),
-                Metric::Euclidean => {
-                    let ball = Ball::par_new_tree(&data, &euclidean, &|_| true);
-                    if permuted {
-                        let (ball, _) = PermutedBall::par_from_cluster_tree(ball, &mut data);
-                        let ball = Self::PermutedBall(ShellPermutedBall::F32(ball));
-                        let data = ShellData::F32(data);
-                        Ok((ball, data))
-                    } else {
-                        Ok((Self::Ball(ShellBall::F32(ball)), ShellData::F32(data)))
-                    }
+            Metric::Euclidean => match inp_data {
+                ShellData::String(_) => Err("Euclidean metric cannot be used for string data".to_string()),
+                ShellData::F32(items) => {
+                    let strategy = PartitionStrategy::default();
+                    let items = items.into_iter().enumerate().collect::<Vec<_>>();
+                    let tree = Tree::par_new(items, euclidean, &strategy, &|_, _, _| None)?;
+                    Ok(ShellTree::Euclidean(VectorTree::F32(tree)))
                 }
-                Metric::Cosine => {
-                    let ball = Ball::par_new_tree(&data, &cosine, &|_| true);
-                    if permuted {
-                        let (ball, _) = PermutedBall::par_from_cluster_tree(ball, &mut data);
-                        let ball = Self::PermutedBall(ShellPermutedBall::F32(ball));
-                        let data = ShellData::F32(data);
-                        Ok((ball, data))
-                    } else {
-                        Ok((Self::Ball(ShellBall::F32(ball)), ShellData::F32(data)))
-                    }
+                _ => {
+                    unimplemented!("Najib: Implement remaining match arms via macro");
                 }
             },
-            _ => {
-                todo!("Najib: Implement remaining match arms via macro");
-            }
+            Metric::Cosine => match inp_data {
+                ShellData::String(_) => Err("Cosine distance cannot be used for string data".to_string()),
+                ShellData::F32(items) => {
+                    let strategy = PartitionStrategy::default();
+                    let items = items.into_iter().enumerate().collect::<Vec<_>>();
+                    let tree = Tree::par_new(items, cosine, &strategy, &|_, _, _| None)?;
+                    Ok(ShellTree::Cosine(VectorTree::F32(tree)))
+                }
+                _ => {
+                    unimplemented!("Najib: Implement remaining match arms via macro");
+                }
+            },
         }
     }
 
     /// Saves the tree to the specified path using bincode.
     pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let contents = bitcode::encode(self).map_err(|e| e.to_string())?;
-        std::fs::write(path, contents).map_err(|e| e.to_string())
+        match self {
+            Self::Levenshtein(tree) => {
+                let bytes = tree.bitcode_encode().map_err(|e| e.to_string())?;
+                std::fs::write(path, bytes).map_err(|e| e.to_string())
+            },
+            Self::Euclidean(tree) => tree.write_to(path),
+            Self::Cosine(tree) => tree.write_to(path),
+        }
     }
 
     /// Reads a tree from the specified path using bincode.
     pub fn read_from<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let contents = std::fs::read(path).map_err(|e| e.to_string())?;
-        bitcode::decode(&contents).map_err(|e| e.to_string())
+        match path.as_ref().extension().and_then(|s| s.to_str()) {
+            Some("lev") => {
+                let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+                let metric = levenshtein::<_, u32>;
+                let tree = Tree::bitcode_decode(&bytes, metric).map_err(|e| e.to_string())?;
+                Ok(ShellTree::Levenshtein(tree))
+            }
+            Some("euc") => Ok(ShellTree::Euclidean(VectorTree::read_from(path)?)),
+            Some("cos") => Ok(ShellTree::Cosine(VectorTree::read_from(path)?)),
+            _ => Err("Unsupported tree file extension".to_string()),
+            
+        }
+    }
+}
+
+impl VectorTree {
+    /// Saves the tree to the specified path using bitcode.
+    pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+        let (bytes, dtype) = match self {
+            Self::F32(tree) => (tree.bitcode_encode(), "f4"),
+            Self::F64(tree) => (tree.bitcode_encode(), "f8"),
+            Self::I8(tree) => (tree.bitcode_encode(), "i1"),
+            Self::I16(tree) => (tree.bitcode_encode(), "i2"),
+            Self::I32(tree) => (tree.bitcode_encode(), "i4"),
+            Self::I64(tree) => (tree.bitcode_encode(), "i8"),
+            Self::U8(tree) => (tree.bitcode_encode(), "u1"),
+            Self::U16(tree) => (tree.bitcode_encode(), "u2"),
+            Self::U32(tree) => (tree.bitcode_encode(), "u4"),
+            Self::U64(tree) => (tree.bitcode_encode(), "u8"),
+        };
+        let mut bytes = bytes.map_err(|e| e.to_string())?;
+        bytes.extend_from_slice(dtype.as_bytes());
+
+        std::fs::write(path, bytes).map_err(|e| e.to_string())
+    }
+
+    /// Reads a VectorTree from the specified path using bitcode.
+    pub fn read_from<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        let dtype = std::str::from_utf8(&bytes[bytes.len() - 2..]).map_err(|e| e.to_string())?;
+        let tree_bytes = &bytes[..bytes.len() - 2];
+        let tree = match dtype {
+            "f4" => {
+                let metric = euclidean::<_, f32, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::F32(tree)
+            }
+            "f8" => {
+                let metric = euclidean::<_, f64, f64>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::F64(tree)
+            }
+            "i1" => {
+                let metric = euclidean::<_, i8, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::I8(tree)
+            }
+            "i2" => {
+                let metric = euclidean::<_, i16, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::I16(tree)
+            }
+            "i4" => {
+                let metric = euclidean::<_, i32, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::I32(tree)
+            }
+            "i8" => {
+                let metric = euclidean::<_, i64, f64>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::I64(tree)
+            }
+            "u1" => {
+                let metric = euclidean::<_, u8, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::U8(tree)
+            }
+            "u2" => {
+                let metric = euclidean::<_, u16, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::U16(tree)
+            }
+            "u4" => {
+                let metric = euclidean::<_, u32, f32>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::U32(tree)
+            }
+            "u8" => {
+                let metric = euclidean::<_, u64, f64>;
+                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
+                Self::U64(tree)
+            }
+            _ => return Err("Unsupported data type in tree file".to_string()),
+        };
+
+        Ok(tree)
+    }
+}
+
+impl std::fmt::Display for VectorTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VectorTree::F32(_) => write!(f, "VectorTree<F32>"),
+            VectorTree::F64(_) => write!(f, "VectorTree<F64>"),
+            VectorTree::I8(_) => write!(f, "VectorTree<I8>"),
+            VectorTree::I16(_) => write!(f, "VectorTree<I16>"),
+            VectorTree::I32(_) => write!(f, "VectorTree<I32>"),
+            VectorTree::I64(_) => write!(f, "VectorTree<I64>"),
+            VectorTree::U8(_) => write!(f, "VectorTree<U8>"),
+            VectorTree::U16(_) => write!(f, "VectorTree<U16>"),
+            VectorTree::U32(_) => write!(f, "VectorTree<U32>"),
+            VectorTree::U64(_) => write!(f, "VectorTree<U64>"),
+        }
     }
 }
 
 impl std::fmt::Display for ShellTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ShellTree::Ball(ShellBall::String(_)) => write!(f, "Ball<String>"),
-            ShellTree::Ball(ShellBall::F32(_)) => write!(f, "Ball<F32>"),
-            ShellTree::Ball(ShellBall::F64(_)) => write!(f, "Ball<F64>"),
-            ShellTree::Ball(ShellBall::I8(_)) => write!(f, "Ball<I8>"),
-            ShellTree::Ball(ShellBall::I16(_)) => write!(f, "Ball<I16>"),
-            ShellTree::Ball(ShellBall::I32(_)) => write!(f, "Ball<I32>"),
-            ShellTree::Ball(ShellBall::I64(_)) => write!(f, "Ball<I64>"),
-            ShellTree::Ball(ShellBall::U8(_)) => write!(f, "Ball<U8>"),
-            ShellTree::Ball(ShellBall::U16(_)) => write!(f, "Ball<U16>"),
-            ShellTree::Ball(ShellBall::U32(_)) => write!(f, "Ball<U32>"),
-            ShellTree::Ball(ShellBall::U64(_)) => write!(f, "Ball<U64>"),
-            ShellTree::PermutedBall(ShellPermutedBall::String(_)) => write!(f, "PermutedBall<String>"),
-            ShellTree::PermutedBall(ShellPermutedBall::F32(_)) => write!(f, "PermutedBall<F32>"),
-            ShellTree::PermutedBall(ShellPermutedBall::F64(_)) => write!(f, "PermutedBall<F64>"),
-            ShellTree::PermutedBall(ShellPermutedBall::I8(_)) => write!(f, "PermutedBall<I8>"),
-            ShellTree::PermutedBall(ShellPermutedBall::I16(_)) => write!(f, "PermutedBall<I16>"),
-            ShellTree::PermutedBall(ShellPermutedBall::I32(_)) => write!(f, "PermutedBall<I32>"),
-            ShellTree::PermutedBall(ShellPermutedBall::I64(_)) => write!(f, "PermutedBall<I64>"),
-            ShellTree::PermutedBall(ShellPermutedBall::U8(_)) => write!(f, "PermutedBall<U8>"),
-            ShellTree::PermutedBall(ShellPermutedBall::U16(_)) => write!(f, "PermutedBall<U16>"),
-            ShellTree::PermutedBall(ShellPermutedBall::U32(_)) => write!(f, "PermutedBall<U32>"),
-            ShellTree::PermutedBall(ShellPermutedBall::U64(_)) => write!(f, "PermutedBall<U64>"),
+            ShellTree::Levenshtein(_) => write!(f, "LevenshteinStringTree<U32>"),
+            ShellTree::Euclidean(tree) => write!(f, "Euclidean{tree}"),
+            ShellTree::Cosine(tree) => write!(f, "Cosine{tree}"),
         }
     }
-}
-
-#[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
-pub enum ShellBall {
-    String(Ball<u32>),
-    F32(Ball<f32>),
-    F64(Ball<f64>),
-    I8(Ball<i8>),
-    I16(Ball<i16>),
-    I32(Ball<i32>),
-    I64(Ball<i64>),
-    U8(Ball<u8>),
-    U16(Ball<u16>),
-    U32(Ball<u32>),
-    U64(Ball<u64>),
-}
-
-#[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
-pub enum ShellPermutedBall {
-    String(PermutedBall<u32, Ball<u32>>),
-    F32(PermutedBall<f32, Ball<f32>>),
-    F64(PermutedBall<f64, Ball<f64>>),
-    I8(PermutedBall<i8, Ball<i8>>),
-    I16(PermutedBall<i16, Ball<i16>>),
-    I32(PermutedBall<i32, Ball<i32>>),
-    I64(PermutedBall<i64, Ball<i64>>),
-    U8(PermutedBall<u8, Ball<u8>>),
-    U16(PermutedBall<u16, Ball<u16>>),
-    U32(PermutedBall<u32, Ball<u32>>),
-    U64(PermutedBall<u64, Ball<u64>>),
 }

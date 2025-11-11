@@ -1,7 +1,6 @@
 //! Implementation of dataset generation logic.
 
-use crate::data::{DataType, Format, ShellFlatVec};
-use abd_clam::{Dataset, FlatVec};
+use crate::data::{DataType, Format, ShellData};
 
 /// Generate a synthetic dataset with the specified parameters.
 ///
@@ -81,7 +80,7 @@ pub fn generate_dataset(
     println!();
 
     // Generate the data based on type
-    let shell_flat_vec = match data_type {
+    let shell_data = match data_type {
         DataType::F32 => {
             let data = symagen::random_data::random_tabular_seedable(
                 num_vectors,
@@ -90,11 +89,11 @@ pub fn generate_dataset(
                 max_val as f32,
                 seed,
             );
-            ShellFlatVec::F32(FlatVec::from_nested_vec(data)?)
+            ShellData::F32(data)
         }
         DataType::F64 => {
             let data = symagen::random_data::random_tabular_seedable(num_vectors, dimensions, min_val, max_val, seed);
-            ShellFlatVec::F64(FlatVec::from_nested_vec(data)?)
+            ShellData::F64(data)
         }
         DataType::I8 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -104,7 +103,7 @@ pub fn generate_dataset(
                 max_val as i8,
                 seed,
             );
-            ShellFlatVec::I8(FlatVec::from_nested_vec(data)?)
+            ShellData::I8(data)
         }
         DataType::I16 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -114,7 +113,7 @@ pub fn generate_dataset(
                 max_val as i16,
                 seed,
             );
-            ShellFlatVec::I16(FlatVec::from_nested_vec(data)?)
+            ShellData::I16(data)
         }
         DataType::I32 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -124,7 +123,7 @@ pub fn generate_dataset(
                 max_val as i32,
                 seed,
             );
-            ShellFlatVec::I32(FlatVec::from_nested_vec(data)?)
+            ShellData::I32(data)
         }
         DataType::I64 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -134,7 +133,7 @@ pub fn generate_dataset(
                 max_val as i64,
                 seed,
             );
-            ShellFlatVec::I64(FlatVec::from_nested_vec(data)?)
+            ShellData::I64(data)
         }
         DataType::U8 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -144,7 +143,7 @@ pub fn generate_dataset(
                 max_val as u8,
                 seed,
             );
-            ShellFlatVec::U8(FlatVec::from_nested_vec(data)?)
+            ShellData::U8(data)
         }
         DataType::U16 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -154,7 +153,7 @@ pub fn generate_dataset(
                 max_val as u16,
                 seed,
             );
-            ShellFlatVec::U16(FlatVec::from_nested_vec(data)?)
+            ShellData::U16(data)
         }
         DataType::U32 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -164,7 +163,7 @@ pub fn generate_dataset(
                 max_val as u32,
                 seed,
             );
-            ShellFlatVec::U32(FlatVec::from_nested_vec(data)?)
+            ShellData::U32(data)
         }
         DataType::U64 => {
             let data = symagen::random_data::random_tabular_seedable(
@@ -174,18 +173,18 @@ pub fn generate_dataset(
                 max_val as u64,
                 seed,
             );
-            ShellFlatVec::U64(FlatVec::from_nested_vec(data)?)
+            ShellData::U64(data)
         }
-        DataType::String => generate_strings(num_vectors, dimensions, seed)?,
+        DataType::String => generate_strings(num_vectors, dimensions, seed),
     };
 
     // Write data to file(s) based on partitions
     if let Some(parts) = partitions {
-        write_partitions(&shell_flat_vec, &filename, &format, num_vectors, &parts)?;
+        write_partitions(&shell_data, &filename, &format, num_vectors, &parts)?;
     } else {
         let output_path = format!("{filename}.{format}");
         println!("Writing {num_vectors} vectors to: {output_path}");
-        shell_flat_vec.write(&output_path)?;
+        shell_data.write(&output_path)?;
         println!("✓ Successfully wrote {output_path}");
     }
 
@@ -195,22 +194,26 @@ pub fn generate_dataset(
     Ok(())
 }
 
-/// Generate random string sequences and wrap them in a ShellFlatVec.
-fn generate_strings(num_vectors: usize, avg_length: usize, seed: u64) -> Result<ShellFlatVec, String> {
+/// Generate random string sequences and wrap them in a ShellData.
+fn generate_strings(num_vectors: usize, avg_length: usize, seed: u64) -> ShellData {
     // Use DNA alphabet for biological sequences
     let alphabet = "ACGT";
     let min_len = avg_length.saturating_sub(avg_length / 4);
     let max_len = avg_length + avg_length / 4;
 
     let data = symagen::random_data::random_string(num_vectors, min_len, max_len, alphabet, seed);
+    let metadata = (0..num_vectors)
+        .map(|i| format!(">seq_{}", i + 1))
+        .collect::<Vec<String>>();
 
-    let flat_vec = FlatVec::new(data)?;
-    Ok(ShellFlatVec::String(flat_vec))
+    let data = metadata.into_iter().zip(data).collect();
+
+    ShellData::String(data)
 }
 
 /// Write partitioned data to multiple files.
 fn write_partitions(
-    data: &ShellFlatVec,
+    data: &ShellData,
     filename: &str,
     format: &Format,
     total_vectors: usize,
@@ -238,7 +241,7 @@ fn write_partitions(
         let end_idx = start_idx + count;
 
         // Create a slice of the data
-        let partition = slice_shell_flat_vec(data, start_idx, end_idx)?;
+        let partition = data.slice(start_idx, end_idx);
 
         // Write the partition to a file
         let output_path = format!("{filename}-{count}.{format}");
@@ -250,54 +253,4 @@ fn write_partitions(
     }
 
     Ok(())
-}
-
-/// Create a slice of a ShellFlatVec from start to end indices.
-fn slice_shell_flat_vec(data: &ShellFlatVec, start: usize, end: usize) -> Result<ShellFlatVec, String> {
-    match data {
-        ShellFlatVec::F32(fv) => {
-            let sliced: Vec<Vec<f32>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::F32(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::F64(fv) => {
-            let sliced: Vec<Vec<f64>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::F64(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::I8(fv) => {
-            let sliced: Vec<Vec<i8>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::I8(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::I16(fv) => {
-            let sliced: Vec<Vec<i16>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::I16(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::I32(fv) => {
-            let sliced: Vec<Vec<i32>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::I32(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::I64(fv) => {
-            let sliced: Vec<Vec<i64>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::I64(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::U8(fv) => {
-            let sliced: Vec<Vec<u8>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::U8(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::U16(fv) => {
-            let sliced: Vec<Vec<u16>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::U16(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::U32(fv) => {
-            let sliced: Vec<Vec<u32>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::U32(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::U64(fv) => {
-            let sliced: Vec<Vec<u64>> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::U64(FlatVec::from_nested_vec(sliced)?))
-        }
-        ShellFlatVec::String(fv) => {
-            let sliced: Vec<String> = (start..end).map(|i| fv.get(i).clone()).collect();
-            Ok(ShellFlatVec::String(FlatVec::new(sliced)?))
-        }
-    }
 }

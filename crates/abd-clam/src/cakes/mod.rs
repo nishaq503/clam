@@ -19,11 +19,9 @@ where
 {
     /// Returns a name for the search algorithm.
     ///
-    /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm. The default implementation uses
+    /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm.
     /// [`type_name`](core::any::type_name).
-    fn name(&self) -> String {
-        core::any::type_name::<Self>().to_string()
-    }
+    fn name(&self) -> String;
 
     /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;

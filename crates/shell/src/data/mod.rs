@@ -123,78 +123,21 @@ pub enum ShellData {
     U64(Vec<Vec<u64>>),
 }
 
-impl std::fmt::Display for ShellFlatVec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ShellData {
+    /// Create a slice of a ShellData from start to end indices.
+    pub fn slice(&self, start: usize, end: usize) -> Self {
         match self {
-            ShellFlatVec::String(vec) => write!(f, "String({})", vec.items().len()),
-            ShellFlatVec::F32(vec) => write!(f, "F32({})", vec.items().len()),
-            ShellFlatVec::F64(vec) => write!(f, "F64({})", vec.items().len()),
-            ShellFlatVec::I8(vec) => write!(f, "I8({})", vec.items().len()),
-            ShellFlatVec::I16(vec) => write!(f, "I16({})", vec.items().len()),
-            ShellFlatVec::I32(vec) => write!(f, "I32({})", vec.items().len()),
-            ShellFlatVec::I64(vec) => write!(f, "I64({})", vec.items().len()),
-            ShellFlatVec::U8(vec) => write!(f, "U8({})", vec.items().len()),
-            ShellFlatVec::U16(vec) => write!(f, "U16({})", vec.items().len()),
-            ShellFlatVec::U32(vec) => write!(f, "U32({})", vec.items().len()),
-            ShellFlatVec::U64(vec) => write!(f, "U64({})", vec.items().len()),
-        }
-    }
-}
-
-impl ShellFlatVec {
-    /// Reads a NPY file and returns a ShellFlatVec.
-    pub fn read_npy<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        npy::NpyType::read(path)
-    }
-
-    /// Reads a FASTA file and returns a ShellFlatVec.
-    pub fn read_fasta<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        fasta::read(path).map(ShellData::String)
-    }
-
-    /// Saves the ShellFlatVec to the specified path using bincode.
-    pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let contents = bitcode::encode(self).map_err(|e| e.to_string())?;
-        std::fs::write(path, contents).map_err(|e| e.to_string())
-    }
-
-    /// Reads a ShellFlatVec from the specified path using bincode.
-    #[allow(dead_code)]
-    pub fn read_from<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let contents = std::fs::read(path).map_err(|e| e.to_string())?;
-        bitcode::decode(&contents).map_err(|e| e.to_string())
-    }
-
-    /// Writes the ShellFlatVec to a file based on the format.
-    pub fn write<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        match Format::from(&path) {
-            Format::Npy => self.write_npy(path),
-            Format::Fasta => self.write_fasta(path),
-        }
-    }
-
-    /// Writes a NPY file from the ShellFlatVec.
-    pub fn write_npy<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        match self {
-            ShellFlatVec::String(_) => Err("Cannot write String data to NPY format".to_string()),
-            ShellFlatVec::F32(data) => data.write_npy(&path),
-            ShellFlatVec::F64(data) => data.write_npy(&path),
-            ShellFlatVec::I8(data) => data.write_npy(&path),
-            ShellFlatVec::I16(data) => data.write_npy(&path),
-            ShellFlatVec::I32(data) => data.write_npy(&path),
-            ShellFlatVec::I64(data) => data.write_npy(&path),
-            ShellFlatVec::U8(data) => data.write_npy(&path),
-            ShellFlatVec::U16(data) => data.write_npy(&path),
-            ShellFlatVec::U32(data) => data.write_npy(&path),
-            ShellFlatVec::U64(data) => data.write_npy(&path),
-        }
-    }
-
-    /// Writes a FASTA file from the ShellFlatVec.
-    pub fn write_fasta<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        match self {
-            ShellFlatVec::String(data) => fasta::write(path, data),
-            _ => Err("Only String data can be written to FASTA format".to_string()),
+            Self::String(data) => Self::String(data[start..end].to_vec()),
+            Self::F32(data) => Self::F32(data[start..end].to_vec()),
+            Self::F64(data) => Self::F64(data[start..end].to_vec()),
+            Self::I8(data) => Self::I8(data[start..end].to_vec()),
+            Self::I16(data) => Self::I16(data[start..end].to_vec()),
+            Self::I32(data) => Self::I32(data[start..end].to_vec()),
+            Self::I64(data) => Self::I64(data[start..end].to_vec()),
+            Self::U8(data) => Self::U8(data[start..end].to_vec()),
+            Self::U16(data) => Self::U16(data[start..end].to_vec()),
+            Self::U32(data) => Self::U32(data[start..end].to_vec()),
+            Self::U64(data) => Self::U64(data[start..end].to_vec()),
         }
     }
 }

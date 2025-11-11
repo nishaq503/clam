@@ -1,7 +1,10 @@
 //! Redesign of CLAM
 // #![doc = include_str!("../README.md")]
 
-use core::fmt::{Debug, Display};
+use core::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 pub mod cakes;
 pub mod codec;
@@ -21,6 +24,7 @@ pub trait DistanceValue:
     + Copy
     + Display
     + Debug
+    + FromStr
     + num_traits::Num
     + num_traits::NumRef
     + num_traits::RefNum<Self>
@@ -46,6 +50,7 @@ impl<T> DistanceValue for T where
         + Copy
         + Display
         + Debug
+        + FromStr
         + num_traits::Num
         + num_traits::NumRef
         + num_traits::RefNum<Self>
