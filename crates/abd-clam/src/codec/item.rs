@@ -2,31 +2,8 @@
 
 use super::{Decoder, Encoder};
 
-/// An item or a reference to that item.
-pub enum ItemOrRef<'a, I> {
-    /// An owned item.
-    Item(I),
-    /// A reference to an item.
-    Ref(&'a I),
-}
-
-impl<I> AsRef<I> for ItemOrRef<'_, I> {
-    fn as_ref(&self) -> &I {
-        match self {
-            ItemOrRef::Item(item) => item,
-            ItemOrRef::Ref(item) => item,
-        }
-    }
-}
-
-impl<I> ItemOrRef<'_, I> {
-    /// Compute the distance between two `ItemOrRef`s using the provided metric.
-    pub fn distance_to<T, M: Fn(&I, &I) -> T>(&self, other: &Self, metric: &M) -> T {
-        metric(self.as_ref(), other.as_ref())
-    }
-}
-
 /// An item that has been compressed using an `Encoder` and can be decompressed during `CompressiveSearch`.
+#[derive(Debug, Clone)]
 pub enum CodecItem<I, Enc: Encoder<I, Dec> + ?Sized, Dec: Decoder<I, Enc> + ?Sized> {
     /// An uncompressed item.
     Uncompressed(I),
@@ -45,14 +22,35 @@ impl<I, Enc: Encoder<I, Dec> + ?Sized, Dec: Decoder<I, Enc> + ?Sized> CodecItem<
         Self::Delta(delta)
     }
 
-    /// Decode the item without consuming it, using the provided decoder and return the decoded item.
-    pub fn decode<'a>(&'a self, decoder: &Dec, reference: Option<&'a I>) -> ItemOrRef<'a, I> {
+    /// Encode the item using the provided encoder and reference item.
+    pub fn encode(&mut self, encoder: &Enc, reference: Option<&I>) {
         match self {
-            Self::Uncompressed(item) => ItemOrRef::Ref(item),
-            Self::Delta(delta) => ItemOrRef::Item(reference.map_or_else(
-                || decoder.decode_root(delta),
-                |reference| decoder.decode(delta, reference),
-            )),
+            Self::Uncompressed(item) => {
+                let delta = reference.map_or_else(
+                    || encoder.encode_root(item),
+                    |reference| encoder.encode(item, reference),
+                );
+                *self = Self::Delta(delta);
+            }
+            Self::Delta(_) => {
+                // Already encoded; do nothing.
+            }
+        }
+    }
+
+    /// Decode the item using the provided decoder and reference item.
+    pub fn decode(&mut self, decoder: &Dec, reference: Option<&I>) {
+        match self {
+            Self::Uncompressed(_) => {
+                // Already decoded; do nothing.
+            }
+            Self::Delta(delta) => {
+                let item = reference.map_or_else(
+                    || decoder.decode_root(delta),
+                    |reference| decoder.decode(delta, reference),
+                );
+                *self = Self::Uncompressed(item);
+            }
         }
     }
 }

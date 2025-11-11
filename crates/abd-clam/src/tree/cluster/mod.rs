@@ -157,6 +157,46 @@ impl<T, A> Cluster<T, A> {
         }
     }
 
+    /// Returns references to all clusters along the path from this cluster to the descendant that directly contains the item at the given item index.
+    ///
+    /// # Errors
+    ///
+    /// If the given item index is not contained in this cluster.
+    pub fn path_to_cluster_containing(&self, item_index: usize) -> Result<Vec<&Self>, &'static str> {
+        if item_index == self.center_index {
+            Ok(vec![self])
+        } else if self.subtree_indices().contains(&item_index) {
+            let mut path = self.descend_to_cluster(item_index);
+            path.reverse();
+            Ok(path)
+        } else {
+            Err("item index out of bounds for this cluster")
+        }
+    }
+
+    /// Helper function for [`Self::path_to_cluster_containing`].
+    ///
+    /// This returns references the path in reverse order (from descendant to root).
+    fn descend_to_cluster(&self, item_index: usize) -> Vec<&Self> {
+        if self.center_index == item_index {
+            // The requested item is the center of this cluster.
+            return vec![self];
+        }
+
+        if let Some((children, _)) = &self.children {
+            let target_child = children
+                .iter()
+                .find(|child| child.all_items_indices().contains(&item_index))
+                .unwrap_or_else(|| unreachable!("The item index is guaranteed to be in one of the children."));
+            let mut path = target_child.descend_to_cluster(item_index);
+            path.push(self);
+            path
+        } else {
+            // This is a leaf cluster and the requested item is not the center.
+            vec![self]
+        }
+    }
+
     /// Returns true if this cluster has an annotation.
     pub const fn is_annotated(&self) -> bool {
         self.annotation.is_some()

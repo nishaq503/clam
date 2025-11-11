@@ -35,7 +35,7 @@ macro_rules! st_new_vector_arm {
         let strategy = PartitionStrategy::default();
         let items = $items.into_iter().enumerate().collect::<Vec<_>>();
         let metric: fn(&_, &_) -> $ty = $metric::<_, _, _>;
-        let tree = Tree::par_new(items, metric, &strategy, &|_, _, _| None)?;
+        let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
         Ok(ShellTree::$st_var(VectorTree::$vt_var(tree)))
     }};
 }
@@ -64,7 +64,7 @@ impl ShellTree {
                 ShellData::String(items) => {
                     let strategy = PartitionStrategy::default();
                     let metric: fn(&_, &_) -> u32 = levenshtein::<_, _>;
-                    let tree: Tree<_, _, _, (), _> = Tree::par_new(items, metric, &strategy, &|_, _, _| None)?;
+                    let tree: Tree<_, _, _, (), _> = Tree::par_new(items, metric, &strategy, &|_| None)?;
                     Ok(ShellTree::Levenshtein(tree))
                 }
                 _ => Err("Levenshtein metric can only be used with string data".to_string()),

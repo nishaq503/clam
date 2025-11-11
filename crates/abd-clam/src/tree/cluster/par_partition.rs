@@ -12,11 +12,11 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn par_new_root<Id, I, M, P, Post>(
+    pub(crate) fn par_new_root<Id, I, M, P, Ann>(
         items: &mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,
-        post_process: &Post,
+        annotator: &Ann,
     ) -> Self
     where
         T: DistanceValue + Send + Sync,
@@ -25,9 +25,9 @@ impl<T, A> Cluster<T, A> {
         I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
-        Post: Fn(&mut Self, &mut [(Id, I)], &M) -> Option<A> + Send + Sync,
+        Ann: Fn(&Self) -> Option<A> + Send + Sync,
     {
-        Self::par_new(0, 0, items, metric, strategy, post_process)
+        Self::par_new(0, 0, items, metric, strategy, annotator)
     }
 
     /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
@@ -35,13 +35,13 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    fn par_new<Id, I, M, P, Post>(
+    fn par_new<Id, I, M, P, Ann>(
         depth: usize,
         center_index: usize,
         items: &mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,
-        post_process: &Post,
+        annotator: &Ann,
     ) -> Self
     where
         T: DistanceValue + Send + Sync,
@@ -50,7 +50,7 @@ impl<T, A> Cluster<T, A> {
         I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
-        Post: Fn(&mut Self, &mut [(Id, I)], &M) -> Option<A> + Send + Sync,
+        Ann: Fn(&Self) -> Option<A> + Send + Sync,
     {
         let (mut cluster, radius_index) = Self::par_new_leaf(depth, center_index, items, metric);
         if !strategy.par_should_partition(&cluster) {
@@ -133,12 +133,12 @@ impl<T, A> Cluster<T, A> {
 
         let children = child_items
             .into_par_iter()
-            .map(|(c_index, c_items)| Self::par_new(depth + 1, c_index, c_items, metric, strategy, post_process))
+            .map(|(c_index, c_items)| Self::par_new(depth + 1, c_index, c_items, metric, strategy, annotator))
             .collect::<Vec<_>>()
             .into_boxed_slice();
         cluster.children = Some((children, span));
 
-        cluster.annotation = post_process(&mut cluster, items, metric);
+        cluster.annotation = annotator(&cluster);
 
         cluster
     }

@@ -167,7 +167,7 @@ fn main() -> Result<(), String> {
                 "Building CAKES index for dataset '{}' with strategy {strategy}",
                 dataset.name()
             );
-            let tree = Tree::par_new(items, metric, &strategy, &|_, _, _| None)?;
+            let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
 
             let root_csv_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-tree.csv");
             if root_csv_path.exists() {
