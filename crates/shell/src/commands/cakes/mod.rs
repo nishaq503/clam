@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use clap::Subcommand;
 
 pub use build::build_new_tree;
-pub use search::search_tree;
+pub use search::{AlgorithmResult, QueryResult, SearchOutputFormat, SearchResults, search_tree};
+
+use crate::search::ShellSearchAlgorithm;
 
 #[derive(Subcommand, Debug)]
 pub enum CakesAction {
@@ -26,8 +28,8 @@ pub enum CakesAction {
         #[arg(short('I'), long)]
         instances_path: PathBuf,
 
-        #[arg(short('q'), long, value_parser = clap::value_parser!(crate::search::QueryAlgorithm<f64>))]
-        query_algorithms: Vec<crate::search::QueryAlgorithm<f64>>,
+        #[arg(short('q'), long, value_parser = clap::value_parser!(ShellSearchAlgorithm))]
+        query_algorithms: Vec<ShellSearchAlgorithm>,
 
         /// The path to the output file for search results (format determined by extension: .json, .yaml, or .yml).
         #[arg(short('o'), long)]

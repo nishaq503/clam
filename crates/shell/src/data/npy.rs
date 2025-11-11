@@ -68,6 +68,16 @@ pub fn read_npy<P: AsRef<Path>, T: ndarray_npy::ReadableElement + Clone>(path: P
     Ok(vecs)
 }
 
+pub fn write_npy<P: AsRef<Path>, T: ndarray_npy::WritableElement + Clone>(
+    path: P,
+    data: &[Vec<T>],
+) -> Result<(), String> {
+    let (n_rows, n_cols) = (data.len(), data.first().map_or(0, |row| row.len()));
+    let flat_data = data.iter().flatten().cloned().collect::<Vec<_>>();
+    let arr = Array2::from_shape_vec((n_rows, n_cols), flat_data).map_err(|e| e.to_string())?;
+    ndarray_npy::write_npy(path, &arr).map_err(|e| e.to_string())
+}
+
 pub fn read_npy_n<P: AsRef<Path>, T: ndarray_npy::ReadableElement + Clone + Copy, const N: usize>(
     path: P,
 ) -> Result<Vec<[T; N]>, String> {
@@ -75,7 +85,7 @@ pub fn read_npy_n<P: AsRef<Path>, T: ndarray_npy::ReadableElement + Clone + Copy
     from_array2(&arr)
 }
 
-pub fn write_npy<P: AsRef<Path>, T: ndarray_npy::WritableElement + Clone, const N: usize>(
+pub fn write_npy_n<P: AsRef<Path>, T: ndarray_npy::WritableElement + Clone, const N: usize>(
     path: P,
     data: &[[T; N]],
 ) -> Result<(), String> {

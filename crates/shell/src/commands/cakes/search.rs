@@ -1,17 +1,10 @@
 //! Search a given tree for some given queries.
 
-use std::fs;
 use std::path::Path;
 
-use abd_clam::{DistanceValue, Tree};
-use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    data::ShellData,
-    metrics::Metric,
-    trees::{ShellTree, VectorTree},
-};
+use crate::{data::ShellData, search::ShellSearchAlgorithm, trees::ShellTree};
 
 /// Represents the complete search results for all queries and algorithms.
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,18 +33,18 @@ pub struct AlgorithmResult {
 
 /// Supported output formats based on file extension.
 #[derive(Debug, Clone, Copy)]
-enum OutputFormat {
+pub enum SearchOutputFormat {
     Json,
     Yaml,
 }
 
-impl OutputFormat {
+impl SearchOutputFormat {
     /// Determine format from file extension.
-    fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let path = path.as_ref();
         match path.extension().and_then(|ext| ext.to_str()) {
-            Some("json") => Ok(OutputFormat::Json),
-            Some("yaml") | Some("yml") => Ok(OutputFormat::Yaml),
+            Some("json") => Ok(SearchOutputFormat::Json),
+            Some("yaml") | Some("yml") => Ok(SearchOutputFormat::Yaml),
             Some(ext) => Err(format!(
                 "Unsupported file extension: '.{ext}'. Supported formats: .json, .yaml, .yml",
             )),
@@ -75,125 +68,19 @@ impl OutputFormat {
 ///
 /// # Returns
 /// A `Result` containing either `Ok(())` if the search was successful, or `Err(String)` if an error occurred.
-pub fn search_tree<P: AsRef<Path>, O: AsRef<Path>>(
+pub fn search_tree<P: AsRef<Path>>(
     tree_path: P,
-    instances: ShellData,
-    query_algorithms: Vec<crate::search::QueryAlgorithm<f64>>,
-    output_path: O,
+    queries: ShellData,
+    algorithms: &[ShellSearchAlgorithm],
+    output_path: P,
 ) -> Result<(), String> {
     // Determine output format from file extension
-    let format = OutputFormat::from_path(&output_path)?;
+    let format = SearchOutputFormat::from_path(&output_path)?;
 
     // Create parent directory if it doesn't exist
     if let Some(parent) = output_path.as_ref().parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
 
-    let tree = ShellTree::read_from(tree_path)?;
-    match (&tree, &instances) {
-        (ShellTree::Euclidean(VectorTree::F32(tree)), ShellData::F32(queries)) => {
-            search(tree, queries, &query_algorithms, &output_path, format)
-        }
-        (ShellFlatVec::F64(d), ShellTree::Ball(ShellBall::F64(c)), ShellFlatVec::F64(i), ShellMetric::Euclidean(m)) => {
-            search(d, m, c, i, &query_algorithms, &output_path, format)
-        }
-        (
-            ShellFlatVec::F32(d),
-            ShellTree::PermutedBall(ShellPermutedBall::F32(c)),
-            ShellFlatVec::F32(i),
-            ShellMetric::Euclidean(m),
-        ) => search(d, m, c, i, &query_algorithms, &output_path, format),
-        (
-            ShellFlatVec::F64(d),
-            ShellTree::PermutedBall(ShellPermutedBall::F64(c)),
-            ShellFlatVec::F64(i),
-            ShellMetric::Euclidean(m),
-        ) => search(d, m, c, i, &query_algorithms, &output_path, format),
-        _ => Err(format!(
-            "Unsupported type combination for search:\n\
-                 - Input data type: {inp_data}\n\
-                 - Tree data type: {tree}\n\
-                 - Query data type: {instances}\n\
-                 - Metric: {metric}\n\
-                 \n\
-                 Currently supported combinations:\n\
-                 - F32 data + Ball<F32> tree + F32 queries + Euclidean metric\n\
-                 - F64 data + Ball<F64> tree + F64 queries + Euclidean metric\n\
-                 - F32 data + PermutedBall<F32> tree + F32 queries + Euclidean metric\n\
-                 - F64 data + PermutedBall<F64> tree + F64 queries + Euclidean metric\n\
-                 \n\
-                 Note: The input data (-i flag) should point to your training data file.\n\
-                 Example:\n\
-                 cargo run --package shell -- -i training.npy cakes search -t ./tree/tree.bin -i queries.npy -q knn-linear:k=5 -o results.json"
-        )),
-    }?;
-
-    Ok(())
-}
-
-fn search<
-    Id: std::fmt::Debug,
-    I: std::fmt::Debug,
-    T: DistanceValue + 'static,
-    A,
-    M: Fn(&I, &I) -> T + 'static,
-    P: AsRef<Path>,
->(
-    tree: &Tree<Id, I, T, A, M>,
-    queries: &[I],
-    algs: &[crate::search::QueryAlgorithm<T>],
-    output_path: P,
-    format: OutputFormat,
-) -> Result<(), String> {
-    let mut all_results = SearchResults { results: Vec::new() };
-
-    for (i, query) in queries.iter().enumerate() {
-        println!("Processing query {i}: {query:?}");
-
-        let mut query_result = QueryResult {
-            query_index: i,
-            algorithms: Vec::new(),
-        };
-
-        for alg in algs {
-            let result = alg.get().search(tree, query);
-            println!("Result {alg}: {result:?}");
-
-            // Convert result to f64 for serialization consistency
-            let neighbors: Vec<(usize, f64)> = result
-                .into_iter()
-                .map(|(idx, dist)| (idx, dist.to_f64().unwrap()))
-                .collect();
-
-            query_result.algorithms.push(AlgorithmResult {
-                algorithm: alg.to_string(),
-                neighbors,
-            });
-        }
-
-        all_results.results.push(query_result);
-    }
-
-    // Save all results to the specified file
-    save_results(&all_results, &output_path, format)?;
-
-    Ok(())
-}
-
-/// Saves search results to a file in the specified format.
-fn save_results<P: AsRef<Path>>(results: &SearchResults, output_path: P, format: OutputFormat) -> Result<(), String> {
-    let output_path = output_path.as_ref();
-
-    let content = match format {
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(results).map_err(|e| format!("Failed to serialize to JSON: {e}"))?
-        }
-        OutputFormat::Yaml => serde_yaml::to_string(results).map_err(|e| format!("Failed to serialize to YAML: {e}"))?,
-    };
-
-    fs::write(output_path, content).map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
-
-    println!("Saved search results to {}", output_path.display());
-
-    Ok(())
+    ShellTree::read_from(tree_path)?.search(queries, algorithms, output_path, format)
 }

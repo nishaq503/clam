@@ -1,83 +1,108 @@
+use core::str::FromStr;
 use std::collections::HashMap;
-use std::fmt;
-use std::str::FromStr;
 
-use abd_clam::cakes::Search;
-use abd_clam::{DistanceValue, cakes};
+use abd_clam::{
+    DistanceValue,
+    cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
+};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ShellQueryAlgorithm {
-    String(QueryAlgorithm<u32>),
-    F32(QueryAlgorithm<f32>),
-    F64(QueryAlgorithm<f64>),
-    U8(QueryAlgorithm<u8>),
-    U16(QueryAlgorithm<u16>),
-    U32(QueryAlgorithm<u32>),
-    U64(QueryAlgorithm<u64>),
-    I8(QueryAlgorithm<i8>),
-    I16(QueryAlgorithm<i16>),
-    I32(QueryAlgorithm<i32>),
-    I64(QueryAlgorithm<i64>),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShellSearchAlgorithm {
+    KnnLinear(HashMap<String, String>),
+    KnnRepeatedRnn(HashMap<String, String>),
+    KnnBreadthFirst(HashMap<String, String>),
+    KnnDepthFirst(HashMap<String, String>),
+    RnnLinear(HashMap<String, String>),
+    RnnChess(HashMap<String, String>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct KnnParams {
-    pub k: usize,
-}
-
-impl fmt::Display for KnnParams {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "k={}", self.k)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RnnParams<T: DistanceValue> {
-    pub radius: T,
-}
-
-impl<T: DistanceValue> fmt::Display for RnnParams<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "radius={}", self.radius)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum QueryAlgorithm<T: DistanceValue> {
-    KnnLinear(KnnParams),
-    KnnRepeatedRnn(KnnParams),
-    KnnBreadthFirst(KnnParams),
-    KnnDepthFirst(KnnParams),
-    RnnLinear(RnnParams<T>),
-    RnnClustered(RnnParams<T>),
-}
-
-impl<T: DistanceValue> std::fmt::Display for QueryAlgorithm<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for ShellSearchAlgorithm {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            QueryAlgorithm::KnnLinear(params) => write!(f, "knn-linear({params})"),
-            QueryAlgorithm::KnnRepeatedRnn(params) => write!(f, "knn-repeated-rnn(k={})", params.k),
-            QueryAlgorithm::KnnBreadthFirst(params) => write!(f, "knn-breadth-first({params})"),
-            QueryAlgorithm::KnnDepthFirst(params) => write!(f, "knn-depth-first({params})"),
-            QueryAlgorithm::RnnLinear(params) => write!(f, "rnn-linear({params})"),
-            QueryAlgorithm::RnnClustered(params) => write!(f, "rnn-clustered({params})"),
+            Self::KnnLinear(params) => write!(f, "KnnLinear({params:?})"),
+            Self::KnnRepeatedRnn(params) => write!(f, "KnnRrnn({params:?})"),
+            Self::KnnBreadthFirst(params) => write!(f, "KnnBfs({params:?})"),
+            Self::KnnDepthFirst(params) => write!(f, "KnnDfs({params:?})"),
+            Self::RnnLinear(params) => write!(f, "RnnLinear({params:?})"),
+            Self::RnnChess(params) => write!(f, "RnnChess({params:?})"),
         }
     }
 }
 
-impl<T: DistanceValue + 'static> QueryAlgorithm<T> {
-    pub fn get<Id, I, A, M>(&self) -> Box<dyn Search<Id, I, T, A, M>>
+impl FromStr for ShellSearchAlgorithm {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (alg, params_str) = s.trim().split_once(':').unwrap_or((s, ""));
+        let params = parse_parameters(params_str)?;
+
+        match alg.to_lowercase().as_str() {
+            "knn-linear" | "knnlinear" => Ok(Self::KnnLinear(params)),
+            "knn-repeated-rnn" | "knnrepeatedrnn" | "knn-rrnn" | "knnrrnn" => Ok(Self::KnnRepeatedRnn(params)),
+            "knn-breadth-first" | "knnbreadthfirst" | "knn-bfs" | "knnbfs" => Ok(Self::KnnBreadthFirst(params)),
+            "knn-depth-first" | "knndepthfirst" | "knn-dfs" | "knndfs" => Ok(Self::KnnDepthFirst(params)),
+            "rnn-linear" | "rnnlinear" => Ok(Self::RnnLinear(params)),
+            "rnn-chess" | "rnnchess" => Ok(Self::RnnChess(params)),
+            _ => Err(format!("Unknown search algorithm: {alg}")),
+        }
+    }
+}
+
+impl ShellSearchAlgorithm {
+    pub fn get<Id, I, T, A, M>(&self) -> Result<Box<dyn Search<Id, I, T, A, M>>, String>
     where
         T: DistanceValue + 'static,
-        M: Fn(&I, &I) -> T + 'static,
+        M: Fn(&I, &I) -> T,
     {
         match self {
-            QueryAlgorithm::KnnLinear(params) => Box::new(cakes::KnnLinear(params.k)),
-            QueryAlgorithm::KnnRepeatedRnn(params) => Box::new(cakes::KnnRrnn(params.k)),
-            QueryAlgorithm::KnnBreadthFirst(params) => Box::new(cakes::KnnBfs(params.k)),
-            QueryAlgorithm::KnnDepthFirst(params) => Box::new(cakes::KnnDfs(params.k)),
-            QueryAlgorithm::RnnLinear(params) => Box::new(cakes::RnnLinear(T::from(params.radius))),
-            QueryAlgorithm::RnnClustered(params) => Box::new(cakes::RnnChess(T::from(params.radius))),
+            Self::KnnLinear(params) => {
+                let k = params
+                    .get("k")
+                    .ok_or("Missing parameter 'k' for KnnLinear")?
+                    .parse::<usize>()
+                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
+                Ok(Box::new(KnnLinear(k)))
+            }
+            Self::KnnRepeatedRnn(params) => {
+                let k = params
+                    .get("k")
+                    .ok_or("Missing parameter 'k' for KnnRepeatedRnn")?
+                    .parse::<usize>()
+                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
+                Ok(Box::new(KnnRrnn(k)))
+            }
+            Self::KnnBreadthFirst(params) => {
+                let k = params
+                    .get("k")
+                    .ok_or("Missing parameter 'k' for KnnBreadthFirst")?
+                    .parse::<usize>()
+                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
+                Ok(Box::new(KnnBfs(k)))
+            }
+            Self::KnnDepthFirst(params) => {
+                let k = params
+                    .get("k")
+                    .ok_or("Missing parameter 'k' for KnnDepthFirst")?
+                    .parse::<usize>()
+                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
+                Ok(Box::new(KnnDfs(k)))
+            }
+            Self::RnnLinear(params) => {
+                let radius = params
+                    .get("radius")
+                    .ok_or("Missing parameter 'radius' for RnnLinear")?
+                    .parse::<T>()
+                    .map_err(|_| format!("Invalid value for 'radius': {params:?}"))?;
+                Ok(Box::new(RnnLinear(radius)))
+            }
+            Self::RnnChess(params) => {
+                let radius = params
+                    .get("radius")
+                    .ok_or("Missing parameter 'radius' for RnnChess")?
+                    .parse::<T>()
+                    .map_err(|_| format!("Invalid value for 'radius': {params:?}"))?;
+                Ok(Box::new(RnnChess(radius)))
+            }
         }
     }
 }
@@ -87,7 +112,7 @@ fn parse_parameters(params_str: &str) -> Result<HashMap<String, String>, String>
     let mut params = HashMap::new();
 
     if params_str.is_empty() {
-        return Ok(params);
+        return Err("No search parameters provided".to_string());
     }
 
     for pair in params_str.split(',') {
@@ -98,123 +123,75 @@ fn parse_parameters(params_str: &str) -> Result<HashMap<String, String>, String>
             return Err(format!("Invalid parameter format: '{pair}'. Expected 'key=value'"));
         }
     }
-    Ok(params)
-}
 
-impl<T: DistanceValue> FromStr for QueryAlgorithm<T> {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (algorithm, params_str) = if let Some((alg, params)) = s.split_once(':') {
-            (alg, params)
-        } else {
-            (s, "")
-        };
-        let params = parse_parameters(params_str)?;
-
-        match algorithm {
-            "knn-linear" => Ok(QueryAlgorithm::KnnLinear(KnnParams {
-                k: params
-                    .get("k")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid k value")?,
-            })),
-            "knn-repeated-rnn" => Ok(QueryAlgorithm::KnnRepeatedRnn(KnnParams {
-                k: params
-                    .get("k")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid k value")?,
-            })),
-            "knn-breadth-first" => Ok(QueryAlgorithm::KnnBreadthFirst(KnnParams {
-                k: params
-                    .get("k")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid k value")?,
-            })),
-            "knn-depth-first" => Ok(QueryAlgorithm::KnnDepthFirst(KnnParams {
-                k: params
-                    .get("k")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid k value")?,
-            })),
-            "rnn-linear" => Ok(QueryAlgorithm::RnnLinear(RnnParams {
-                radius: params
-                    .get("radius")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid radius value")?,
-            })),
-            "rnn-clustered" => Ok(QueryAlgorithm::RnnClustered(RnnParams {
-                radius: params
-                    .get("radius")
-                    .unwrap_or(&"1".to_string())
-                    .parse()
-                    .map_err(|_| "Invalid radius value")?,
-            })),
-            _ => Err(format!("Unknown algorithm: '{algorithm}'")),
-        }
+    if params.is_empty() {
+        return Err("No valid search parameters found".to_string());
     }
+
+    Ok(params)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::euclidean;
-
     use super::*;
 
     #[test]
     fn test_parse_knn_linear() {
-        let query: QueryAlgorithm<f64> = "knn-linear:k=3".parse().unwrap();
-        assert_eq!(query, QueryAlgorithm::KnnLinear(KnnParams { k: 3 }));
+        let query: ShellSearchAlgorithm = "knn-linear:k=3".parse().unwrap();
+        let params = HashMap::from([("k".to_string(), "3".to_string())]);
+        assert_eq!(query, ShellSearchAlgorithm::KnnLinear(params));
     }
 
     #[test]
     fn test_parse_knn_repeated_rnn() {
-        let query: QueryAlgorithm<f64> = "knn-repeated-rnn:k=5".parse().unwrap();
-        assert_eq!(query, QueryAlgorithm::KnnRepeatedRnn(KnnParams { k: 5 }));
+        let query: ShellSearchAlgorithm = "knn-repeated-rnn:k=5".parse().unwrap();
+        let params = HashMap::from([("k".to_string(), "5".to_string())]);
+        assert_eq!(query, ShellSearchAlgorithm::KnnRepeatedRnn(params));
     }
 
     #[test]
     fn test_parse_rnn() {
-        let query: QueryAlgorithm<f64> = "rnn-linear:radius=2.5".parse().unwrap();
-        assert_eq!(query, QueryAlgorithm::RnnLinear(RnnParams { radius: 2.5 }));
+        let query: ShellSearchAlgorithm = "rnn-linear:radius=2.5".parse().unwrap();
+        let params = HashMap::from([("radius".to_string(), "2.5".to_string())]);
+        assert_eq!(query, ShellSearchAlgorithm::RnnLinear(params));
 
-        let query2: QueryAlgorithm<f64> = "rnn-clustered:radius=1.0".parse().unwrap();
-        assert_eq!(query2, QueryAlgorithm::RnnClustered(RnnParams { radius: 1.0 }));
+        let query2: ShellSearchAlgorithm = "rnn-clustered:radius=1.0".parse().unwrap();
+        let params2 = HashMap::from([("radius".to_string(), "1.0".to_string())]);
+        assert_eq!(query2, ShellSearchAlgorithm::RnnChess(params2));
     }
 
     #[test]
     fn test_display() {
-        let query: QueryAlgorithm<f64> = QueryAlgorithm::KnnLinear(KnnParams { k: 3 });
-        assert_eq!(query.to_string(), "knn-linear(k=3)");
+        let query = ShellSearchAlgorithm::KnnLinear(HashMap::from([("k".to_string(), "3".to_string())]));
+        assert_eq!(query.to_string(), "KnnLinear(k=3)");
     }
 
     #[test]
     fn test_parse_errors() {
-        assert!("unknown-algo:k=3".parse::<QueryAlgorithm<f64>>().is_err());
-        assert!("knn-linear:k=invalid".parse::<QueryAlgorithm<f64>>().is_err());
-        assert!("knn-linear:missing_equals".parse::<QueryAlgorithm<f64>>().is_err());
+        assert!("unknown-algo:k=3".parse::<ShellSearchAlgorithm>().is_err());
+        assert!("knn-linear:k=invalid".parse::<ShellSearchAlgorithm>().is_err());
+        assert!("knn-linear:missing_equals".parse::<ShellSearchAlgorithm>().is_err());
     }
 
     #[test]
     fn test_search_algorithm_wrapper_creation() {
-        // Test that we can create a SearchAlgorithmWrapper from a QueryAlgorithm
-        let query: QueryAlgorithm<f64> = QueryAlgorithm::KnnLinear(KnnParams { k: 5 });
-        let alg = query.get::<usize, Vec<f64>, (), euclidean>();
+        // Test that we can create a SearchAlgorithmWrapper from a ShellSearchAlgorithm
+        let query = ShellSearchAlgorithm::KnnLinear(HashMap::from([("k".to_string(), "5".to_string())]));
+        let alg = query.get::<usize, Vec<f64>, f64, (), fn(&Vec<f64>, &Vec<f64>) -> f64>();
 
         // Test that the wrapper implements the SearchAlgorithm trait correctly
+        assert!(alg.is_ok());
+        let alg = alg.unwrap();
         assert_eq!(alg.name(), "KnnLinear(k=5)");
     }
 
     #[test]
     fn test_rnn_wrapper_creation() {
-        let query = QueryAlgorithm::RnnLinear(RnnParams { radius: 2.5 });
-        let alg = query.get::<usize, Vec<f64>, (), euclidean>();
+        let query = ShellSearchAlgorithm::RnnLinear(HashMap::from([("radius".to_string(), "2.5".to_string())]));
+        let alg = query.get::<usize, Vec<f64>, f64, (), fn(&Vec<f64>, &Vec<f64>) -> f64>();
 
+        assert!(alg.is_ok());
+        let alg = alg.unwrap();
         assert_eq!(alg.name(), "RnnLinear(radius=2.5)");
     }
 }

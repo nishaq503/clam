@@ -9,8 +9,8 @@ pub mod npy;
 /// Reads the data from the file at the given path.
 pub fn read<P: AsRef<Path>>(path: P) -> Result<ShellData, String> {
     match Format::from(&path) {
-        Format::Npy => ShellData::read_npy(path),
-        Format::Fasta => ShellData::read_fasta(path),
+        Format::Npy => npy::NpyType::read(path),
+        Format::Fasta => fasta::read(path).map(ShellData::String),
     }
 }
 
@@ -123,6 +123,24 @@ pub enum ShellData {
     U64(Vec<Vec<u64>>),
 }
 
+impl core::fmt::Display for ShellData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ShellData::String(_) => write!(f, "String data"),
+            ShellData::F32(_) => write!(f, "F32 data"),
+            ShellData::F64(_) => write!(f, "F64 data"),
+            ShellData::I8(_) => write!(f, "I8 data"),
+            ShellData::I16(_) => write!(f, "I16 data"),
+            ShellData::I32(_) => write!(f, "I32 data"),
+            ShellData::I64(_) => write!(f, "I64 data"),
+            ShellData::U8(_) => write!(f, "U8 data"),
+            ShellData::U16(_) => write!(f, "U16 data"),
+            ShellData::U32(_) => write!(f, "U32 data"),
+            ShellData::U64(_) => write!(f, "U64 data"),
+        }
+    }
+}
+
 impl ShellData {
     /// Create a slice of a ShellData from start to end indices.
     pub fn slice(&self, start: usize, end: usize) -> Self {
@@ -138,6 +156,23 @@ impl ShellData {
             Self::U16(data) => Self::U16(data[start..end].to_vec()),
             Self::U32(data) => Self::U32(data[start..end].to_vec()),
             Self::U64(data) => Self::U64(data[start..end].to_vec()),
+        }
+    }
+
+    /// Writes the ShellData to a file at the given path.
+    pub fn write<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+        match self {
+            Self::String(data) => fasta::write(path, data),
+            Self::F32(data) => npy::write_npy(path, data),
+            Self::F64(data) => npy::write_npy(path, data),
+            Self::I8(data) => npy::write_npy(path, data),
+            Self::I16(data) => npy::write_npy(path, data),
+            Self::I32(data) => npy::write_npy(path, data),
+            Self::I64(data) => npy::write_npy(path, data),
+            Self::U8(data) => npy::write_npy(path, data),
+            Self::U16(data) => npy::write_npy(path, data),
+            Self::U32(data) => npy::write_npy(path, data),
+            Self::U64(data) => npy::write_npy(path, data),
         }
     }
 }

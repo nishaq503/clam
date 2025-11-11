@@ -267,10 +267,17 @@ where
     A: serde::Serialize + serde::de::DeserializeOwned,
 {
     /// Serializes the `Tree` using Serde.
+    ///
+    /// # Errors
+    ///
+    /// If serialization fails.
     pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        /// A helper struct for serialization.
         #[derive(serde::Serialize)]
         struct SerializableTree<'a, Id, I, T, A> {
+            /// The items stored in the tree, each paired with its identifier.
             items: &'a Vec<(Id, I)>,
+            /// The root cluster of the tree.
             root: &'a Cluster<T, A>,
         }
 
@@ -283,15 +290,22 @@ where
     }
 
     /// Deserializes a `Tree` using Serde.
+    ///
+    /// # Errors
+    ///
+    /// If deserialization fails.
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
+        /// A helper struct for deserialization.
         #[derive(serde::Deserialize)]
         struct SerializableTree<Id, I, T, A> {
+            /// The items stored in the tree, each paired with its identifier.
             items: Vec<(Id, I)>,
+            /// The root cluster of the tree.
             root: Cluster<T, A>,
         }
 
         let SerializableTree { items, root } = SerializableTree::deserialize(deserializer)?;
-        Ok(Tree { items, root, metric })
+        Ok(Self { items, root, metric })
     }
 }
 #[cfg(feature = "serde")]
@@ -303,13 +317,21 @@ where
     A: bitcode::Encode + bitcode::Decode,
 {
     /// Encodes the `Tree` using Bitcode, returning a vector of bytes.
+    ///
+    /// # Errors
+    ///
+    /// If the encoding fails.
     pub fn bitcode_encode(&self) -> Result<Vec<u8>, bitcode::Error> {
         bitcode::encode(&(&self.items, &self.root))
     }
 
     /// Decodes a `Tree` using Bitcode, taking a slice of bytes and a metric.
+    ///
+    /// # Errors
+    ///
+    /// If the decoding fails.
     pub fn bitcode_decode(bytes: &[u8], metric: M) -> Result<Self, bitcode::Error> {
         let (items, root) = bitcode::decode(bytes)?;
-        Ok(Tree { items, root, metric })
+        Ok(Self { items, root, metric })
     }
 }
