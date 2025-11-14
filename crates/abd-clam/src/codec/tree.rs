@@ -1,5 +1,7 @@
 //! An adaptation of the `Tree` for use in compression and compressive search.
 
+use core::ops::Range;
+
 use rayon::prelude::*;
 
 use crate::{Cluster, DistanceValue, PartitionStrategy, Tree};
@@ -14,15 +16,15 @@ where
     Dec: Decoder<I, Enc>,
 {
     /// The items
-    codec_items: Vec<(Id, CodecItem<I, Enc, Dec>)>,
+    pub(crate) codec_items: Vec<(Id, CodecItem<I, Enc, Dec>)>,
     /// The underlying root cluster.
-    root: Cluster<T, A>,
+    pub(crate) root: Cluster<T, A>,
     /// The distance metric used.
-    metric: M,
+    pub(crate) metric: M,
     /// The encoder used for compressing items.
-    encoder: Enc,
+    pub(crate) encoder: Enc,
     /// The decoder used for decompressing items.
-    decoder: Dec,
+    pub(crate) decoder: Dec,
 }
 
 impl<Id, I, T, A, M, Enc, Dec> core::fmt::Debug for CodecTree<Id, I, T, A, M, Enc, Dec>
@@ -148,17 +150,19 @@ where
         }
     }
 
-    /// Decode all cluster centers along the branch from this cluster to the given cluster.
-    fn decode_branch_to_cluster(&mut self, cluster: &Cluster<T, A>) {
-        if matches!(&self.codec_items[cluster.center_index].1, CodecItem::Uncompressed(_)) {
-            // The center is already uncompressed.
-            return;
-        }
-
+    /// Decode all cluster centers along the branch from this cluster to the given cluster, and returns a reference to the cluster whose center is at the given
+    /// index.
+    fn decode_branch_to_cluster(&mut self, center_index: usize) -> &Cluster<T, A> {
         // Find the path from the root to the requested cluster.
-        let path = cluster
-            .path_to_cluster_containing(cluster.center_index)
+        let path = self
+            .root
+            .path_to_cluster_containing(center_index)
             .unwrap_or_else(|_| unreachable!("The center index is never out of bounds."));
+
+        if matches!(&self.codec_items[center_index].1, CodecItem::Uncompressed(_)) {
+            // The center is already uncompressed.
+            return path[path.len() - 1];
+        }
 
         // Decode the root item first.
         let mut path_iter = path.iter();
@@ -186,15 +190,17 @@ where
             }
             ref_index = center_index;
         }
+
+        path[path.len() - 1]
     }
 
     /// Decodes all non-center items in the given cluster using the center as reference, assuming the center is already decoded.
-    fn decode_non_center_items(&mut self, cluster: &Cluster<T, A>) {
-        let reference = match &self.codec_items[cluster.center_index].1 {
+    fn decode_non_center_items(&mut self, center_index: usize, non_center_indices: Range<usize>) {
+        let reference = match &self.codec_items[center_index].1 {
             CodecItem::Uncompressed(item) => item,
             CodecItem::Delta(_) => unreachable!("Center item should be uncompressed at this point."),
         };
-        cluster.subtree_indices().for_each(|index| {
+        non_center_indices.for_each(|index| {
             // SAFETY: We have mutable access to the tree and we know that the center index is not in the subtree indices. Therefore, we are not taking
             // simultaneous mutable references to the same item.
             #[allow(unsafe_code)]
@@ -206,7 +212,7 @@ where
     }
 
     /// Parallel version of [`Self::decode_non_center_items`].
-    fn par_decode_non_center_items(&mut self, cluster: &Cluster<T, A>)
+    fn par_decode_non_center_items(&mut self, center_index: usize, non_center_indices: Range<usize>)
     where
         Id: Send + Sync,
         I: Send + Sync,
@@ -217,11 +223,11 @@ where
         Enc::Output: Send + Sync,
         Dec: Send + Sync,
     {
-        let reference = match &self.codec_items[cluster.center_index].1 {
+        let reference = match &self.codec_items[center_index].1 {
             CodecItem::Uncompressed(item) => item,
             CodecItem::Delta(_) => unreachable!("Center item should be uncompressed at this point."),
         };
-        cluster.subtree_indices().into_par_iter().for_each(|index| {
+        non_center_indices.into_par_iter().for_each(|index| {
             // SAFETY: We have mutable access to the tree and we know that the center index is not in the subtree indices. Therefore, we are not taking
             // simultaneous mutable references to the same item.
             #[allow(unsafe_code)]
@@ -275,55 +281,52 @@ where
         }
     }
 
-    /// Returns the distance between the query and the center of the given cluster, decoding items as necessary.
-    pub fn distance_to_center_mut(&mut self, query: &I, cluster: &Cluster<T, A>) -> T {
-        self.decode_branch_to_cluster(cluster);
-        self.distance_to_center_decoded(query, cluster)
+    /// Returns the distance between the query and the item at the given index.
+    ///
+    /// This assumes that the indexed item is the center of some cluster, and will decode all centers along the branch to that cluster as necessary.
+    pub fn distance_to_center_mut(&mut self, query: &I, center_index: usize) -> T {
+        self.decode_branch_to_cluster(center_index);
+        self.distance_to_item_decoded(query, center_index)
     }
 
-    /// Returns the distances between the query item and all items in the given cluster, excluding the cluster's center, decoding items as necessary.
-    pub fn distances_to_items_in_subtree_mut(&mut self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        self.decode_branch_to_cluster(cluster);
-        cluster
-            .subtree_indices()
-            .zip(self.distances_to_non_center_decoded(query, cluster))
-            .collect()
+    /// Returns the distances between the query item and all items in the subtree rooted at the cluster whose center is at the given index, decoding items as
+    /// necessary.
+    pub fn distances_to_items_in_subtree_mut(&mut self, query: &I, center_index: usize) -> Vec<(usize, T)> {
+        let indices = self.decode_branch_to_cluster(center_index).subtree_indices();
+        self.decode_non_center_items(center_index, indices.clone());
+        self.distances_to_items_decoded(query, indices)
     }
 
-    /// Returns the distances between the query item and all items in the given cluster, including the cluster's center, decoding items as necessary.
-    pub fn distances_to_items_in_cluster_mut(&mut self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        self.decode_branch_to_cluster(cluster);
-        self.decode_non_center_items(cluster);
-        let distance_to_center = self.distance_to_center_decoded(query, cluster);
-        let distances_to_non_center = self.distances_to_non_center_decoded(query, cluster);
-        cluster
-            .all_items_indices()
-            .zip(core::iter::once(distance_to_center).chain(distances_to_non_center))
-            .collect()
+    /// Returns the distances between the query item and all items in the cluster whose center is at the given index, decoding items as necessary.
+    pub fn distances_to_items_in_cluster_mut(&mut self, query: &I, center_index: usize) -> Vec<(usize, T)> {
+        let non_center_indices = self.decode_branch_to_cluster(center_index).subtree_indices();
+        self.decode_non_center_items(center_index, non_center_indices.clone());
+        let end = non_center_indices.end;
+        self.distances_to_items_decoded(query, center_index..end)
     }
 
-    /// Returns the distance between the query and the center of the given cluster, assuming the center is already decoded.
-    fn distance_to_center_decoded(&self, query: &I, cluster: &Cluster<T, A>) -> T {
-        let center = match &self.codec_items[cluster.center_index].1 {
+    /// Returns the distance between the query and item at the given index, assuming the item is already decoded.
+    fn distance_to_item_decoded(&self, query: &I, index: usize) -> T {
+        let center = match &self.codec_items[index].1 {
             CodecItem::Uncompressed(item) => item,
             CodecItem::Delta(_) => unreachable!("Center item should be uncompressed at this point."),
         };
         (self.metric)(query, center)
     }
 
-    /// Computes the distances from the query to all non-center items in the given cluster, assuming the center and all items are already decoded.
-    fn distances_to_non_center_decoded(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<T> {
-        let indices = cluster.subtree_indices();
-        self.codec_items[indices]
+    /// Computes the distances from the query to all items in the given range, assuming the items are already decoded.
+    fn distances_to_items_decoded(&self, query: &I, indices: Range<usize>) -> Vec<(usize, T)> {
+        self.codec_items[indices.clone()]
             .iter()
-            .map(|(_, codec_item)| {
+            .zip(indices)
+            .map(|((_, codec_item), i)| {
                 let item = match codec_item {
                     CodecItem::Uncompressed(item) => item,
                     CodecItem::Delta(_) => {
                         unreachable!("All items in the subtree should be uncompressed at this point.")
                     }
                 };
-                (self.metric)(query, item)
+                (i, (self.metric)(query, item))
             })
             .collect()
     }
@@ -378,30 +381,26 @@ where
     /// Parallel version of [`Self::distances_to_items_in_cluster_mut`].
     ///
     /// The centers along the branch to the cluster are decoded in serial. Decoding of non-center items and the distance computations are then parallelized.
-    pub fn par_distances_to_items_in_cluster_mut(&mut self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        self.decode_branch_to_cluster(cluster);
-        self.par_decode_non_center_items(cluster);
-        let distance_to_center = self.distance_to_center_decoded(query, cluster);
-        let distances_to_non_center = self.par_distances_to_non_center_decoded(query, cluster);
-        cluster
-            .all_items_indices()
-            .zip(core::iter::once(distance_to_center).chain(distances_to_non_center))
-            .collect()
+    pub fn par_distances_to_items_in_cluster_mut(&mut self, query: &I, center_index: usize) -> Vec<(usize, T)> {
+        let non_center_indices = self.decode_branch_to_cluster(center_index).subtree_indices();
+        self.par_decode_non_center_items(center_index, non_center_indices.clone());
+        let end = non_center_indices.end;
+        self.par_distances_to_items_decoded(query, center_index..end)
     }
 
-    /// Parallel version of [`Self::distances_to_non_center_decoded`].
-    fn par_distances_to_non_center_decoded(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<T> {
-        let indices = cluster.subtree_indices();
-        self.codec_items[indices]
+    /// Parallel version of [`Self::distances_to_items_decoded`].
+    fn par_distances_to_items_decoded(&self, query: &I, indices: Range<usize>) -> Vec<(usize, T)> {
+        self.codec_items[indices.clone()]
             .par_iter()
-            .map(|(_, codec_item)| {
+            .zip(indices)
+            .map(|((_, codec_item), i)| {
                 let item = match codec_item {
                     CodecItem::Uncompressed(item) => item,
                     CodecItem::Delta(_) => {
                         unreachable!("All items in the subtree should be uncompressed at this point.")
                     }
                 };
-                (self.metric)(query, item)
+                (i, (self.metric)(query, item))
             })
             .collect()
     }

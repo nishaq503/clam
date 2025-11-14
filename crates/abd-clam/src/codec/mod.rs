@@ -5,7 +5,11 @@ mod search;
 mod tree;
 
 pub use item::CodecItem;
-pub use search::CompressiveSearch;
+pub use search::{
+    CompressiveSearch,
+    exact::{RnnChess, RnnLinear},
+};
+// pub use search::{CompressiveSearch, exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear}};
 pub use tree::CodecTree;
 
 /// An `Encoder` encodes items into a compressed representation.

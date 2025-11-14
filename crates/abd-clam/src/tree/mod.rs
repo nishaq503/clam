@@ -42,10 +42,8 @@ where
             return Err("Cannot create a Tree with no items.");
         }
 
-        let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Cluster::new_root(&mut items, &metric, &PartitionStrategy::default(), &|_| None);
-
-        Ok(Self { items, root, metric })
+        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        Self::new(items, metric, &PartitionStrategy::default(), &|_| None)
     }
 
     /// Parallel version of [`new_minimal`](Self::new_minimal).
@@ -63,10 +61,8 @@ where
             return Err("Cannot create a Tree with no items.");
         }
 
-        let mut items = items.into_iter().enumerate().collect::<Vec<_>>();
-        let root = Cluster::par_new_root(&mut items, &metric, &PartitionStrategy::default(), &|_| None);
-
-        Ok(Self { items, root, metric })
+        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| None)
     }
 }
 
