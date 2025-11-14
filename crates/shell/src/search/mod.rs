@@ -3,28 +3,32 @@ use std::collections::HashMap;
 
 use abd_clam::{
     DistanceValue,
-    cakes::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear, Search},
+    cakes::{Cakes, KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ShellSearchAlgorithm {
+pub enum ShellCakes {
+    KnnBfs(HashMap<String, String>),
+    KnnBranch(HashMap<String, String>),
+    KnnDfs(HashMap<String, String>),
     KnnLinear(HashMap<String, String>),
-    KnnRepeatedRnn(HashMap<String, String>),
-    KnnBreadthFirst(HashMap<String, String>),
-    KnnDepthFirst(HashMap<String, String>),
-    RnnLinear(HashMap<String, String>),
+    KnnRrnn(HashMap<String, String>),
     RnnChess(HashMap<String, String>),
+    RnnLinear(HashMap<String, String>),
+    ApproxKnnDfs(HashMap<String, String>),
 }
 
-impl core::fmt::Display for ShellSearchAlgorithm {
+impl core::fmt::Display for ShellCakes {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
+            Self::KnnBfs(params) => write!(f, "KnnBfs({})", display_params(params)),
+            Self::KnnBranch(params) => write!(f, "KnnBranch({})", display_params(params)),
+            Self::KnnDfs(params) => write!(f, "KnnDfs({})", display_params(params)),
             Self::KnnLinear(params) => write!(f, "KnnLinear({})", display_params(params)),
-            Self::KnnRepeatedRnn(params) => write!(f, "KnnRrnn({})", display_params(params)),
-            Self::KnnBreadthFirst(params) => write!(f, "KnnBfs({})", display_params(params)),
-            Self::KnnDepthFirst(params) => write!(f, "KnnDfs({})", display_params(params)),
-            Self::RnnLinear(params) => write!(f, "RnnLinear({})", display_params(params)),
+            Self::KnnRrnn(params) => write!(f, "KnnRrnn({})", display_params(params)),
             Self::RnnChess(params) => write!(f, "RnnChess({})", display_params(params)),
+            Self::RnnLinear(params) => write!(f, "RnnLinear({})", display_params(params)),
+            Self::ApproxKnnDfs(params) => write!(f, "ApproxKnnDfs({})", display_params(params)),
         }
     }
 }
@@ -37,7 +41,7 @@ fn display_params(params: &HashMap<String, String>) -> String {
         .join(", ")
 }
 
-impl FromStr for ShellSearchAlgorithm {
+impl FromStr for ShellCakes {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -45,71 +49,59 @@ impl FromStr for ShellSearchAlgorithm {
         let params = parse_parameters(params_str)?;
 
         match alg.to_lowercase().as_str() {
-            "knn-linear" | "knnlinear" => Ok(Self::KnnLinear(params)),
-            "knn-repeated-rnn" | "knnrepeatedrnn" | "knn-rrnn" | "knnrrnn" => Ok(Self::KnnRepeatedRnn(params)),
-            "knn-breadth-first" | "knnbreadthfirst" | "knn-bfs" | "knnbfs" => Ok(Self::KnnBreadthFirst(params)),
-            "knn-depth-first" | "knndepthfirst" | "knn-dfs" | "knndfs" => Ok(Self::KnnDepthFirst(params)),
-            "rnn-linear" | "rnnlinear" => Ok(Self::RnnLinear(params)),
-            "rnn-chess" | "rnnchess" => Ok(Self::RnnChess(params)),
+            "knn-bfs" => Ok(Self::KnnBfs(params)),
+            "knn-branch" => Ok(Self::KnnBranch(params)),
+            "knn-dfs" => Ok(Self::KnnDfs(params)),
+            "knn-linear" => Ok(Self::KnnLinear(params)),
+            "knn-rrnn" => Ok(Self::KnnRrnn(params)),
+            "rnn-chess" => Ok(Self::RnnChess(params)),
+            "rnn-linear" => Ok(Self::RnnLinear(params)),
+            "approx-knn-dfs" => Ok(Self::ApproxKnnDfs(params)),
             _ => Err(format!("Unknown search algorithm: {alg}")),
         }
     }
 }
 
-impl ShellSearchAlgorithm {
-    pub fn get<Id, I, T, A, M>(&self) -> Result<Box<dyn Search<Id, I, T, A, M>>, String>
+impl ShellCakes {
+    pub fn get<T>(&self) -> Result<Cakes<T>, String>
     where
         T: DistanceValue + 'static,
-        M: Fn(&I, &I) -> T,
+        <T as FromStr>::Err: std::fmt::Display,
     {
         match self {
+            Self::KnnBfs(params) => {
+                let k = parse_param(params, "k", "KnnBfs")?;
+                Ok(Cakes::KnnBfs(KnnBfs(k)))
+            }
+            Self::KnnBranch(params) => {
+                let k = parse_param(params, "k", "KnnBranch")?;
+                Ok(Cakes::KnnBranch(KnnBranch(k)))
+            }
+            Self::KnnDfs(params) => {
+                let k = parse_param(params, "k", "KnnDfs")?;
+                Ok(Cakes::KnnDfs(KnnDfs(k)))
+            }
             Self::KnnLinear(params) => {
-                let k = params
-                    .get("k")
-                    .ok_or("Missing parameter 'k' for KnnLinear")?
-                    .parse::<usize>()
-                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
-                Ok(Box::new(KnnLinear(k)))
+                let k = parse_param(params, "k", "KnnLinear")?;
+                Ok(Cakes::KnnLinear(KnnLinear(k)))
             }
-            Self::KnnRepeatedRnn(params) => {
-                let k = params
-                    .get("k")
-                    .ok_or("Missing parameter 'k' for KnnRepeatedRnn")?
-                    .parse::<usize>()
-                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
-                Ok(Box::new(KnnRrnn(k)))
-            }
-            Self::KnnBreadthFirst(params) => {
-                let k = params
-                    .get("k")
-                    .ok_or("Missing parameter 'k' for KnnBreadthFirst")?
-                    .parse::<usize>()
-                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
-                Ok(Box::new(KnnBfs(k)))
-            }
-            Self::KnnDepthFirst(params) => {
-                let k = params
-                    .get("k")
-                    .ok_or("Missing parameter 'k' for KnnDepthFirst")?
-                    .parse::<usize>()
-                    .map_err(|e| format!("Invalid value for 'k': {e}"))?;
-                Ok(Box::new(KnnDfs(k)))
-            }
-            Self::RnnLinear(params) => {
-                let radius = params
-                    .get("radius")
-                    .ok_or("Missing parameter 'radius' for RnnLinear")?
-                    .parse::<T>()
-                    .map_err(|_| format!("Invalid value for 'radius': {params:?}"))?;
-                Ok(Box::new(RnnLinear(radius)))
+            Self::KnnRrnn(params) => {
+                let k = parse_param(params, "k", "KnnRrnn")?;
+                Ok(Cakes::KnnRrnn(KnnRrnn(k)))
             }
             Self::RnnChess(params) => {
-                let radius = params
-                    .get("radius")
-                    .ok_or("Missing parameter 'radius' for RnnChess")?
-                    .parse::<T>()
-                    .map_err(|_| format!("Invalid value for 'radius': {params:?}"))?;
-                Ok(Box::new(RnnChess(radius)))
+                let r = parse_param(params, "r", "RnnChess")?;
+                Ok(Cakes::RnnChess(RnnChess(r)))
+            }
+            Self::RnnLinear(params) => {
+                let r = parse_param(params, "r", "RnnLinear")?;
+                Ok(Cakes::RnnLinear(RnnLinear(r)))
+            }
+            Self::ApproxKnnDfs(params) => {
+                let k = parse_param(params, "k", "ApproxKnnDfs")?;
+                let d = parse_param(params, "d", "ApproxKnnDfs")?;
+                let l = parse_param(params, "l", "ApproxKnnDfs")?;
+                Ok(Cakes::ApproxKnnDfs(abd_clam::cakes::approximate::KnnDfs(k, d, l)))
             }
         }
     }
@@ -139,52 +131,68 @@ fn parse_parameters(params_str: &str) -> Result<HashMap<String, String>, String>
     Ok(params)
 }
 
+/// Helper function to parse individual parameters into desired type
+fn parse_param<T>(params: &HashMap<String, String>, key: &str, alg_name: &str) -> Result<T, String>
+where
+    T: FromStr,
+    T::Err: std::fmt::Display,
+{
+    let value_str = params
+        .get(key)
+        .ok_or_else(|| format!("Missing parameter '{key}' for {alg_name}"))?;
+    value_str
+        .parse::<T>()
+        .map_err(|e| format!("Invalid value for '{key}' for {alg_name}: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashMap;
+
+    use super::ShellCakes;
 
     #[test]
     fn test_parse_knn_linear() {
-        let query: ShellSearchAlgorithm = "knn-linear:k=3".parse().unwrap();
+        let query: ShellCakes = "knn-linear:k=3".parse().unwrap();
         let params = HashMap::from([("k".to_string(), "3".to_string())]);
-        assert_eq!(query, ShellSearchAlgorithm::KnnLinear(params));
+        assert_eq!(query, ShellCakes::KnnLinear(params));
     }
 
     #[test]
     fn test_parse_knn_repeated_rnn() {
-        let query: ShellSearchAlgorithm = "knn-repeated-rnn:k=5".parse().unwrap();
+        let query: ShellCakes = "knn-rrnn:k=5".parse().unwrap();
         let params = HashMap::from([("k".to_string(), "5".to_string())]);
-        assert_eq!(query, ShellSearchAlgorithm::KnnRepeatedRnn(params));
+        assert_eq!(query, ShellCakes::KnnRrnn(params));
     }
 
     #[test]
     fn test_parse_rnn() {
-        let query: ShellSearchAlgorithm = "rnn-linear:radius=2.5".parse().unwrap();
-        let params = HashMap::from([("radius".to_string(), "2.5".to_string())]);
-        assert_eq!(query, ShellSearchAlgorithm::RnnLinear(params));
+        let query: ShellCakes = "rnn-linear:r=2.5".parse().unwrap();
+        let params = HashMap::from([("r".to_string(), "2.5".to_string())]);
+        assert_eq!(query, ShellCakes::RnnLinear(params));
 
-        let query2: ShellSearchAlgorithm = "rnn-chess:radius=1.0".parse().unwrap();
-        let params2 = HashMap::from([("radius".to_string(), "1.0".to_string())]);
-        assert_eq!(query2, ShellSearchAlgorithm::RnnChess(params2));
+        let query2: ShellCakes = "rnn-chess:r=1.0".parse().unwrap();
+        let params2 = HashMap::from([("r".to_string(), "1.0".to_string())]);
+        assert_eq!(query2, ShellCakes::RnnChess(params2));
     }
 
     #[test]
     fn test_display() {
-        let query = ShellSearchAlgorithm::KnnLinear(HashMap::from([("k".to_string(), "3".to_string())]));
+        let query = ShellCakes::KnnLinear(HashMap::from([("k".to_string(), "3".to_string())]));
         assert_eq!(query.to_string(), "KnnLinear(k=3)");
     }
 
     #[test]
     fn test_parse_errors() {
-        assert!("unknown-algo:k=3".parse::<ShellSearchAlgorithm>().is_err());
-        assert!("knn-linear:missing_equals".parse::<ShellSearchAlgorithm>().is_err());
+        assert!("unknown-algo:k=3".parse::<ShellCakes>().is_err());
+        assert!("knn-linear:missing_equals".parse::<ShellCakes>().is_err());
     }
 
     #[test]
     fn test_search_algorithm_wrapper_creation() {
         // Test that we can create a SearchAlgorithmWrapper from a ShellSearchAlgorithm
-        let query = ShellSearchAlgorithm::KnnLinear(HashMap::from([("k".to_string(), "5".to_string())]));
-        let alg = query.get::<usize, Vec<f64>, f64, (), fn(&Vec<f64>, &Vec<f64>) -> f64>();
+        let query = ShellCakes::KnnLinear(HashMap::from([("k".to_string(), "5".to_string())]));
+        let alg = query.get::<f64>();
 
         // Test that the wrapper implements the SearchAlgorithm trait correctly
         assert!(alg.is_ok());
@@ -194,11 +202,11 @@ mod tests {
 
     #[test]
     fn test_rnn_wrapper_creation() {
-        let query = ShellSearchAlgorithm::RnnLinear(HashMap::from([("radius".to_string(), "2.5".to_string())]));
-        let alg = query.get::<usize, Vec<f64>, f64, (), fn(&Vec<f64>, &Vec<f64>) -> f64>();
+        let query = ShellCakes::RnnLinear(HashMap::from([("r".to_string(), "2.5".to_string())]));
+        let alg = query.get::<f64>();
 
         assert!(alg.is_ok());
         let alg = alg.unwrap();
-        assert_eq!(alg.name(), "RnnLinear(radius=2.5)");
+        assert_eq!(alg.name(), "RnnLinear(r=2.5)");
     }
 }

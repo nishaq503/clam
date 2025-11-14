@@ -7,6 +7,7 @@ name = "abd-clam"
 version = "0.33.0"
 dependencies = [
  "bitcode",
+ "bytecount",
  "criterion",
  "csv",
  "distances",

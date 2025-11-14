@@ -2,30 +2,36 @@
 
 use std::path::Path;
 
-use abd_clam::{DistanceValue, PartitionStrategy, Tree};
+use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search};
 
 use crate::{
     commands::cakes::{AlgorithmResult, QueryResult, SearchOutputFormat, SearchResults},
     data::ShellData,
     metrics::{Metric, cosine, euclidean, levenshtein},
-    search::ShellSearchAlgorithm,
+    search::ShellCakes,
 };
 
+macro_rules! tree_type {
+    ($id:ty, $i:ty, $t:ty) => {
+        Tree<$id, $i, $t, (), fn(&$i, &$i) -> $t>
+    };
+}
+
 pub enum VectorTree {
-    F32(Tree<usize, Vec<f32>, f32, (), fn(&Vec<f32>, &Vec<f32>) -> f32>),
-    F64(Tree<usize, Vec<f64>, f64, (), fn(&Vec<f64>, &Vec<f64>) -> f64>),
-    I8(Tree<usize, Vec<i8>, f32, (), fn(&Vec<i8>, &Vec<i8>) -> f32>),
-    I16(Tree<usize, Vec<i16>, f32, (), fn(&Vec<i16>, &Vec<i16>) -> f32>),
-    I32(Tree<usize, Vec<i32>, f32, (), fn(&Vec<i32>, &Vec<i32>) -> f32>),
-    I64(Tree<usize, Vec<i64>, f64, (), fn(&Vec<i64>, &Vec<i64>) -> f64>),
-    U8(Tree<usize, Vec<u8>, f32, (), fn(&Vec<u8>, &Vec<u8>) -> f32>),
-    U16(Tree<usize, Vec<u16>, f32, (), fn(&Vec<u16>, &Vec<u16>) -> f32>),
-    U32(Tree<usize, Vec<u32>, f32, (), fn(&Vec<u32>, &Vec<u32>) -> f32>),
-    U64(Tree<usize, Vec<u64>, f64, (), fn(&Vec<u64>, &Vec<u64>) -> f64>),
+    F32(tree_type!(usize, Vec<f32>, f32)),
+    F64(tree_type!(usize, Vec<f64>, f64)),
+    I8(tree_type!(usize, Vec<i8>, f32)),
+    I16(tree_type!(usize, Vec<i16>, f32)),
+    I32(tree_type!(usize, Vec<i32>, f32)),
+    I64(tree_type!(usize, Vec<i64>, f64)),
+    U8(tree_type!(usize, Vec<u8>, f32)),
+    U16(tree_type!(usize, Vec<u16>, f32)),
+    U32(tree_type!(usize, Vec<u32>, f32)),
+    U64(tree_type!(usize, Vec<u64>, f64)),
 }
 
 pub enum ShellTree {
-    Levenshtein(Tree<String, String, u32, (), fn(&String, &String) -> u32>),
+    Levenshtein(tree_type!(String, String, u32)),
     Euclidean(VectorTree),
     Cosine(VectorTree),
 }
@@ -64,7 +70,7 @@ impl ShellTree {
                 ShellData::String(items) => {
                     let strategy = PartitionStrategy::default();
                     let metric: fn(&_, &_) -> u32 = levenshtein::<_, _>;
-                    let tree: Tree<_, _, _, (), _> = Tree::par_new(items, metric, &strategy, &|_| None)?;
+                    let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
                     Ok(ShellTree::Levenshtein(tree))
                 }
                 _ => Err("Levenshtein metric can only be used with string data".to_string()),
@@ -102,7 +108,7 @@ impl ShellTree {
     pub fn search<P: AsRef<Path>>(
         &self,
         queries: ShellData,
-        algorithms: &[ShellSearchAlgorithm],
+        algorithms: &[ShellCakes],
         output_path: P,
         format: SearchOutputFormat,
     ) -> Result<(), String> {
@@ -240,7 +246,7 @@ impl VectorTree {
     pub fn search<P: AsRef<Path>>(
         &self,
         queries: ShellData,
-        algorithms: &[ShellSearchAlgorithm],
+        algorithms: &[ShellCakes],
         output_path: P,
         format: SearchOutputFormat,
     ) -> Result<(), String> {
@@ -290,7 +296,7 @@ impl std::fmt::Display for ShellTree {
 fn search<Id, I, T, A, M, P>(
     tree: &Tree<Id, I, T, A, M>,
     queries: &[I],
-    algs: &[ShellSearchAlgorithm],
+    algs: &[ShellCakes],
     output_path: P,
     format: SearchOutputFormat,
 ) -> Result<(), String>
@@ -298,6 +304,7 @@ where
     T: DistanceValue + 'static,
     M: Fn(&I, &I) -> T,
     P: AsRef<Path>,
+    <T as core::str::FromStr>::Err: std::fmt::Display,
 {
     let mut all_results = SearchResults { results: Vec::new() };
 

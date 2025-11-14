@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{data::ShellData, search::ShellSearchAlgorithm, trees::ShellTree};
+use crate::{data::ShellData, search::ShellCakes, trees::ShellTree};
 
 /// Represents the complete search results for all queries and algorithms.
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,7 +71,7 @@ impl SearchOutputFormat {
 pub fn search_tree<P: AsRef<Path>>(
     tree_path: P,
     queries: ShellData,
-    algorithms: &[ShellSearchAlgorithm],
+    algorithms: &[ShellCakes],
     output_path: P,
 ) -> Result<(), String> {
     // Determine output format from file extension

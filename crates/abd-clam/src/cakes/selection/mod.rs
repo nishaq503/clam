@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{ParSearch, Search},
+    cakes::{Cakes, ParSearch, Search},
 };
 
 /// Measures the throughput (Queries per Second) of a CAKES algorithm on the given root cluster with the given metric.
@@ -76,15 +76,15 @@ pub fn select_fastest_algorithm<'a, Id, I, T, A, M>(
     tree: &Tree<Id, I, T, A, M>,
     n_queries: usize,
     min_time_secs: f64,
-    algorithms: &[&'a dyn Search<Id, I, T, A, M>],
-) -> (&'a dyn Search<Id, I, T, A, M>, f64)
+    algorithms: &'a [Cakes<T>],
+) -> (&'a Cakes<T>, f64)
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
     algorithms
         .iter()
-        .map(|&alg| {
+        .map(|alg| {
             let throughput = measure_throughput(tree, n_queries, alg, min_time_secs);
             (alg, throughput)
         })

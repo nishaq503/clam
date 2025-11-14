@@ -4,9 +4,11 @@ mod alignment_ops;
 mod columnar;
 mod cost_matrix;
 mod msa;
+mod quality_metrics;
 mod sequence;
 
 pub use cost_matrix::CostMatrix;
+pub use quality_metrics::QualityMetric;
 pub use sequence::Sequence;
 
 use alignment_ops::{Direction, Edit, Edits};

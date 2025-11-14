@@ -11,6 +11,42 @@ pub mod selection;
 pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 
+/// CAKES algorithms.
+pub enum Cakes<T: DistanceValue> {
+    /// K-Nearest Neighbors Breadth-First Sieve.
+    KnnBfs(KnnBfs),
+    /// K-Nearest Neighbors Repeated RNN along a greedy branch.
+    KnnBranch(KnnBranch),
+    /// K-Nearest Neighbors Depth-First Sieve.
+    KnnDfs(KnnDfs),
+    /// K-Nearest Neighbors Linear Search.
+    KnnLinear(KnnLinear),
+    /// K-Nearest Neighbors Repeated RNN.
+    KnnRrnn(KnnRrnn),
+    /// Ranged Nearest Neighbors Chess Search.
+    RnnChess(RnnChess<T>),
+    /// Ranged Nearest Neighbors Linear Search.
+    RnnLinear(RnnLinear<T>),
+    /// Approximate K-Nearest Neighbors Depth-First Sieve.
+    ApproxKnnDfs(approximate::KnnDfs),
+}
+
+impl<T: DistanceValue> Cakes<T> {
+    /// Returns the name of the algorithm.
+    pub fn name(&self) -> String {
+        match self {
+            Self::KnnBfs(KnnBfs(k)) => format!("KnnBfs(k={k})"),
+            Self::KnnBranch(KnnBranch(k)) => format!("KnnBranch(k={k})"),
+            Self::KnnDfs(KnnDfs(k)) => format!("KnnDfs(k={k})"),
+            Self::KnnLinear(KnnLinear(k)) => format!("KnnLinear(k={k})"),
+            Self::KnnRrnn(KnnRrnn(k)) => format!("KnnRrnn(k={k})"),
+            Self::RnnChess(RnnChess(r)) => format!("RnnChess(r={r})"),
+            Self::RnnLinear(RnnLinear(r)) => format!("RnnLinear(r={r})"),
+            Self::ApproxKnnDfs(approximate::KnnDfs(k, d, l)) => format!("ApproxKnnDfs(k={k}, d={d}, l={l})"),
+        }
+    }
+}
+
 /// A Nearest Neighbor Search algorithm.
 pub trait Search<Id, I, T, A, M>
 where
@@ -20,7 +56,6 @@ where
     /// Returns a name for the search algorithm.
     ///
     /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm.
-    /// [`type_name`](core::any::type_name).
     fn name(&self) -> String;
 
     /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
@@ -29,6 +64,83 @@ where
     /// Batched version of [`Search::search`].
     fn batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries.iter().map(|query| self.search(tree, query)).collect()
+    }
+}
+
+/// Parallel version of [`Search`].
+pub trait ParSearch<Id, I, T, A, M>: Search<Id, I, T, A, M> + Send + Sync
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    /// Parallel version of [`Search::search`].
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
+
+    /// Parallel version of [`Search::batch_search`].
+    fn par_batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+        queries.par_iter().map(|query| self.search(tree, query)).collect()
+    }
+
+    /// Parallel batched version of [`Search::par_search`].
+    fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
+        queries.par_iter().map(|query| self.par_search(tree, query)).collect()
+    }
+}
+
+impl<Id, I, T, A, M> Search<Id, I, T, A, M> for Cakes<T>
+where
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
+    fn name(&self) -> String {
+        match self {
+            Self::KnnBfs(alg) => <KnnBfs as Search<Id, I, T, A, M>>::name(alg),
+            Self::KnnBranch(alg) => <KnnBranch as Search<Id, I, T, A, M>>::name(alg),
+            Self::KnnDfs(alg) => <KnnDfs as Search<Id, I, T, A, M>>::name(alg),
+            Self::KnnLinear(alg) => <KnnLinear as Search<Id, I, T, A, M>>::name(alg),
+            Self::KnnRrnn(alg) => <KnnRrnn as Search<Id, I, T, A, M>>::name(alg),
+            Self::RnnChess(alg) => <RnnChess<T> as Search<Id, I, T, A, M>>::name(alg),
+            Self::RnnLinear(alg) => <RnnLinear<T> as Search<Id, I, T, A, M>>::name(alg),
+            Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as Search<Id, I, T, A, M>>::name(alg),
+        }
+    }
+
+    fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        match self {
+            Self::KnnBfs(alg) => alg.search(tree, query),
+            Self::KnnBranch(alg) => alg.search(tree, query),
+            Self::KnnDfs(alg) => alg.search(tree, query),
+            Self::KnnLinear(alg) => alg.search(tree, query),
+            Self::KnnRrnn(alg) => alg.search(tree, query),
+            Self::RnnChess(alg) => alg.search(tree, query),
+            Self::RnnLinear(alg) => alg.search(tree, query),
+            Self::ApproxKnnDfs(alg) => alg.search(tree, query),
+        }
+    }
+}
+
+impl<Id, I, T, A, M> ParSearch<Id, I, T, A, M> for Cakes<T>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
+{
+    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
+        match self {
+            Self::KnnBfs(alg) => alg.par_search(tree, query),
+            Self::KnnBranch(alg) => alg.par_search(tree, query),
+            Self::KnnDfs(alg) => alg.par_search(tree, query),
+            Self::KnnLinear(alg) => alg.par_search(tree, query),
+            Self::KnnRrnn(alg) => alg.par_search(tree, query),
+            Self::RnnChess(alg) => alg.par_search(tree, query),
+            Self::RnnLinear(alg) => alg.par_search(tree, query),
+            Self::ApproxKnnDfs(alg) => alg.par_search(tree, query),
+        }
     }
 }
 
@@ -60,29 +172,6 @@ where
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         (**self).search(tree, query)
-    }
-}
-
-/// Parallel version of [`Search`].
-pub trait ParSearch<Id, I, T, A, M>: Search<Id, I, T, A, M> + Send + Sync
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-{
-    /// Parallel version of [`Search::search`].
-    fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)>;
-
-    /// Parallel version of [`Search::batch_search`].
-    fn par_batch_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
-        queries.par_iter().map(|query| self.search(tree, query)).collect()
-    }
-
-    /// Parallel batched version of [`Search::par_search`].
-    fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
-        queries.par_iter().map(|query| self.par_search(tree, query)).collect()
     }
 }
 

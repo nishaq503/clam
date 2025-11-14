@@ -7,7 +7,6 @@ use core::{
 };
 
 pub mod cakes;
-pub mod codec;
 mod tree;
 pub mod utils; // Intended for private use, but made public for testing
 

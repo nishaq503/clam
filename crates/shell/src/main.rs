@@ -1,7 +1,5 @@
 //! CLI for CLAM-MBED, the dimension reduction tool.
 
-#![expect(clippy::type_complexity)]
-
 mod commands;
 pub mod data;
 pub mod metrics;
@@ -86,10 +84,10 @@ fn main() -> Result<(), String> {
             }
             commands::cakes::CakesAction::Search {
                 tree_path,
-                instances_path,
-                query_algorithms,
+                queries_path,
+                cakes_algorithms,
                 output_path,
-            } => commands::cakes::search_tree(tree_path, data::read(instances_path)?, &query_algorithms, output_path)?,
+            } => commands::cakes::search_tree(tree_path, data::read(queries_path)?, &cakes_algorithms, output_path)?,
         },
         Commands::Musals { .. } => todo!("Emily"),
         // Commands::Mbed { action } => {

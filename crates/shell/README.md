@@ -22,8 +22,8 @@ cargo run --package shell -- \
 cargo run --package shell -- \
     -i target/experiments/data-45.npy cakes search \
         --tree-path ./target/experiments/tree.bin \
-        --instances-path ./target/experiments/data-5.npy \
-        --query-algorithms knn-linear:k=2 \
-        --query-algorithms knn-linear:k=5 \
+        --queries-path ./target/experiments/data-5.npy \
+        --cakes-algorithms knn-linear:k=2 \
+        --cakes-algorithms knn-linear:k=5 \
         --output-path ./target/experiments/results.json
 ```

@@ -45,6 +45,11 @@ pub trait Sequence: AsRef<[u8]> + Sized + Clone {
         Self::from_vec(self.as_ref().iter().filter(|&&b| b != Self::GAP).copied().collect())
     }
 
+    /// Returns the number of gaps in the sequence.
+    fn gap_count(&self) -> usize {
+        bytecount::count(self.as_ref(), Self::GAP)
+    }
+
     /// Computes the dynamic programming table for the Needleman-Wunsch algorithm using the given cost matrix.
     fn nw_table<T: DistanceValue>(&self, other: &Self, cost_matrix: &CostMatrix<T>) -> DpTable<T> {
         // TODO: Consider a parallel implementation where cells on the same anti-diagonal are computed in parallel.
