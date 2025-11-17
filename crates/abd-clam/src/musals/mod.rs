@@ -1,19 +1,13 @@
 //! Multiple Sequence Alignment At Scale (`MuSAlS`) with CLAM.
 
-mod alignment_ops;
-mod columnar;
-mod cost_matrix;
-mod msa;
+mod alignment;
 mod quality_metrics;
-mod sequence;
 
-pub use cost_matrix::CostMatrix;
-pub use quality_metrics::QualityMetric;
-pub use sequence::Sequence;
+pub use alignment::{CostMatrix, Sequence};
+pub use quality_metrics::{GapFraction, MismatchFraction, QualityMetric, QualityMetricResult};
 
-use alignment_ops::{Direction, Edit, Edits};
-use columnar::Columnar;
-use msa::Msa;
+use alignment::Msa;
+use quality_metrics::MsaQuality;
 
 use rayon::prelude::*;
 
@@ -37,6 +31,16 @@ where
 
         self
     }
+    /// Computes all quality metrics for the MSA represented by this tree.
+    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric) -> QualityMetricResult
+    where
+        M: Fn(&S, &S) -> T,
+    {
+        match quality_metric {
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(self)),
+            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(self)),
+        }
+    }
 }
 
 impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
@@ -59,6 +63,19 @@ where
             .collect();
 
         self
+    }
+
+    /// Parallel version of [`Self::compute_quality_metric`].
+    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric) -> QualityMetricResult
+    where
+        M: Fn(&S, &S) -> T,
+    {
+        match quality_metric {
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(self)),
+            QualityMetric::MismatchFraction => {
+                QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self))
+            }
+        }
     }
 }
 

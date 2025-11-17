@@ -4,7 +4,16 @@ use rayon::prelude::*;
 
 use crate::{Cluster, DistanceValue, Tree};
 
-use super::{Columnar, CostMatrix, Sequence};
+mod alignment_ops;
+mod columnar;
+mod cost_matrix;
+mod sequence;
+
+pub use cost_matrix::CostMatrix;
+pub use sequence::Sequence;
+
+use alignment_ops::{Direction, Edit, Edits};
+use columnar::Columnar;
 
 /// A multiple sequence alignment (MSA) of sequences of type `S`.
 #[must_use]
