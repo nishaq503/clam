@@ -4,13 +4,19 @@
 
 use crate::{DistanceValue, Tree};
 
-use super::Sequence;
+use super::{CostMatrix, Sequence};
 
+mod distance_distortion;
 mod gap_fraction;
 mod mismatch_fraction;
+mod pairwise_scores;
+mod weighted_pairwise_scores;
 
+pub use distance_distortion::DistanceDistortion;
 pub use gap_fraction::GapFraction;
 pub use mismatch_fraction::MismatchFraction;
+pub use pairwise_scores::PairwiseScores;
+pub use weighted_pairwise_scores::WeightedPairwiseScores;
 
 /// An enumeration of the quality metrics that can be computed for an MSA.
 pub enum QualityMetric {
@@ -18,6 +24,12 @@ pub enum QualityMetric {
     GapFraction,
     /// The fraction of mismatches between pairs of sequences in the MSA.
     MismatchFraction,
+    /// The scores of pairwise alignments in the MSA.
+    PairwiseScores,
+    /// The scores of weighted pairwise alignments in the MSA.
+    WeightedPairwiseScores,
+    /// The mean distortion of alignment distances between pairs of sequences in the MSA.
+    DistanceDistortion,
 }
 
 /// An enumeration of the quality metrics that have been computed for an MSA.
@@ -26,6 +38,12 @@ pub enum QualityMetricResult {
     GapFraction(GapFraction),
     /// The fraction of mismatches between pairs of sequences in the MSA.
     MismatchFraction(MismatchFraction),
+    /// The scores of pairwise alignments in the MSA.
+    PairwiseScores(PairwiseScores),
+    /// The scores of weighted pairwise alignments in the MSA.
+    WeightedPairwiseScores(WeightedPairwiseScores),
+    /// The mean distortion of alignment distances between pairs of sequences in the MSA.
+    DistanceDistortion(DistanceDistortion),
 }
 
 impl QualityMetricResult {
@@ -35,6 +53,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.name(),
             Self::MismatchFraction(metric) => metric.name(),
+            Self::PairwiseScores(metric) => metric.name(),
+            Self::WeightedPairwiseScores(metric) => metric.name(),
+            Self::DistanceDistortion(metric) => metric.name(),
         }
     }
 
@@ -44,6 +65,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.description(),
             Self::MismatchFraction(metric) => metric.description(),
+            Self::PairwiseScores(metric) => metric.description(),
+            Self::WeightedPairwiseScores(metric) => metric.description(),
+            Self::DistanceDistortion(metric) => metric.description(),
         }
     }
 
@@ -53,6 +77,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.mean(),
             Self::MismatchFraction(metric) => metric.mean(),
+            Self::PairwiseScores(metric) => metric.mean(),
+            Self::WeightedPairwiseScores(metric) => metric.mean(),
+            Self::DistanceDistortion(metric) => metric.mean(),
         }
     }
 
@@ -62,6 +89,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.std_dev(),
             Self::MismatchFraction(metric) => metric.std_dev(),
+            Self::PairwiseScores(metric) => metric.std_dev(),
+            Self::WeightedPairwiseScores(metric) => metric.std_dev(),
+            Self::DistanceDistortion(metric) => metric.std_dev(),
         }
     }
 
@@ -71,6 +101,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.min(),
             Self::MismatchFraction(metric) => metric.min(),
+            Self::PairwiseScores(metric) => metric.min(),
+            Self::WeightedPairwiseScores(metric) => metric.min(),
+            Self::DistanceDistortion(metric) => metric.min(),
         }
     }
 
@@ -80,6 +113,9 @@ impl QualityMetricResult {
         match self {
             Self::GapFraction(metric) => metric.max(),
             Self::MismatchFraction(metric) => metric.max(),
+            Self::PairwiseScores(metric) => metric.max(),
+            Self::WeightedPairwiseScores(metric) => metric.max(),
+            Self::DistanceDistortion(metric) => metric.max(),
         }
     }
 }
@@ -105,7 +141,7 @@ pub trait MsaQuality {
     fn max(&self) -> f64;
 
     /// Computes the quality metric from the given MSA tree.
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>) -> Self
+    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
@@ -113,7 +149,7 @@ pub trait MsaQuality {
         Self: Sized;
 
     /// Parallel version of [`compute`].
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>) -> Self
+    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,

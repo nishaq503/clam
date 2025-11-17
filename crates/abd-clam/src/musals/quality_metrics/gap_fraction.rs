@@ -2,7 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, musals::Sequence};
+use crate::{
+    DistanceValue, Tree,
+    musals::{CostMatrix, Sequence},
+};
 
 use super::{MsaQuality, mu_sigma_min_max};
 
@@ -34,7 +37,7 @@ impl MsaQuality for GapFraction {
         self.3
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>) -> Self
+    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
@@ -51,7 +54,7 @@ impl MsaQuality for GapFraction {
         Self(mean, std_dev, min, max)
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>) -> Self
+    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,

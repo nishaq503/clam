@@ -4,7 +4,10 @@ mod alignment;
 mod quality_metrics;
 
 pub use alignment::{CostMatrix, Sequence};
-pub use quality_metrics::{GapFraction, MismatchFraction, QualityMetric, QualityMetricResult};
+pub use quality_metrics::{
+    DistanceDistortion, GapFraction, MismatchFraction, PairwiseScores, QualityMetric, QualityMetricResult,
+    WeightedPairwiseScores,
+};
 
 use alignment::Msa;
 use quality_metrics::MsaQuality;
@@ -32,13 +35,28 @@ where
         self
     }
     /// Computes all quality metrics for the MSA represented by this tree.
-    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric) -> QualityMetricResult
+    pub fn compute_quality_metric(
+        &self,
+        quality_metric: &QualityMetric,
+        cost_matrix: &CostMatrix<T>,
+    ) -> QualityMetricResult
     where
         M: Fn(&S, &S) -> T,
     {
         match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(self)),
-            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(self)),
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(self, cost_matrix)),
+            QualityMetric::MismatchFraction => {
+                QualityMetricResult::MismatchFraction(MismatchFraction::compute(self, cost_matrix))
+            }
+            QualityMetric::PairwiseScores => {
+                QualityMetricResult::PairwiseScores(PairwiseScores::compute(self, cost_matrix))
+            }
+            QualityMetric::WeightedPairwiseScores => {
+                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::compute(self, cost_matrix))
+            }
+            QualityMetric::DistanceDistortion => {
+                QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(self, cost_matrix))
+            }
         }
     }
 }
@@ -66,14 +84,27 @@ where
     }
 
     /// Parallel version of [`Self::compute_quality_metric`].
-    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric) -> QualityMetricResult
+    pub fn par_compute_quality_metric(
+        &self,
+        quality_metric: &QualityMetric,
+        cost_matrix: &CostMatrix<T>,
+    ) -> QualityMetricResult
     where
         M: Fn(&S, &S) -> T,
     {
         match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(self)),
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(self, cost_matrix)),
             QualityMetric::MismatchFraction => {
-                QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self))
+                QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self, cost_matrix))
+            }
+            QualityMetric::PairwiseScores => {
+                QualityMetricResult::PairwiseScores(PairwiseScores::par_compute(self, cost_matrix))
+            }
+            QualityMetric::WeightedPairwiseScores => {
+                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::par_compute(self, cost_matrix))
+            }
+            QualityMetric::DistanceDistortion => {
+                QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(self, cost_matrix))
             }
         }
     }
