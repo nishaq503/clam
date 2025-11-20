@@ -33,6 +33,7 @@ pub enum QualityMetric {
 }
 
 /// An enumeration of the quality metrics that have been computed for an MSA.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum QualityMetricResult {
     /// The mean fraction of gaps in the sequences of the MSA.
     GapFraction(GapFraction),
@@ -56,6 +57,18 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.name(),
             Self::WeightedPairwiseScores(metric) => metric.name(),
             Self::DistanceDistortion(metric) => metric.name(),
+        }
+    }
+
+    /// Returns a short name of the quality metric, usually an acronym for use as a suffix in file names.
+    #[must_use]
+    pub fn short_name<'a>(&self) -> &'a str {
+        match self {
+            Self::GapFraction(metric) => metric.short_name(),
+            Self::MismatchFraction(metric) => metric.short_name(),
+            Self::PairwiseScores(metric) => metric.short_name(),
+            Self::WeightedPairwiseScores(metric) => metric.short_name(),
+            Self::DistanceDistortion(metric) => metric.short_name(),
         }
     }
 
@@ -121,9 +134,12 @@ impl QualityMetricResult {
 }
 
 /// A trait for quality metrics that can be computed from a multiple sequence alignment (MSA).
-pub trait MsaQuality {
+pub trait MsaQuality: serde::Serialize + for<'de> serde::Deserialize<'de> {
     /// Returns the name of the quality metric.
     fn name(&self) -> String;
+
+    /// Returns a short name of the quality metric, usually an acronym for use as a suffix in file names.
+    fn short_name<'a>(&self) -> &'a str;
 
     /// Returns a description of the quality metric.
     fn description(&self) -> String;

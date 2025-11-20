@@ -15,7 +15,7 @@ pub trait Sequence: AsRef<[u8]> + Sized + Clone {
 
     /// Creates a sequence from a vector of bytes.
     #[must_use]
-    fn from_vec(vec: Vec<u8>) -> Self;
+    fn from_vec(v: Vec<u8>) -> Self;
 
     /// Creates a sequence from a String.
     #[must_use]
@@ -292,8 +292,8 @@ mod tests {
         const GAP: u8 = b'-';
 
         #[allow(clippy::expect_used)]
-        fn from_vec(vec: Vec<u8>) -> Self {
-            Self::from_utf8(vec).expect("Invalid UTF-8 sequence")
+        fn from_vec(v: Vec<u8>) -> Self {
+            Self::from_utf8(v).expect("Invalid UTF-8 sequence")
         }
 
         fn from_string(s: String) -> Self {

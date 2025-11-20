@@ -31,28 +31,6 @@ pub struct AlgorithmResult {
     pub neighbors: Vec<(usize, f64)>,
 }
 
-/// Supported output formats based on file extension.
-#[derive(Debug, Clone, Copy)]
-pub enum SearchOutputFormat {
-    Json,
-    Yaml,
-}
-
-impl SearchOutputFormat {
-    /// Determine format from file extension.
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let path = path.as_ref();
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("json") => Ok(SearchOutputFormat::Json),
-            Some("yaml") | Some("yml") => Ok(SearchOutputFormat::Yaml),
-            Some(ext) => Err(format!(
-                "Unsupported file extension: '.{ext}'. Supported formats: .json, .yaml, .yml",
-            )),
-            None => Err("No file extension found. Please specify .json, .yaml, or .yml".to_string()),
-        }
-    }
-}
-
 /// Searches a given tree for some given queries and saves results to a file.
 ///
 /// This function is responsible for searching a given tree for some given queries.
@@ -60,27 +38,26 @@ impl SearchOutputFormat {
 /// to a single file in the format determined by the file extension.
 ///
 /// # Arguments
-/// * `inp_data` - The input data to search.
-/// * `tree_path` - The path to the tree to search.
-/// * `instances` - The instances to search for.
-/// * `query_algorithms` - The query algorithms to apply.
-/// * `output_path` - The path to the output file (format determined by extension).
+/// * `tree_dir` - The directory containing the tree to search.
+/// * `queries` - The dataset containing the query instances.
+/// * `algorithms` - A slice of `ShellCakes` algorithms to use for searching.
+/// * `out_path` - The path to the output file where results will be saved.
 ///
 /// # Returns
 /// A `Result` containing either `Ok(())` if the search was successful, or `Err(String)` if an error occurred.
-pub fn search_tree<P: AsRef<Path>>(
-    tree_path: P,
+pub fn search_tree<P: AsRef<Path> + core::fmt::Debug>(
+    tree_dir: P,
     queries: ShellData,
     algorithms: &[ShellCakes],
-    output_path: P,
+    out_path: P,
 ) -> Result<(), String> {
-    // Determine output format from file extension
-    let format = SearchOutputFormat::from_path(&output_path)?;
-
     // Create parent directory if it doesn't exist
-    if let Some(parent) = output_path.as_ref().parent() {
+    if let Some(parent) = out_path.as_ref().parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
 
-    ShellTree::read_from(tree_path)?.search(queries, algorithms, output_path, format)
+    let (tree, tree_path) = ShellTree::read_from(tree_dir)?;
+    println!("Read tree from {tree_path:?}.");
+
+    tree.search(queries, algorithms, out_path)
 }

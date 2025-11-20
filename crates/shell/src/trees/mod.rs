@@ -1,12 +1,12 @@
 //! Tree formats supported in the CLI.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search};
 
 use crate::{
-    commands::cakes::{AlgorithmResult, QueryResult, SearchOutputFormat, SearchResults},
-    data::ShellData,
+    commands::cakes::{AlgorithmResult, QueryResult, SearchResults},
+    data::{MusalsSequence, OutputFormat, ShellData},
     metrics::{Metric, cosine, euclidean, levenshtein},
     search::ShellCakes,
 };
@@ -31,7 +31,7 @@ pub enum VectorTree {
 }
 
 pub enum ShellTree {
-    Levenshtein(tree_type!(String, String, u32)),
+    Levenshtein(tree_type!(String, MusalsSequence, u32)),
     Euclidean(VectorTree),
     Cosine(VectorTree),
 }
@@ -105,57 +105,90 @@ impl ShellTree {
     }
 
     /// Search the tree with the given queries and algorithms.
-    pub fn search<P: AsRef<Path>>(
+    pub fn search<P: AsRef<Path> + core::fmt::Debug>(
         &self,
         queries: ShellData,
         algorithms: &[ShellCakes],
-        output_path: P,
-        format: SearchOutputFormat,
+        out_path: P,
     ) -> Result<(), String> {
         match self {
             Self::Levenshtein(tree) => match queries {
                 ShellData::String(queries) => {
                     let queries = queries.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
-                    search(tree, &queries, algorithms, output_path, format)
+                    search(tree, &queries, algorithms, out_path)
                 }
                 _ => Err("Levenshtein tree can only be searched with string queries".to_string()),
             },
             Self::Euclidean(tree) => match queries {
                 ShellData::String(_) => Err("Euclidean tree cannot be searched with string queries".to_string()),
-                _ => tree.search(queries, algorithms, output_path, format),
+                _ => tree.search(queries, algorithms, out_path),
             },
             Self::Cosine(tree) => match queries {
                 ShellData::String(_) => Err("Cosine tree cannot be searched with string queries".to_string()),
-                _ => tree.search(queries, algorithms, output_path, format),
+                _ => tree.search(queries, algorithms, out_path),
             },
         }
     }
 
     /// Saves the tree to the specified path using bincode.
-    pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
+    pub fn write_to<P: AsRef<Path>>(&self, out_dir: P, suffix: Option<&str>) -> Result<(), String> {
         match self {
             Self::Levenshtein(tree) => {
+                let suffix = suffix.map_or_else(|| "lev".to_string(), |s| format!("{s}-lev"));
+                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
                 let bytes = tree.bitcode_encode().map_err(|e| e.to_string())?;
                 std::fs::write(path, bytes).map_err(|e| e.to_string())
             }
-            Self::Euclidean(tree) => tree.write_to(path),
-            Self::Cosine(tree) => tree.write_to(path),
+            Self::Euclidean(tree) => {
+                let suffix = suffix.map_or_else(|| "euc".to_string(), |s| format!("{s}-euc"));
+                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
+                tree.write_to(path)
+            }
+            Self::Cosine(tree) => {
+                let suffix = suffix.map_or_else(|| "cos".to_string(), |s| format!("{s}-cos"));
+                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
+                tree.write_to(path)
+            }
         }
     }
 
-    /// Reads a tree from the specified path using bincode.
-    pub fn read_from<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        match path.as_ref().extension().and_then(|s| s.to_str()) {
-            Some("lev") => {
-                let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    /// Reads a tree from the specified input directory using bincode.
+    pub fn read_from<P: AsRef<Path>>(inp_dir: P) -> Result<(Self, PathBuf), String> {
+        let inp_dir = inp_dir.as_ref();
+        // Find a ".bin" file whose name starts with "tree-".
+        let tree_path = std::fs::read_dir(inp_dir)
+            .map_err(|e| format!("Failed to read input directory {}: {}", inp_dir.display(), e))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.is_file()
+                    && path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.starts_with("tree-") && name.ends_with(".bin"))
+            })
+            .ok_or_else(|| format!("No tree file found in directory {}", inp_dir.display()))?;
+
+        // The metric name is the last three characters before the ".bin" extension.
+        let metric_name = tree_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .and_then(|stem| stem.split('-').next_back())
+            .ok_or_else(|| "Failed to determine metric from tree file name".to_string())?;
+
+        let tree = match metric_name {
+            "lev" => {
+                let bytes = std::fs::read(&tree_path).map_err(|e| e.to_string())?;
                 let metric: fn(&_, &_) -> u32 = levenshtein::<_, u32>;
                 let tree = Tree::bitcode_decode(&bytes, metric).map_err(|e| e.to_string())?;
                 Ok(ShellTree::Levenshtein(tree))
             }
-            Some("euc") => Ok(ShellTree::Euclidean(VectorTree::read_from(path)?)),
-            Some("cos") => Ok(ShellTree::Cosine(VectorTree::read_from(path)?)),
-            _ => Err("Unsupported tree file extension".to_string()),
-        }
+            "euc" => Ok(ShellTree::Euclidean(VectorTree::read_from(&tree_path)?)),
+            "cos" => Ok(ShellTree::Cosine(VectorTree::read_from(&tree_path)?)),
+            _ => Err("Unsupported metric in tree file".to_string()),
+        };
+
+        tree.map(|t| (t, tree_path))
     }
 }
 
@@ -243,24 +276,23 @@ impl VectorTree {
     }
 
     /// Search the tree with the given queries and algorithms.
-    pub fn search<P: AsRef<Path>>(
+    pub fn search<P: AsRef<Path> + core::fmt::Debug>(
         &self,
         queries: ShellData,
         algorithms: &[ShellCakes],
-        output_path: P,
-        format: SearchOutputFormat,
+        out_path: P,
     ) -> Result<(), String> {
         match (self, queries) {
-            (Self::F32(tree), ShellData::F32(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::F64(tree), ShellData::F64(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::I8(tree), ShellData::I8(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::I16(tree), ShellData::I16(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::I32(tree), ShellData::I32(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::I64(tree), ShellData::I64(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::U8(tree), ShellData::U8(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::U16(tree), ShellData::U16(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::U32(tree), ShellData::U32(queries)) => search(tree, &queries, algorithms, output_path, format),
-            (Self::U64(tree), ShellData::U64(queries)) => search(tree, &queries, algorithms, output_path, format),
+            (Self::F32(tree), ShellData::F32(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::F64(tree), ShellData::F64(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::I8(tree), ShellData::I8(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::I16(tree), ShellData::I16(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::I32(tree), ShellData::I32(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::I64(tree), ShellData::I64(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::U8(tree), ShellData::U8(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::U16(tree), ShellData::U16(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::U32(tree), ShellData::U32(queries)) => search(tree, &queries, algorithms, out_path),
+            (Self::U64(tree), ShellData::U64(queries)) => search(tree, &queries, algorithms, out_path),
             _ => Err("Query data type does not match vectors type in tree".to_string()),
         }
     }
@@ -297,13 +329,12 @@ fn search<Id, I, T, A, M, P>(
     tree: &Tree<Id, I, T, A, M>,
     queries: &[I],
     algs: &[ShellCakes],
-    output_path: P,
-    format: SearchOutputFormat,
+    out_path: P,
 ) -> Result<(), String>
 where
     T: DistanceValue + 'static,
     M: Fn(&I, &I) -> T,
-    P: AsRef<Path>,
+    P: AsRef<Path> + core::fmt::Debug,
     <T as core::str::FromStr>::Err: std::fmt::Display,
 {
     let mut all_results = SearchResults { results: Vec::new() };
@@ -336,33 +367,5 @@ where
         all_results.results.push(query_result);
     }
 
-    // Save all results to the specified file
-    save_results(&all_results, &output_path, format)?;
-
-    Ok(())
-}
-
-/// Saves search results to a file in the specified format.
-fn save_results<P: AsRef<Path>>(
-    results: &SearchResults,
-    output_path: P,
-    format: SearchOutputFormat,
-) -> Result<(), String> {
-    let output_path = output_path.as_ref();
-
-    let content = match format {
-        SearchOutputFormat::Json => {
-            serde_json::to_string_pretty(results).map_err(|e| format!("Failed to serialize to JSON: {e}"))?
-        }
-        SearchOutputFormat::Yaml => {
-            serde_yaml::to_string(results).map_err(|e| format!("Failed to serialize to YAML: {e}"))?
-        }
-    };
-
-    std::fs::write(output_path, content)
-        .map_err(|e| format!("Failed to write file {}: {}", output_path.display(), e))?;
-
-    println!("Saved search results to {}", output_path.display());
-
-    Ok(())
+    OutputFormat::write(out_path, &all_results)
 }

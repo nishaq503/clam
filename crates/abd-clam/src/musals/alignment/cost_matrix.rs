@@ -1,7 +1,5 @@
 //! Substitution matrix for the Needleman-Wunsch aligner.
 
-use core::ops::Neg;
-
 use std::collections::HashSet;
 
 use num::Integer;
@@ -63,6 +61,23 @@ impl<T: DistanceValue> CostMatrix<T> {
         }
     }
 
+    /// Cast the cost matrix to another distance value type.
+    pub fn cast<U: DistanceValue, F: Fn(T) -> U>(&self, caster: F) -> CostMatrix<U> {
+        let mut new_sub_matrix = [[U::zero(); NUM_CHARS]; NUM_CHARS];
+
+        for (i, row) in new_sub_matrix.iter_mut().enumerate().take(NUM_CHARS) {
+            for (j, cost) in row.iter_mut().enumerate().take(NUM_CHARS) {
+                *cost = caster(self.sub_matrix[i][j]);
+            }
+        }
+
+        CostMatrix {
+            sub_matrix: new_sub_matrix,
+            gap_open: caster(self.gap_open),
+            gap_ext: caster(self.gap_ext),
+        }
+    }
+
     /// Create a new substitution matrix with affine gap penalties.
     ///
     /// All substitution costs are set to 1.
@@ -79,10 +94,20 @@ impl<T: DistanceValue> CostMatrix<T> {
     }
 
     /// Add a constant to all substitution costs.
-    pub fn shift(mut self, shift: T) -> Self {
+    pub fn shift_up(mut self, shift: T) -> Self {
         for i in 0..NUM_CHARS {
             for j in 0..NUM_CHARS {
                 self.sub_matrix[i][j] += shift;
+            }
+        }
+        self
+    }
+
+    /// Subtract a constant from all substitution costs.
+    pub fn shift_down(mut self, shift: T) -> Self {
+        for i in 0..NUM_CHARS {
+            for j in 0..NUM_CHARS {
+                self.sub_matrix[i][j] -= shift;
             }
         }
         self
@@ -141,9 +166,7 @@ impl<T: DistanceValue> CostMatrix<T> {
     pub const fn gap_ext_cost(&self) -> T {
         self.gap_ext
     }
-}
 
-impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero and all non-zero costs are positive.
     pub fn normalize(self) -> Self {
@@ -153,26 +176,24 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
             .flatten()
             .fold(T::max_value(), |a, &b| if a < b { a } else { b });
 
-        self.shift(-shift)
+        self.shift_down(shift)
+    }
+
+    /// Invert all costs in the matrix, i.e. subtract them from the maximum cost and then normalize.
+    pub fn invert(mut self) -> Self {
+        let max_cost = self
+            .sub_matrix
+            .iter()
+            .flatten()
+            .fold(T::min_value(), |a, &b| if a > b { a } else { b });
+
+        self.sub_matrix = self.sub_matrix.map(|row| row.map(|cost| max_cost - cost));
+
+        self.normalize()
     }
 }
 
-impl<T: DistanceValue + Neg<Output = T>> Neg for CostMatrix<T> {
-    type Output = Self;
-
-    fn neg(mut self) -> Self::Output {
-        for i in 0..NUM_CHARS {
-            for j in 0..NUM_CHARS {
-                self.sub_matrix[i][j] = -self.sub_matrix[i][j];
-            }
-        }
-        self.gap_open = -self.gap_open;
-        self.gap_ext = -self.gap_ext;
-        self
-    }
-}
-
-impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
+impl<T: DistanceValue> CostMatrix<T> {
     /// A substitution matrix for the Needleman-Wunsch aligner using the
     /// extendedIUPAC alphabet for nucleotides.
     ///
@@ -185,7 +206,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
     ///   than to extend an existing gap. This defaults to 10.
     pub fn extended_iupac(gap_open: Option<T>) -> Self {
         let gap_open = gap_open.unwrap_or_else(|| {
-            T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
+            T::from_u8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
         });
 
         // For each pair of IUPAC characters, the cost is 1 - n / m, where m is
@@ -193,7 +214,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
         // the IUPAC characters, and n is the number of matching pairs.
         #[rustfmt::skip]
         let costs = vec![
-            ('A', 'R', 1_i8, 2_i8), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
+            ('A', 'R', 1_u8, 2_u8), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
             ('A', 'W', 1, 2), ('C', 'S', 1, 2), ('G', 'S', 1, 2), ('T', 'W', 1, 2),
             ('A', 'M', 1, 2), ('C', 'M', 1, 2), ('G', 'K', 1, 2), ('T', 'K', 1, 2),
             ('A', 'D', 1, 3), ('C', 'B', 1, 3), ('G', 'B', 1, 3), ('T', 'B', 1, 3),
@@ -259,11 +280,11 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
             .with_sub_cost(b'-', b'.', T::zero())
             .with_sub_cost(b'.', b'-', T::zero())
             .scale(
-                T::from_i8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+                T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
             );
 
         let lcm_t =
-            T::from_i8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
+            T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
 
         // Add all costs to the matrix.
         costs
@@ -274,7 +295,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
                 (
                     a,
                     b,
-                    T::from_i8(n * (lcm / m))
+                    T::from_u8(n * (lcm / m))
                         .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
                 )
             })
@@ -307,7 +328,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
     ///   than to extend an existing gap. This defaults to 10.
     pub fn blosum62(gap_open: Option<T>) -> Self {
         let gap_open = gap_open.unwrap_or_else(|| {
-            T::from_i8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"))
+            T::from_u8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"))
         });
 
         #[rustfmt::skip]
@@ -356,7 +377,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
             );
 
         let max_delta_t = T::from_i8(max_delta)
-            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
+            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8: {max_delta}"));
 
         // Flatten the costs into a vector of (a, b, cost) tuples.
         codes
@@ -367,8 +388,9 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
                     (
                         a,
                         b,
-                        T::from_i8(cost)
-                            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+                        T::from_i8(cost).unwrap_or_else(|| {
+                            unreachable!("Every distance type should be large enough to hold i8: {cost}")
+                        }),
                     )
                 })
             })
@@ -390,8 +412,7 @@ impl<T: DistanceValue + Neg<Output = T>> CostMatrix<T> {
             })
             // Convert the matrix into a form that can be used to minimize the
             // edit distances.
-            .neg()
-            .normalize()
+            .invert()
             // Add affine gap penalties.
             .with_gap_open(max_delta_t * gap_open)
             .with_gap_ext(max_delta_t)

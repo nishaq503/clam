@@ -13,11 +13,25 @@ use super::{
 };
 
 /// The scores of pairwise alignments in the MSA.
-pub struct WeightedPairwiseScores(f64, f64, f64, f64);
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct WeightedPairwiseScores {
+    /// Mean
+    mean: f64,
+    /// Standard Deviation
+    std_dev: f64,
+    /// Minimum
+    min: f64,
+    /// Maximum
+    max: f64,
+}
 
 impl MsaQuality for WeightedPairwiseScores {
     fn name(&self) -> String {
         "WeightedPairwiseScores".to_string()
+    }
+
+    fn short_name<'a>(&self) -> &'a str {
+        "wps"
     }
 
     fn description(&self) -> String {
@@ -25,19 +39,19 @@ impl MsaQuality for WeightedPairwiseScores {
     }
 
     fn mean(&self) -> f64 {
-        self.0
+        self.mean
     }
 
     fn std_dev(&self) -> f64 {
-        self.1
+        self.std_dev
     }
 
     fn min(&self) -> f64 {
-        self.2
+        self.min
     }
 
     fn max(&self) -> f64 {
-        self.3
+        self.max
     }
 
     fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
@@ -51,7 +65,12 @@ impl MsaQuality for WeightedPairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self(mean, std_dev, min, max)
+        Self {
+            mean,
+            std_dev,
+            min,
+            max,
+        }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
@@ -67,7 +86,12 @@ impl MsaQuality for WeightedPairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self(mean, std_dev, min, max)
+        Self {
+            mean,
+            std_dev,
+            min,
+            max,
+        }
     }
 }
 

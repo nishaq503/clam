@@ -6,54 +6,139 @@ use std::str::FromStr;
 mod fasta;
 pub mod npy;
 
-/// Reads the data from the file at the given path.
-pub fn read<P: AsRef<Path> + core::fmt::Debug>(path: P) -> Result<ShellData, String> {
-    match Format::from(&path) {
-        Format::Npy => npy::NpyType::read(path),
-        Format::Fasta => fasta::read(path).map(ShellData::String),
+pub use fasta::MusalsSequence;
+
+/// Supported output formats for data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum OutputFormat {
+    /// Json format.
+    Json,
+    /// Yaml format.
+    Yaml,
+}
+
+impl OutputFormat {
+    /// Returns the file extension associated with the input format.
+    pub const fn extension(&self) -> &str {
+        match self {
+            Self::Json => "json",
+            Self::Yaml => "yaml",
+        }
+    }
+
+    /// Creates a new OutputFormat from a Path.
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let ext = path
+            .as_ref()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .ok_or_else(|| format!("Failed to get file extension from path {:?}", path.as_ref()))?;
+
+        match ext.to_lowercase().as_str() {
+            "json" => Ok(Self::Json),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            _ => Err(format!("Unknown format: '{ext}'. Use 'json' or 'yaml'/'yml'.")),
+        }
+    }
+
+    /// Reads the input data from the given path based on the input format.
+    pub fn read<P, T>(path: P) -> Result<T, String>
+    where
+        P: AsRef<Path> + core::fmt::Debug,
+        T: for<'de> serde::Deserialize<'de>,
+    {
+        match Self::from_path(&path)? {
+            Self::Json => {
+                let content =
+                    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
+                serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON from file {path:?}: {e}"))
+            }
+            Self::Yaml => {
+                let content =
+                    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
+                serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse YAML from file {path:?}: {e}"))
+            }
+        }
+    }
+
+    /// Writes the given data to the specified path in the output format.
+    pub fn write<P, T>(path: P, data: &T) -> Result<(), String>
+    where
+        P: AsRef<Path> + core::fmt::Debug,
+        T: serde::Serialize,
+    {
+        let content = match Self::from_path(&path)? {
+            Self::Json => serde_json::to_string(data).map_err(|e| format!("Failed to serialize data to JSON: {e}"))?,
+            Self::Yaml => serde_yaml::to_string(data).map_err(|e| format!("Failed to serialize data to YAML: {e}"))?,
+        };
+
+        std::fs::write(&path, content).map_err(|e| format!("Failed to write file {path:?}: {e}"))?;
+
+        Ok(())
     }
 }
 
-/// Data formats supported in the CLI.
+impl core::fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Json => write!(f, "json"),
+            Self::Yaml => write!(f, "yaml"),
+        }
+    }
+}
+
+/// Supported formats for input data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum Format {
+pub enum InputFormat {
     /// Npy array format.
     Npy,
     /// FASTA format.
     Fasta,
 }
 
-impl std::fmt::Display for Format {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl InputFormat {
+    /// Returns the file extension associated with the input format.
+    pub const fn extension(&self) -> &str {
         match self {
-            Format::Npy => write!(f, "npy"),
-            Format::Fasta => write!(f, "fasta"),
+            Self::Npy => "npy",
+            Self::Fasta => "fasta",
         }
+    }
+
+    /// Creates a new InputFormat from a Path.
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let ext = path
+            .as_ref()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .ok_or_else(|| format!("Failed to get file extension from path {:?}", path.as_ref()))?;
+
+        match ext.to_lowercase().as_str() {
+            "npy" => Ok(Self::Npy),
+            "fasta" => Ok(Self::Fasta),
+            _ => Err(format!("Unknown format: '{ext}'. Use 'npy' or 'fasta'.")),
+        }
+    }
+
+    /// Reads the input data from the given path based on the input format.
+    pub fn read<P: AsRef<Path> + core::fmt::Debug>(path: P) -> Result<ShellData, String> {
+        match Self::from_path(&path)? {
+            Self::Npy => npy::NpyType::read(path),
+            Self::Fasta => fasta::read(path).map(ShellData::String),
+        }
+    }
+
+    /// Writes the given data to the specified path in the input format.
+    pub fn write<P: AsRef<Path> + core::fmt::Debug>(path: P, data: &ShellData) -> Result<(), String> {
+        data.write(path)
     }
 }
 
-impl<P: AsRef<Path>> From<P> for Format {
-    fn from(path: P) -> Self {
-        match path.as_ref().extension().and_then(|s| s.to_str()) {
-            Some("npy") => Format::Npy,
-            Some("fasta") => Format::Fasta,
-            Some(ext) => panic!("Unknown data format {ext} for path: {}", path.as_ref().display()),
-            None => panic!(
-                "Could not determine data format without extension for path: {}",
-                path.as_ref().display()
-            ),
-        }
-    }
-}
-
-impl FromStr for Format {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "npy" => Ok(Format::Npy),
-            "fasta" => Ok(Format::Fasta),
-            _ => Err(format!("Unknown format: '{}'. Use 'npy' or 'fasta'.", s)),
+impl core::fmt::Display for InputFormat {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Npy => write!(f, "npy"),
+            Self::Fasta => write!(f, "fasta"),
         }
     }
 }
@@ -109,7 +194,7 @@ impl FromStr for DataType {
 #[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellData {
     /// Vec of sequences and their metadata from FASTA files.
-    String(Vec<(String, String)>),
+    String(Vec<(String, MusalsSequence)>),
     /// Vec of various numeric types from NPY files.
     F32(Vec<Vec<f32>>),
     F64(Vec<Vec<f64>>),

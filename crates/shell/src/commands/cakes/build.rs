@@ -22,7 +22,7 @@ use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 ///
 /// - If the dataset and metric are deemed an incompatible combination. See
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
-pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: Metric, out_dir: P) -> Result<(), String> {
-    let tree = ShellTree::new(inp_data, &metric)?;
-    tree.write_to(out_dir.as_ref().join("tree.bin"))
+pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: &Metric, out_dir: P) -> Result<(), String> {
+    let tree = ShellTree::new(inp_data, metric)?;
+    tree.write_to(out_dir, None)
 }

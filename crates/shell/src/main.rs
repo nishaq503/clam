@@ -13,12 +13,18 @@ use clap::Parser;
 
 use commands::Commands;
 
+use crate::data::InputFormat;
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// The path to the input dataset file (not required for generate-data).
     #[arg(short('i'), long)]
     inp_path: Option<PathBuf>,
+
+    /// The path to the output directory or file, depending on the subcommand used.
+    #[arg(short('o'), long)]
+    out_path: PathBuf,
 
     /// The name of the distance metric to use for the CAKES tree.
     #[arg(short('m'), long, default_value = "euclidean")]
@@ -41,6 +47,7 @@ fn main() -> Result<(), String> {
     let args = Args::parse();
 
     let seed = args.seed;
+    let out_path = &args.out_path;
 
     // Handle generate-data separately since it doesn't need input data
     if let Commands::GenerateData { action } = args.command {
@@ -48,9 +55,7 @@ fn main() -> Result<(), String> {
             commands::generate_data::GenerateDataAction::Generate {
                 num_vectors,
                 dimensions,
-                filename,
                 data_type,
-                format,
                 partitions,
                 min_val,
                 max_val,
@@ -58,9 +63,8 @@ fn main() -> Result<(), String> {
                 return commands::generate_data::generate_dataset(
                     num_vectors,
                     dimensions,
-                    filename,
+                    out_path,
                     data_type,
-                    format,
                     partitions,
                     min_val,
                     max_val,
@@ -74,22 +78,31 @@ fn main() -> Result<(), String> {
     let inp_path = args
         .inp_path
         .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
-    let inp_data = data::read(&inp_path)?;
     let metric = args.metric;
 
     match args.command {
         Commands::Cakes { action } => match action {
-            commands::cakes::CakesAction::Build { out_dir } => {
-                commands::cakes::build_new_tree(inp_data, metric, out_dir)?
+            commands::cakes::CakesAction::Build => {
+                let inp_data = InputFormat::read(&inp_path)?;
+                commands::cakes::build_new_tree(inp_data, &metric, out_path)?
             }
             commands::cakes::CakesAction::Search {
-                tree_path,
                 queries_path,
                 cakes_algorithms,
-                output_path,
-            } => commands::cakes::search_tree(tree_path, data::read(queries_path)?, &cakes_algorithms, output_path)?,
+            } => {
+                let queries = InputFormat::read(&queries_path)?;
+                commands::cakes::search_tree(&inp_path, queries, &cakes_algorithms, out_path)?
+            }
         },
-        Commands::Musals { .. } => todo!("Emily"),
+        Commands::Musals { action, cost_matrix } => match action {
+            commands::musals::MusalsAction::Build { save_fasta } => {
+                let inp_data = InputFormat::read(&inp_path)?;
+                commands::musals::build_msa(inp_data, &metric, &cost_matrix, out_path, save_fasta)?
+            }
+            commands::musals::MusalsAction::Evaluate { quality_metrics } => {
+                commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path)?
+            }
+        },
         // Commands::Mbed { action } => {
         //     const DIM: usize = 2; // TODO Najib: figure out how to make this dynamic
         //     match action {

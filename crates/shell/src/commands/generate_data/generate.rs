@@ -1,6 +1,8 @@
 //! Implementation of dataset generation logic.
 
-use crate::data::{DataType, Format, ShellData};
+use std::path::Path;
+
+use crate::data::{DataType, InputFormat, MusalsSequence, ShellData};
 
 /// Generate a synthetic dataset with the specified parameters.
 ///
@@ -8,12 +10,12 @@ use crate::data::{DataType, Format, ShellData};
 ///
 /// * `num_vectors` - Total number of vectors to generate (m)
 /// * `dimensions` - Dimensionality of each vector (n)
-/// * `filename` - Base filename for output files (without extension)
+/// * `out_path` - Output file path with extension indicating format
 /// * `data_type` - The data type for generated vectors
-/// * `format` - Output format
 /// * `partitions` - Optional partition splits as percentages (e.g., vec![95, 5])
 /// * `min_val` - Minimum value for numeric data
 /// * `max_val` - Maximum value for numeric data
+/// * `seed` - Optional random seed for reproducibility
 ///
 /// # Returns
 ///
@@ -27,22 +29,21 @@ use crate::data::{DataType, Format, ShellData};
 /// generate_dataset(
 ///     100,
 ///     12,
-///     "data".to_string(),
+///     PathBuf::from("../data/small-vectors.npy"),
 ///     DataType::F32,
-///     Format::Npy,
 ///     Some(vec![95, 5]),
 ///     0.0,
 ///     1.0,
+///     Some(42),
 /// )?;
 /// // This creates: data-95.npy and data-5.npy
 /// ```
 #[allow(clippy::too_many_arguments)]
-pub fn generate_dataset(
+pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug>(
     num_vectors: usize,
     dimensions: usize,
-    filename: String,
+    out_path: P,
     data_type: DataType,
-    format: Format,
     partitions: Option<Vec<usize>>,
     min_val: f64,
     max_val: f64,
@@ -60,20 +61,22 @@ pub fn generate_dataset(
         }
     }
 
-    // String type is only valid for FASTA format
-    if matches!(data_type, DataType::String) && format != Format::Fasta {
-        return Err("String data type is only supported with FASTA format".to_string());
-    }
-
-    // FASTA format is only valid for String type
-    if format == Format::Fasta && !matches!(data_type, DataType::String) {
-        return Err("FASTA format is only supported with String data type".to_string());
+    let fmt =
+        InputFormat::from_path(&out_path).map_err(|e| format!("Failed to determine format from file extension: {e}"))?;
+    match (&fmt, &data_type) {
+        (InputFormat::Fasta, DataType::String) => {} // Valid
+        (InputFormat::Fasta, _) => {
+            return Err("Fasta format only supports String data type".to_string());
+        }
+        (_, DataType::String) => {
+            return Err("String data type only supports Fasta format".to_string());
+        }
+        _ => {} // Other combinations are valid
     }
 
     println!("=== Generating Dataset ===");
     println!("Generating {num_vectors} {dimensions}-dimensional vectors of type {data_type:?}");
-    println!("Output filename: {filename}");
-    println!("Format: {format}");
+    println!("Output filename: {out_path:?}");
     println!("Partitions: {partitions:?}");
     println!("Value range: [{min_val}, {max_val}]");
     println!("Seed: {seed}");
@@ -180,12 +183,10 @@ pub fn generate_dataset(
 
     // Write data to file(s) based on partitions
     if let Some(parts) = partitions {
-        write_partitions(&shell_data, &filename, &format, num_vectors, &parts)?;
+        write_partitions(&shell_data, out_path, num_vectors, &parts)?;
     } else {
-        let output_path = format!("{filename}.{format}");
-        println!("Writing {num_vectors} vectors to: {output_path}");
-        shell_data.write(&output_path)?;
-        println!("✓ Successfully wrote {output_path}");
+        shell_data.write(&out_path)?;
+        println!("✓ Successfully wrote {out_path:?}");
     }
 
     println!();
@@ -206,19 +207,31 @@ fn generate_strings(num_vectors: usize, avg_length: usize, seed: u64) -> ShellDa
         .map(|i| format!(">seq_{}", i + 1))
         .collect::<Vec<String>>();
 
-    let data = metadata.into_iter().zip(data).collect();
+    let data = metadata.into_iter().zip(data.into_iter().map(MusalsSequence)).collect();
 
     ShellData::String(data)
 }
 
 /// Write partitioned data to multiple files.
-fn write_partitions(
+fn write_partitions<P: AsRef<Path> + core::fmt::Debug>(
     data: &ShellData,
-    filename: &str,
-    format: &Format,
+    out_path: P,
     total_vectors: usize,
     partitions: &[usize],
 ) -> Result<(), String> {
+    let out_path = out_path.as_ref();
+    let out_dir = out_path
+        .parent()
+        .ok_or_else(|| "Output path must have a parent directory".to_string())?;
+    let filename = out_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "Output file must have a valid name".to_string())?;
+    let ext = out_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "Output file must have a valid extension".to_string())?;
+
     let mut start_idx = 0;
 
     for (idx, &percentage) in partitions.iter().enumerate() {
@@ -244,10 +257,10 @@ fn write_partitions(
         let partition = data.slice(start_idx, end_idx);
 
         // Write the partition to a file
-        let output_path = format!("{filename}-{count}.{format}");
-        println!("Writing {count} vectors to: {output_path}");
-        partition.write(&output_path)?;
-        println!("✓ Successfully wrote {output_path}");
+        let partition_path = out_dir.join(format!("{filename}-{percentage}.{ext}"));
+        println!("Writing {count} vectors to: {partition_path:?}");
+        partition.write(&partition_path)?;
+        println!("✓ Successfully wrote {partition_path:?}");
 
         start_idx = end_idx;
     }

@@ -9,7 +9,7 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// CLAM-Augmented K-nearest-neighbors Entropy-scaling Search
+    /// CLAM-Augmented K-nearest-neighbors Entropy-scaling Search.
     Cakes {
         #[clap(subcommand)]
         action: cakes::CakesAction,
@@ -18,6 +18,10 @@ pub enum Commands {
     Musals {
         #[clap(subcommand)]
         action: musals::MusalsAction,
+
+        /// The cost matrix to use for building/evaluating the MSA tree
+        #[arg(short('c'), long, default_value_t = musals::ShellCostMatrix::Default)]
+        cost_matrix: musals::ShellCostMatrix,
     },
     // /// Dimension Reduction with CLAM-MBED
     // Mbed {
