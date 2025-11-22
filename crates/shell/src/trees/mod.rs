@@ -7,7 +7,7 @@ use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search};
 use crate::{
     commands::cakes::{AlgorithmResult, QueryResult, SearchResults},
     data::{MusalsSequence, OutputFormat, ShellData},
-    metrics::{Metric, cosine, euclidean, levenshtein},
+    metrics::{Metric, cosine, euclidean},
     search::ShellCakes,
 };
 
@@ -30,8 +30,11 @@ pub enum VectorTree {
     U64(tree_type!(usize, Vec<u64>, f64)),
 }
 
+#[expect(clippy::type_complexity)]
 pub enum ShellTree {
-    Levenshtein(tree_type!(String, MusalsSequence, u32)),
+    Levenshtein(
+        Tree<String, MusalsSequence, u32, (), Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>>,
+    ),
     Euclidean(VectorTree),
     Cosine(VectorTree),
 }
@@ -68,8 +71,16 @@ impl ShellTree {
         match metric {
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {
+                    let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
+                    let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1)
+                        .map_err(|e| e.to_string())?;
+                    let metric = move |a: &MusalsSequence, b: &MusalsSequence| -> u32 {
+                        let distances = sz_engine.compute(&sz_device, &[a.as_ref()], &[b.as_ref()]).unwrap();
+                        distances[0] as u32
+                    };
+                    let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
+
                     let strategy = PartitionStrategy::default();
-                    let metric: fn(&_, &_) -> u32 = levenshtein::<_, _>;
                     let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
                     Ok(ShellTree::Levenshtein(tree))
                 }
@@ -178,8 +189,16 @@ impl ShellTree {
 
         let tree = match metric_name {
             "lev" => {
+                let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
+                let sz_engine =
+                    stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
+                let metric = move |a: &MusalsSequence, b: &MusalsSequence| -> u32 {
+                    let distances = sz_engine.compute(&sz_device, &[a.as_ref()], &[b.as_ref()]).unwrap();
+                    distances[0] as u32
+                };
+                let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
+
                 let bytes = std::fs::read(&tree_path).map_err(|e| e.to_string())?;
-                let metric: fn(&_, &_) -> u32 = levenshtein::<_, u32>;
                 let tree = Tree::bitcode_decode(&bytes, metric).map_err(|e| e.to_string())?;
                 Ok(ShellTree::Levenshtein(tree))
             }

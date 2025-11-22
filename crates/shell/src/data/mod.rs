@@ -3,6 +3,8 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use rand::prelude::*;
+
 mod fasta;
 pub mod npy;
 
@@ -121,11 +123,20 @@ impl InputFormat {
     }
 
     /// Reads the input data from the given path based on the input format.
-    pub fn read<P: AsRef<Path> + core::fmt::Debug>(path: P) -> Result<ShellData, String> {
-        match Self::from_path(&path)? {
+    pub fn read<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
+        path: P,
+        sample_size: Option<usize>,
+        rng: &mut R,
+    ) -> Result<ShellData, String> {
+        let mut data = match Self::from_path(&path)? {
             Self::Npy => npy::NpyType::read(path),
             Self::Fasta => fasta::read(path).map(ShellData::String),
+        }?;
+        data.shuffle(rng);
+        if let Some(size) = sample_size {
+            data.truncate(size);
         }
+        Ok(data)
     }
 
     /// Writes the given data to the specified path in the input format.
@@ -241,6 +252,40 @@ impl ShellData {
             Self::U16(data) => Self::U16(data[start..end].to_vec()),
             Self::U32(data) => Self::U32(data[start..end].to_vec()),
             Self::U64(data) => Self::U64(data[start..end].to_vec()),
+        }
+    }
+
+    /// Shuffles the ShellData in place using the provided RNG.
+    pub fn shuffle<R: rand::Rng>(&mut self, rng: &mut R) {
+        match self {
+            Self::String(data) => data.shuffle(rng),
+            Self::F32(data) => data.shuffle(rng),
+            Self::F64(data) => data.shuffle(rng),
+            Self::I8(data) => data.shuffle(rng),
+            Self::I16(data) => data.shuffle(rng),
+            Self::I32(data) => data.shuffle(rng),
+            Self::I64(data) => data.shuffle(rng),
+            Self::U8(data) => data.shuffle(rng),
+            Self::U16(data) => data.shuffle(rng),
+            Self::U32(data) => data.shuffle(rng),
+            Self::U64(data) => data.shuffle(rng),
+        }
+    }
+
+    /// Truncates the ShellData to the specified size.
+    pub fn truncate(&mut self, size: usize) {
+        match self {
+            Self::String(data) => data.truncate(size),
+            Self::F32(data) => data.truncate(size),
+            Self::F64(data) => data.truncate(size),
+            Self::I8(data) => data.truncate(size),
+            Self::I16(data) => data.truncate(size),
+            Self::I32(data) => data.truncate(size),
+            Self::I64(data) => data.truncate(size),
+            Self::U8(data) => data.truncate(size),
+            Self::U16(data) => data.truncate(size),
+            Self::U32(data) => data.truncate(size),
+            Self::U64(data) => data.truncate(size),
         }
     }
 

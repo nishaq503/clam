@@ -25,6 +25,8 @@ use crate::data::{DataType, InputFormat, MusalsSequence, ShellData};
 /// # Examples
 ///
 /// ```ignore
+/// let mut rng = rand::rng();
+///
 /// // Generate 100 12-dimensional f32 vectors, split 95/5
 /// generate_dataset(
 ///     100,
@@ -34,12 +36,12 @@ use crate::data::{DataType, InputFormat, MusalsSequence, ShellData};
 ///     Some(vec![95, 5]),
 ///     0.0,
 ///     1.0,
-///     Some(42),
+///     &mut rng,
 /// )?;
 /// // This creates: data-95.npy and data-5.npy
 /// ```
 #[allow(clippy::too_many_arguments)]
-pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug>(
+pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
     num_vectors: usize,
     dimensions: usize,
     out_path: P,
@@ -47,9 +49,8 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug>(
     partitions: Option<Vec<usize>>,
     min_val: f64,
     max_val: f64,
-    seed: Option<u64>,
+    rng: &mut R,
 ) -> Result<(), String> {
-    let seed = seed.unwrap_or(42);
     // Validate partitions sum to 100 if provided
     if let Some(ref parts) = partitions {
         let sum: usize = parts.iter().sum();
@@ -79,106 +80,58 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug>(
     println!("Output filename: {out_path:?}");
     println!("Partitions: {partitions:?}");
     println!("Value range: [{min_val}, {max_val}]");
-    println!("Seed: {seed}");
     println!();
 
     // Generate the data based on type
     let shell_data = match data_type {
         DataType::F32 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as f32,
-                max_val as f32,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as f32, max_val as f32, rng);
             ShellData::F32(data)
         }
         DataType::F64 => {
-            let data = symagen::random_data::random_tabular_seedable(num_vectors, dimensions, min_val, max_val, seed);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val, max_val, rng);
             ShellData::F64(data)
         }
         DataType::I8 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as i8,
-                max_val as i8,
-                seed,
-            );
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i8, max_val as i8, rng);
             ShellData::I8(data)
         }
         DataType::I16 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as i16,
-                max_val as i16,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i16, max_val as i16, rng);
             ShellData::I16(data)
         }
         DataType::I32 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as i32,
-                max_val as i32,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i32, max_val as i32, rng);
             ShellData::I32(data)
         }
         DataType::I64 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as i64,
-                max_val as i64,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i64, max_val as i64, rng);
             ShellData::I64(data)
         }
         DataType::U8 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as u8,
-                max_val as u8,
-                seed,
-            );
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u8, max_val as u8, rng);
             ShellData::U8(data)
         }
         DataType::U16 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as u16,
-                max_val as u16,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u16, max_val as u16, rng);
             ShellData::U16(data)
         }
         DataType::U32 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as u32,
-                max_val as u32,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u32, max_val as u32, rng);
             ShellData::U32(data)
         }
         DataType::U64 => {
-            let data = symagen::random_data::random_tabular_seedable(
-                num_vectors,
-                dimensions,
-                min_val as u64,
-                max_val as u64,
-                seed,
-            );
+            let data =
+                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u64, max_val as u64, rng);
             ShellData::U64(data)
         }
-        DataType::String => generate_strings(num_vectors, dimensions, seed),
+        DataType::String => generate_strings(num_vectors, dimensions, rng),
     };
 
     // Write data to file(s) based on partitions
@@ -196,13 +149,13 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug>(
 }
 
 /// Generate random string sequences and wrap them in a ShellData.
-fn generate_strings(num_vectors: usize, avg_length: usize, seed: u64) -> ShellData {
+fn generate_strings<R: rand::Rng>(num_vectors: usize, avg_length: usize, rng: &mut R) -> ShellData {
     // Use DNA alphabet for biological sequences
     let alphabet = "ACGT";
     let min_len = avg_length.saturating_sub(avg_length / 4);
     let max_len = avg_length + avg_length / 4;
 
-    let data = symagen::random_data::random_string(num_vectors, min_len, max_len, alphabet, seed);
+    let data = symagen::random_data::random_string(num_vectors, min_len, max_len, alphabet, rng);
     let metadata = (0..num_vectors)
         .map(|i| format!(">seq_{}", i + 1))
         .collect::<Vec<String>>();

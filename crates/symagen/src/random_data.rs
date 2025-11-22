@@ -72,9 +72,14 @@ pub fn random_tabular<T: Number, R: Rng>(
 /// * `alphabet`: the alphabet from which to draw characters
 /// * `seed`: for the random number generator
 #[must_use]
-pub fn random_string(cardinality: usize, min_len: usize, max_len: usize, alphabet: &str, seed: u64) -> Vec<String> {
+pub fn random_string<R: rand::Rng>(
+    cardinality: usize,
+    min_len: usize,
+    max_len: usize,
+    alphabet: &str,
+    rng: &mut R,
+) -> Vec<String> {
     let alphabet = alphabet.chars().collect::<Vec<_>>();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     (0..cardinality)
         .map(|_| {
             let len = rng.random_range(min_len..=max_len);

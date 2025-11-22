@@ -13,7 +13,7 @@ pub enum GenerateDataAction {
     /// If `partitions` is provided, multiple files will be created in the parent of `out_path` with suffixes indicating the partition percentages.
     Generate {
         /// Number of vectors to generate (m).
-        #[arg(short('n'), long)]
+        #[arg(short('v'), long)]
         num_vectors: usize,
 
         /// Dimensionality of each vector (n).
