@@ -7,11 +7,7 @@ use crate::{DistanceValue, PartitionStrategy, utils::SizedHeap};
 use super::{Cluster, lfd_estimate, reorder_items_in_place};
 
 impl<T, A> Cluster<T, A> {
-    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
-    ///
-    /// # WARNING
-    ///
-    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    /// Parallel version of [`Self::new_root`].
     pub(crate) fn par_new_root<Id, I, M, P, Ann>(
         items: &mut [(Id, I)],
         metric: &M,
@@ -30,11 +26,76 @@ impl<T, A> Cluster<T, A> {
         Self::par_new(0, 0, items, metric, strategy, annotator)
     }
 
-    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
-    ///
-    /// # WARNING
-    ///
-    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    /// Parallel version of [`Self::new_root_iterative`].
+    pub(crate) fn par_new_root_iterative<Id, I, M, P, Ann>(
+        items: &mut [(Id, I)],
+        metric: &M,
+        strategy: &PartitionStrategy<P>,
+        annotator: &Ann,
+        max_recursion_depth: usize,
+    ) -> Self
+    where
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        P: Fn(&Self) -> bool + Send + Sync,
+        Ann: Fn(&Self) -> Option<A> + Send + Sync,
+    {
+        let predicate = &strategy.predicate;
+
+        // Initial partitioning up to max_recursion_depth
+        let iterative_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
+        let iterative_strategy = strategy.with_predicate(iterative_predicate);
+        let mut root = Self::par_new(0, 0, items, metric, &iterative_strategy, annotator);
+
+        // Find unfinished leaves that still satisfy the original predicate
+        let unfinished_selector = |c: &Self| c.is_leaf() && predicate(c);
+        let mut unfinished_leaves = root.select_clusters_mut(&unfinished_selector);
+
+        // Iteratively increase recursion depth and partition unfinished leaves
+        let mut step = 1;
+        while !unfinished_leaves.is_empty() {
+            // Create a new strategy with increased recursion depth
+            step += 1;
+            let depth = max_recursion_depth * step;
+            let iterative_predicate = |c: &Self| c.depth < depth && predicate(c);
+            let iterative_strategy = strategy.with_predicate(iterative_predicate);
+
+            unfinished_leaves = unfinished_leaves
+                .into_par_iter()
+                .flat_map(|leaf| {
+                    // Get the items corresponding to this leaf
+                    //
+                    // SAFETY: The indices in different leaves are disjoint, so there are no concurrent mutable accesses to the same item. All items are also in
+                    // the original `items` slice, and so they are part of the same allocation and, thus, are contiguous in memory.
+                    #[allow(unsafe_code)]
+                    let leaf_items = unsafe {
+                        let items_ptr = &mut *items.as_ptr().cast_mut().add(leaf.center_index);
+                        std::slice::from_raw_parts_mut(items_ptr, leaf.cardinality)
+                    };
+
+                    // Re-partition the leaf and replace it in the tree
+                    *leaf = Self::par_new(
+                        leaf.depth,
+                        leaf.center_index,
+                        leaf_items,
+                        metric,
+                        &iterative_strategy,
+                        annotator,
+                    );
+
+                    // Return any new unfinished leaves
+                    leaf.select_clusters_mut(&unfinished_selector)
+                })
+                .collect();
+        }
+
+        root
+    }
+
+    /// Parallel version of [`Self::new`].
     fn par_new<Id, I, M, P, Ann>(
         depth: usize,
         center_index: usize,

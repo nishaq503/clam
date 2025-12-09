@@ -11,6 +11,7 @@ pub use partition_strategy::{BranchingFactor, PartitionStrategy, SpanReductionFa
 
 /// A cluster in the `Tree`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", expect(clippy::unsafe_derive_deserialize))]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)

@@ -62,8 +62,10 @@ impl<T, A> Cluster<T, A> {
             unfinished_leaves = unfinished_leaves
                 .into_iter()
                 .flat_map(|leaf| {
-                    // Re-partition the leaf and replace it in the tree
+                    // Get the items corresponding to this leaf
                     let leaf_items = &mut items[leaf.all_items_indices()];
+
+                    // Re-partition the leaf and replace it in the tree
                     *leaf = Self::new(
                         leaf.depth,
                         leaf.center_index,

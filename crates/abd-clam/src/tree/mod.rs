@@ -47,11 +47,13 @@ where
         Self::new(items, metric, &PartitionStrategy::default(), &|_| None)
     }
 
-    /// Same as [`new_minimal`](Self::new_minimal), but switches between iterative and recursive partitions to avoid stack overflows from deep recursion.
+    /// Same as [`Self::new_minimal`], but switches between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
+    ///
+    /// The resulting tree will be similar to, but not necessarily identical to, one created with [`Self::new_minimal`].
     ///
     /// # Errors
     ///
-    /// See [`new_minimal`](Self::new_minimal).
+    /// See [`Self::new_minimal`].
     pub fn new_minimal_iterative(items: Vec<I>, metric: M, max_recursive_depth: usize) -> Result<Self, &'static str> {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
@@ -67,11 +69,11 @@ where
         )
     }
 
-    /// Parallel version of [`new_minimal`](Self::new_minimal).
+    /// Parallel version of [`Self::new_minimal`].
     ///
     /// # Errors
     ///
-    /// If `items` is empty.
+    /// See [`Self::new_minimal`].
     pub fn par_new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str>
     where
         I: Send + Sync,
@@ -84,6 +86,31 @@ where
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
         Self::par_new(items, metric, &PartitionStrategy::default(), &|_| None)
+    }
+
+    /// Parallel version of [`Self::new_minimal_iterative`].
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::new_minimal`].
+    pub fn par_new_minimal_iterative(items: Vec<I>, metric: M, max_recursive_depth: usize) -> Result<Self, &'static str>
+    where
+        I: Send + Sync,
+        T: Send + Sync,
+        M: Send + Sync,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        Self::par_new_iterative(
+            items,
+            metric,
+            &PartitionStrategy::default(),
+            &|_| None,
+            max_recursive_depth,
+        )
     }
 }
 
@@ -305,6 +332,31 @@ where
         }
 
         let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator);
+
+        Ok(Self { items, root, metric })
+    }
+
+    /// Parallel version of [`Self::new_iterative`].
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::new`].
+    pub fn par_new_iterative<P, Ann>(
+        mut items: Vec<(Id, I)>,
+        metric: M,
+        strategy: &PartitionStrategy<P>,
+        annotator: &Ann,
+        max_recursive_depth: usize,
+    ) -> Result<Self, &'static str>
+    where
+        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
+        Ann: Fn(&Cluster<T, A>) -> Option<A> + Send + Sync,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let root = Cluster::par_new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
 
         Ok(Self { items, root, metric })
     }
