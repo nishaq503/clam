@@ -40,11 +40,15 @@ pub enum ShellTree {
 }
 
 macro_rules! st_new_vector_arm {
-    ($items:ident, $metric:ident, $ty:ty, $st_var:ident, $vt_var:ident) => {{
+    ($items:ident, $metric:ident, $ty:ty, $st_var:ident, $vt_var:ident, $iterative_partition:ident) => {{
         let strategy = PartitionStrategy::default();
         let items = $items.into_iter().enumerate().collect::<Vec<_>>();
         let metric: fn(&_, &_) -> $ty = $metric::<_, _, _>;
-        let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
+        let tree = if $iterative_partition {
+            Tree::par_new_iterative(items, metric, &strategy, &|_| None, 128)
+        } else {
+            Tree::par_new(items, metric, &strategy, &|_| None)
+        }?;
         Ok(ShellTree::$st_var(VectorTree::$vt_var(tree)))
     }};
 }
@@ -56,6 +60,7 @@ impl ShellTree {
     ///
     /// - `inp_data`: The input data to build the tree from.
     /// - `metric`: The distance metric to use for the tree.
+    /// - `iterative_partition`: Whether to use the iterative version of the partition algorithm to avoid stack overflows from deep recursion.
     ///
     /// # Returns
     ///
@@ -67,7 +72,7 @@ impl ShellTree {
     ///   are:
     ///   - String data with Levenshtein metric.
     ///   - Float or Integer data with Euclidean or Cosine metrics.
-    pub fn new(inp_data: ShellData, metric: &Metric) -> Result<ShellTree, String> {
+    pub fn new(inp_data: ShellData, metric: &Metric, iterative_partition: bool) -> Result<ShellTree, String> {
         match metric {
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {
@@ -81,36 +86,40 @@ impl ShellTree {
                     let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
                     let strategy = PartitionStrategy::default();
-                    let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
+                    let tree = if iterative_partition {
+                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, 128)
+                    } else {
+                        Tree::par_new(items, metric, &strategy, &|_| None)
+                    }?;
                     Ok(ShellTree::Levenshtein(tree))
                 }
                 _ => Err("Levenshtein metric can only be used with string data".to_string()),
             },
             Metric::Euclidean => match inp_data {
                 ShellData::String(_) => Err("Euclidean metric cannot be used for string data".to_string()),
-                ShellData::F32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, F32),
-                ShellData::F64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, F64),
-                ShellData::I8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I8),
-                ShellData::I16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I16),
-                ShellData::I32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I32),
-                ShellData::I64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, I64),
-                ShellData::U8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U8),
-                ShellData::U16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U16),
-                ShellData::U32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U32),
-                ShellData::U64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, U64),
+                ShellData::F32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, F32, iterative_partition),
+                ShellData::F64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, F64, iterative_partition),
+                ShellData::I8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I8, iterative_partition),
+                ShellData::I16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I16, iterative_partition),
+                ShellData::I32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I32, iterative_partition),
+                ShellData::I64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, I64, iterative_partition),
+                ShellData::U8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U8, iterative_partition),
+                ShellData::U16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U16, iterative_partition),
+                ShellData::U32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U32, iterative_partition),
+                ShellData::U64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, U64, iterative_partition),
             },
             Metric::Cosine => match inp_data {
                 ShellData::String(_) => Err("Cosine distance cannot be used for string data".to_string()),
-                ShellData::F32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, F32),
-                ShellData::F64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, F64),
-                ShellData::I8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I8),
-                ShellData::I16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I16),
-                ShellData::I32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I32),
-                ShellData::I64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, I64),
-                ShellData::U8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U8),
-                ShellData::U16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U16),
-                ShellData::U32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U32),
-                ShellData::U64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, U64),
+                ShellData::F32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, F32, iterative_partition),
+                ShellData::F64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, F64, iterative_partition),
+                ShellData::I8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I8, iterative_partition),
+                ShellData::I16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I16, iterative_partition),
+                ShellData::I32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I32, iterative_partition),
+                ShellData::I64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, I64, iterative_partition),
+                ShellData::U8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U8, iterative_partition),
+                ShellData::U16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U16, iterative_partition),
+                ShellData::U32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U32, iterative_partition),
+                ShellData::U64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, U64, iterative_partition),
             },
         }
     }

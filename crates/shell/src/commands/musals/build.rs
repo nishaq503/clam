@@ -8,6 +8,7 @@ use crate::{commands::musals::ShellCostMatrix, data::ShellData, metrics::Metric,
 pub fn build_msa<P: AsRef<Path>>(
     inp_data: ShellData,
     metric: &Metric,
+    iterative_partition: bool,
     cost_matrix: &ShellCostMatrix,
     out_dir: P,
     save_fasta: bool,
@@ -26,7 +27,7 @@ pub fn build_msa<P: AsRef<Path>>(
     let suffix = format!("msa-{cost_matrix}");
     let cost_matrix = cost_matrix.get();
 
-    let tree = ShellTree::new(inp_data, metric)?;
+    let tree = ShellTree::new(inp_data, metric, iterative_partition)?;
     let msa_tree = match tree {
         ShellTree::Levenshtein(tree) => ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix)),
         _ => return Err("MSA tree can only be built for string data.".to_string()),

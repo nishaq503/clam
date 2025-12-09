@@ -35,6 +35,11 @@ struct Args {
     #[arg(short('s'), long)]
     seed: Option<u64>,
 
+    /// Whether to use the iterative version of the partition algorithm in order to avoid stack overflows from deep recursion. If true, the maximum recursion
+    /// depth is limited to 128.
+    #[arg(long, default_value_t = false)]
+    iterative_partition: bool,
+
     /// Optional size of the subsample of the input data to use for building the tree.
     #[arg(short('n'), long)]
     sample_size: Option<usize>,
@@ -88,7 +93,7 @@ fn main() -> Result<(), String> {
         Commands::Cakes { action } => match action {
             commands::cakes::CakesAction::Build => {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::cakes::build_new_tree(inp_data, &metric, out_path)
+                commands::cakes::build_new_tree(inp_data, &metric, args.iterative_partition, out_path)
             }
             commands::cakes::CakesAction::Search {
                 queries_path,
@@ -101,7 +106,14 @@ fn main() -> Result<(), String> {
         Commands::Musals { action, cost_matrix } => match action {
             commands::musals::MusalsAction::Build { save_fasta } => {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::musals::build_msa(inp_data, &metric, &cost_matrix, out_path, save_fasta)
+                commands::musals::build_msa(
+                    inp_data,
+                    &metric,
+                    args.iterative_partition,
+                    &cost_matrix,
+                    out_path,
+                    save_fasta,
+                )
             }
             commands::musals::MusalsAction::Evaluate { quality_metrics } => {
                 commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path)

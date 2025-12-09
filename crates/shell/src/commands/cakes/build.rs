@@ -16,13 +16,19 @@ use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 ///
 /// - `inp_data`: The input data to build the tree from.
 /// - `metric`: The distance metric to use for the tree.
+/// - `iterative_partition`: Whether to use the iterative version of the partition algorithm to avoid stack overflows from deep recursion.
 /// - `out_dir`: The output directory to write the tree and data to.
 ///
 /// # Errors
 ///
 /// - If the dataset and metric are deemed an incompatible combination. See
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
-pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: &Metric, out_dir: P) -> Result<(), String> {
-    let tree = ShellTree::new(inp_data, metric)?;
+pub fn build_new_tree<P: AsRef<Path>>(
+    inp_data: ShellData,
+    metric: &Metric,
+    iterative_partition: bool,
+    out_dir: P,
+) -> Result<(), String> {
+    let tree = ShellTree::new(inp_data, metric, iterative_partition)?;
     tree.write_to(out_dir, None)
 }
