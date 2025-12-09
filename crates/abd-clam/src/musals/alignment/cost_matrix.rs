@@ -442,15 +442,18 @@ impl<'de, T> serde::Deserialize<'de> for CostMatrix<T>
 where
     T: DistanceValue + serde::Deserialize<'de>,
 {
-    #[expect(clippy::missing_docs_in_private_items)]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
+        /// Helper struct for deserialization.
         #[derive(serde::Deserialize)]
         struct CostMatrixHelper<T: DistanceValue> {
+            /// Using Vec<Vec<T>> to facilitate deserialization
             sub_vec_vec: Vec<Vec<T>>,
+            /// Using T directly for gap costs
             gap_open: T,
+            /// The cost to extend a gap.
             gap_ext: T,
         }
 

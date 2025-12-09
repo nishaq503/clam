@@ -25,6 +25,62 @@ impl<T, A> Cluster<T, A> {
         Self::new(0, 0, items, metric, strategy, annotator)
     }
 
+    /// Same as `new_root`, but switches between iterative and recursive partitioning to avoid stack overflows from deep recursion on large datasets.
+    ///
+    /// # WARNING
+    ///
+    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    pub(crate) fn new_root_iterative<Id, I, M, P, Ann>(
+        items: &mut [(Id, I)],
+        metric: &M,
+        strategy: &PartitionStrategy<P>,
+        annotator: &Ann,
+        max_recursion_depth: usize,
+    ) -> Self
+    where
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+        P: Fn(&Self) -> bool,
+        Ann: Fn(&Self) -> Option<A>,
+    {
+        let predicate = &strategy.predicate;
+
+        let iterative_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
+        let iterative_strategy = strategy.with_predicate(iterative_predicate);
+        let mut root = Self::new(0, 0, items, metric, &iterative_strategy, annotator);
+
+        let unfinished_selector = |c: &Self| c.is_leaf() && predicate(c);
+        let mut unfinished_leaves = root.select_clusters_mut(&unfinished_selector);
+        let mut step = 1;
+        while !unfinished_leaves.is_empty() {
+            // Create a new strategy with increased recursion depth
+            step += 1;
+            let depth = max_recursion_depth * step;
+            let iterative_predicate = |c: &Self| c.depth < depth && predicate(c);
+            let iterative_strategy = strategy.with_predicate(iterative_predicate);
+
+            unfinished_leaves = unfinished_leaves
+                .into_iter()
+                .flat_map(|leaf| {
+                    // Re-partition the leaf and replace it in the tree
+                    let leaf_items = &mut items[leaf.all_items_indices()];
+                    *leaf = Self::new(
+                        leaf.depth,
+                        leaf.center_index,
+                        leaf_items,
+                        metric,
+                        &iterative_strategy,
+                        annotator,
+                    );
+                    // Return any new unfinished leaves
+                    leaf.select_clusters_mut(&unfinished_selector)
+                })
+                .collect();
+        }
+
+        root
+    }
+
     /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
     ///
     /// # WARNING

@@ -1,6 +1,7 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
 use rayon::prelude::*;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::DistanceValue;
@@ -44,6 +45,26 @@ where
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
         Self::new(items, metric, &PartitionStrategy::default(), &|_| None)
+    }
+
+    /// Same as [`new_minimal`](Self::new_minimal), but switches between iterative and recursive partitions to avoid stack overflows from deep recursion.
+    ///
+    /// # Errors
+    ///
+    /// See [`new_minimal`](Self::new_minimal).
+    pub fn new_minimal_iterative(items: Vec<I>, metric: M, max_recursive_depth: usize) -> Result<Self, &'static str> {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let items = items.into_iter().enumerate().collect::<Vec<_>>();
+        Self::new_iterative(
+            items,
+            metric,
+            &PartitionStrategy::default(),
+            &|_| None,
+            max_recursive_depth,
+        )
     }
 
     /// Parallel version of [`new_minimal`](Self::new_minimal).
@@ -117,6 +138,36 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
         self.root.subtree_preorder()
     }
+
+    /// Returns a vector of references to all clusters in the tree that satisfy the given predicate.
+    ///
+    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
+    pub fn select_clusters<P>(&self, predicate: P) -> Vec<&Cluster<T, A>>
+    where
+        P: Fn(&Cluster<T, A>) -> bool,
+    {
+        self.root.select_clusters(&predicate)
+    }
+
+    /// Returns a vector of mutable references to all clusters in the tree that satisfy the given predicate.
+    ///
+    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
+    pub fn select_clusters_mut<P>(&mut self, predicate: P) -> Vec<&mut Cluster<T, A>>
+    where
+        P: Fn(&Cluster<T, A>) -> bool,
+    {
+        self.root.select_clusters_mut(&predicate)
+    }
+
+    /// Returns a vector of references to all leaf clusters in the tree.
+    pub fn leaf_clusters(&self) -> Vec<&Cluster<T, A>> {
+        self.select_clusters(Cluster::is_leaf)
+    }
+
+    /// Returns a vector of mutable references to all leaf clusters in the tree.
+    pub fn leaf_clusters_mut(&mut self) -> Vec<&mut Cluster<T, A>> {
+        self.select_clusters_mut(Cluster::is_leaf)
+    }
 }
 
 /// Constructors and methods for computing distances in `Tree`.
@@ -144,7 +195,7 @@ where
     /// * `items` - A vector of tuples, each containing an identifier and an item.
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
-    /// * `annotator` - A function that annotates clusters in post-order traversal.
+    /// * `annotator` - A function that annotates clusters as they are created.
     ///
     /// # Errors
     ///
@@ -164,6 +215,39 @@ where
         }
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator);
+
+        Ok(Self { items, root, metric })
+    }
+
+    /// Same as [`Self::new`], but switches between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
+    ///
+    /// # Arguments
+    ///
+    /// * `items` - A vector of tuples, each containing an identifier and an item.
+    /// * `metric` - A function that computes the distance between two items.
+    /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
+    /// * `annotator` - A function that annotates clusters as they are created.
+    /// * `max_recursive_depth` - The maximum depth of any recursion.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::new`].
+    pub fn new_iterative<P, Ann>(
+        mut items: Vec<(Id, I)>,
+        metric: M,
+        strategy: &PartitionStrategy<P>,
+        annotator: &Ann,
+        max_recursive_depth: usize,
+    ) -> Result<Self, &'static str>
+    where
+        P: Fn(&Cluster<T, A>) -> bool,
+        Ann: Fn(&Cluster<T, A>) -> Option<A>,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+
+        let root = Cluster::new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
 
         Ok(Self { items, root, metric })
     }

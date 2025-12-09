@@ -3,6 +3,7 @@
 mod par_partition;
 mod partition;
 mod partition_strategy;
+#[cfg(feature = "serde")]
 mod to_csv;
 
 pub use partition::{lfd_estimate, reorder_items_in_place};
@@ -31,6 +32,22 @@ pub struct Cluster<T, A> {
     pub(crate) children: Option<(Box<[Self]>, T)>,
     /// Optional arbitrary data associated with this cluster.
     pub(crate) annotation: Option<A>,
+}
+
+impl<T, A> PartialEq for Cluster<T, A>
+where
+    T: PartialEq,
+    A: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.depth == other.depth
+            && self.center_index == other.center_index
+            && self.cardinality == other.cardinality
+            && self.radius == other.radius
+            && self.lfd == other.lfd
+            && self.children == other.children
+            && self.annotation == other.annotation
+    }
 }
 
 impl<T, A> core::fmt::Display for Cluster<T, A>
@@ -320,6 +337,44 @@ impl<T, A> Cluster<T, A> {
             lfd: self.lfd,
             children,
             annotation: None,
+        }
+    }
+
+    /// Returns references to the clusters in the subtree rooted here that satisfy the given predicate.
+    ///
+    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
+    pub fn select_clusters<P>(&self, predicate: &P) -> Vec<&Self>
+    where
+        P: Fn(&Self) -> bool,
+    {
+        if predicate(self) {
+            vec![self]
+        } else if let Some((children, _)) = &self.children {
+            children
+                .iter()
+                .flat_map(|child| child.select_clusters(predicate))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    /// Returns mutable references to the clusters in the subtree rooted here that satisfy the given predicate.
+    ///
+    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
+    pub fn select_clusters_mut<P>(&mut self, predicate: &P) -> Vec<&mut Self>
+    where
+        P: Fn(&Self) -> bool,
+    {
+        if predicate(self) {
+            vec![self]
+        } else if let Some((children, _)) = &mut self.children {
+            children
+                .iter_mut()
+                .flat_map(|child| child.select_clusters_mut(predicate))
+                .collect()
+        } else {
+            vec![]
         }
     }
 }

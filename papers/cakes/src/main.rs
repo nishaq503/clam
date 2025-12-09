@@ -12,6 +12,7 @@ use rand::prelude::*;
 mod data;
 mod utils;
 
+/// CLI arguments for the benchmark program.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {

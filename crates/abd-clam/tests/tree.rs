@@ -192,6 +192,51 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     Ok(())
 }
 
+#[test_case(1_000, 10 ; "1_000x10")]
+#[test_case(10_000, 10 ; "10_000x10")]
+fn big_iterative(car: usize, dim: usize) -> Result<(), String> {
+    let metric = |a: &Vec<f32>, b: &Vec<f32>| {
+        let d = common::metrics::euclidean::<_, _, f32>(a, b);
+        (d * 1000.0).trunc() / 1000.0 // Truncate to 3 decimal places to help debugging
+    };
+    let (min, max) = (-1.0, 1.0);
+
+    for _ in 0..10 {
+        let data = common::data_gen::tabular(car, dim, min, max);
+        let data = data
+            .into_iter()
+            .map(|v| {
+                v.into_iter()
+                    .map(|f| (f * 1000.0).trunc() / 1000.0) // Truncate to 3 decimal places to help debugging
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        let tree_rec = Tree::new_minimal(data.clone(), metric)?;
+        let clusters_rec = tree_rec.all_clusters_preorder();
+
+        for max_recursion_depth in [4, 8, 16] {
+            let tree_iter = Tree::new_minimal_iterative(data.clone(), metric, max_recursion_depth)?;
+            let clusters_iter = tree_iter.all_clusters_preorder();
+
+            // Check that trees are identical when built iteratively.
+            assert_eq!(
+                clusters_rec.len(),
+                clusters_iter.len(),
+                "Number of clusters mismatch between recursive and iterative implementations"
+            );
+            for (&c_rec, &c_iter) in clusters_rec.iter().zip(clusters_iter.iter()) {
+                assert_eq!(
+                    c_rec, c_iter,
+                    "Cluster mismatch between recursive and iterative implementations"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[test_case(2 ; "k=2")]
 // #[test_case(4 ; "k=4")]
 // #[test_case(8 ; "k=8")]
