@@ -4,7 +4,7 @@ use abd_clam::musals::Sequence;
 use bio::io::fasta;
 
 /// A wrapper type on String to allow use of the `Sequence` trait.
-#[derive(Debug, Clone, PartialEq, Eq, bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, databuf::Encode, databuf::Decode, serde::Deserialize, serde::Serialize)]
 pub struct MusalsSequence(pub String);
 
 impl core::fmt::Display for MusalsSequence {

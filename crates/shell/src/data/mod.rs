@@ -202,7 +202,7 @@ impl FromStr for DataType {
     }
 }
 
-#[derive(bitcode::Encode, bitcode::Decode, serde::Deserialize, serde::Serialize)]
+#[derive(databuf::Encode, databuf::Decode, serde::Deserialize, serde::Serialize)]
 pub enum ShellData {
     /// Vec of sequences and their metadata from FASTA files.
     String(Vec<(String, MusalsSequence)>),

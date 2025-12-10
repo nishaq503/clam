@@ -34,7 +34,8 @@ rayon = { workspace = true }
 rand = { workspace = true }
 profi = { workspace = true, default-features = false, features = ["rayon"] }
 serde = { workspace = true, features = ["derive"], optional = true }
-bitcode = { workspace = true, features = ["derive"], optional = true }
+# bitcode = { workspace = true, features = ["derive"], optional = true }
+databuf = { workspace = true, optional = true }
 csv = { workspace = true, optional = true }
 num = { workspace = true, optional = true }
 bytecount = { workspace = true, optional = true }
@@ -60,7 +61,7 @@ ndarray-npy = { workspace = true }
 distances = { workspace = true }
 
 [features]
-serde = ["dep:serde", "dep:bitcode", "dep:csv"]
+serde = ["dep:serde", "dep:databuf", "dep:csv"]
 musals = ["dep:num", "dep:bytecount"]
 all = ["serde", "musals"]
 profile = ["profi/enable"]

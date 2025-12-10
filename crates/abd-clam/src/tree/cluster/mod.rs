@@ -14,9 +14,8 @@ pub use partition_strategy::{BranchingFactor, PartitionStrategy, SpanReductionFa
 #[cfg_attr(feature = "serde", expect(clippy::unsafe_derive_deserialize))]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize, bitcode::Encode, bitcode::Decode)
+    derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode)
 )]
-#[cfg_attr(feature = "serde", bitcode(recursive))]
 #[must_use]
 pub struct Cluster<T, A> {
     /// Depth of this cluster in the tree, with root at depth 0.

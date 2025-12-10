@@ -161,6 +161,15 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.metric
     }
 
+    /// Changes the metric used in the tree to the provided one.
+    pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N> {
+        Tree {
+            items: self.items,
+            root: self.root,
+            metric,
+        }
+    }
+
     /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
     pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
         self.root.subtree_preorder()
@@ -203,18 +212,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    /// Changes the metric used in the tree to the provided one.
-    pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N>
-    where
-        N: Fn(&I, &I) -> T,
-    {
-        Tree {
-            items: self.items,
-            root: self.root,
-            metric,
-        }
-    }
-
     /// Creates a new `Tree` from the given items and metric.
     ///
     /// # Arguments
@@ -432,30 +429,33 @@ where
         Ok(Self { items, root, metric })
     }
 }
-#[cfg(feature = "serde")]
-impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
-where
-    Id: bitcode::Encode + bitcode::Decode,
-    I: bitcode::Encode + bitcode::Decode,
-    T: bitcode::Encode + bitcode::Decode,
-    A: bitcode::Encode + bitcode::Decode,
-{
-    /// Encodes the `Tree` using Bitcode, returning a vector of bytes.
-    ///
-    /// # Errors
-    ///
-    /// If the encoding fails.
-    pub fn bitcode_encode(&self) -> Result<Vec<u8>, bitcode::Error> {
-        bitcode::encode(&(&self.items, &self.root))
-    }
 
-    /// Decodes a `Tree` using Bitcode, taking a slice of bytes and a metric.
-    ///
-    /// # Errors
-    ///
-    /// If the decoding fails.
-    pub fn bitcode_decode(bytes: &[u8], metric: M) -> Result<Self, bitcode::Error> {
-        let (items, root) = bitcode::decode(bytes)?;
+#[cfg(feature = "serde")]
+impl<Id, I, T, A, M> databuf::Encode for Tree<Id, I, T, A, M>
+where
+    Id: databuf::Encode,
+    I: databuf::Encode,
+    T: databuf::Encode,
+    A: databuf::Encode,
+{
+    fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
+        self.items.encode::<CONFIG>(buffer)?;
+        self.root.encode::<CONFIG>(buffer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, Id, I, T, A> databuf::Decode<'de> for Tree<Id, I, T, A, Box<dyn Fn(&I, &I) -> T>>
+where
+    Id: databuf::Decode<'de>,
+    I: databuf::Decode<'de>,
+    T: databuf::Decode<'de> + DistanceValue,
+    A: databuf::Decode<'de>,
+{
+    fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
+        let items = databuf::Decode::decode::<CONFIG>(buffer)?;
+        let root = databuf::Decode::decode::<CONFIG>(buffer)?;
+        let metric = Box::new(|_: &I, _: &I| T::zero()); // Placeholder; actual metric must be provided externally
         Ok(Self { items, root, metric })
     }
 }

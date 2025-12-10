@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use abd_clam::{DistanceValue, PartitionStrategy, Tree, cakes::Search};
+use databuf::{Decode, Encode, config::DEFAULT as DATABUF_DEFAULT};
 
 use crate::{
     commands::cakes::{AlgorithmResult, QueryResult, SearchResults},
@@ -156,8 +157,8 @@ impl ShellTree {
             Self::Levenshtein(tree) => {
                 let suffix = suffix.map_or_else(|| "lev".to_string(), |s| format!("{s}-lev"));
                 let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
-                let bytes = tree.bitcode_encode().map_err(|e| e.to_string())?;
-                std::fs::write(path, bytes).map_err(|e| e.to_string())
+                let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+                tree.encode::<DATABUF_DEFAULT>(&mut file).map_err(|e| e.to_string())
             }
             Self::Euclidean(tree) => {
                 let suffix = suffix.map_or_else(|| "euc".to_string(), |s| format!("{s}-euc"));
@@ -208,8 +209,8 @@ impl ShellTree {
                 let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
                 let bytes = std::fs::read(&tree_path).map_err(|e| e.to_string())?;
-                let tree = Tree::bitcode_decode(&bytes, metric).map_err(|e| e.to_string())?;
-                Ok(ShellTree::Levenshtein(tree))
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(&bytes).map_err(|e| e.to_string())?;
+                Ok(ShellTree::Levenshtein(tree.with_metric(metric)))
             }
             "euc" => Ok(ShellTree::Euclidean(VectorTree::read_from(&tree_path)?)),
             "cos" => Ok(ShellTree::Cosine(VectorTree::read_from(&tree_path)?)),
@@ -223,21 +224,19 @@ impl ShellTree {
 impl VectorTree {
     /// Saves the tree to the specified path using bitcode.
     pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let (bytes, dtype) = match self {
-            Self::F32(tree) => (tree.bitcode_encode(), "f4"),
-            Self::F64(tree) => (tree.bitcode_encode(), "f8"),
-            Self::I8(tree) => (tree.bitcode_encode(), "i1"),
-            Self::I16(tree) => (tree.bitcode_encode(), "i2"),
-            Self::I32(tree) => (tree.bitcode_encode(), "i4"),
-            Self::I64(tree) => (tree.bitcode_encode(), "i8"),
-            Self::U8(tree) => (tree.bitcode_encode(), "u1"),
-            Self::U16(tree) => (tree.bitcode_encode(), "u2"),
-            Self::U32(tree) => (tree.bitcode_encode(), "u4"),
-            Self::U64(tree) => (tree.bitcode_encode(), "u8"),
+        let (mut bytes, dtype) = match self {
+            Self::F32(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "f4"),
+            Self::F64(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "f8"),
+            Self::I8(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "i1"),
+            Self::I16(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "i2"),
+            Self::I32(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "i4"),
+            Self::I64(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "i8"),
+            Self::U8(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "u1"),
+            Self::U16(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "u2"),
+            Self::U32(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "u4"),
+            Self::U64(tree) => (tree.to_bytes::<DATABUF_DEFAULT>(), "u8"),
         };
-        let mut bytes = bytes.map_err(|e| e.to_string())?;
         bytes.extend_from_slice(dtype.as_bytes());
-
         std::fs::write(path, bytes).map_err(|e| e.to_string())
     }
 
@@ -245,57 +244,48 @@ impl VectorTree {
     pub fn read_from<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         let dtype = std::str::from_utf8(&bytes[bytes.len() - 2..]).map_err(|e| e.to_string())?;
-        let tree_bytes = &bytes[..bytes.len() - 2];
+
+        let bytes = &bytes[..bytes.len() - 2];
         let tree = match dtype {
             "f4" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, f32, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::F32(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::F32(tree.with_metric(euclidean))
             }
             "f8" => {
-                let metric: fn(&_, &_) -> f64 = euclidean::<_, f64, f64>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::F64(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::F64(tree.with_metric(euclidean))
             }
             "i1" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, i8, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::I8(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::I8(tree.with_metric(euclidean))
             }
             "i2" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, i16, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::I16(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::I16(tree.with_metric(euclidean))
             }
             "i4" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, i32, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::I32(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::I32(tree.with_metric(euclidean))
             }
             "i8" => {
-                let metric: fn(&_, &_) -> f64 = euclidean::<_, i64, f64>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::I64(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::I64(tree.with_metric(euclidean))
             }
             "u1" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, u8, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::U8(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::U8(tree.with_metric(euclidean))
             }
             "u2" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, u16, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::U16(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::U16(tree.with_metric(euclidean))
             }
             "u4" => {
-                let metric: fn(&_, &_) -> f32 = euclidean::<_, u32, f32>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::U32(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::U32(tree.with_metric(euclidean))
             }
             "u8" => {
-                let metric: fn(&_, &_) -> f64 = euclidean::<_, u64, f64>;
-                let tree = Tree::bitcode_decode(tree_bytes, metric).map_err(|e| e.to_string())?;
-                Self::U64(tree)
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(bytes).map_err(|e| e.to_string())?;
+                Self::U64(tree.with_metric(euclidean))
             }
             _ => return Err("Unsupported data type in tree file".to_string()),
         };

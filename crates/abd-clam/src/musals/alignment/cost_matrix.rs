@@ -25,7 +25,7 @@ const NUM_CHARS: usize = 256;
 ///     method, a matrix that uses the BLOSUM62 substitution scores for amino-
 ///     acid sequences.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(bitcode::Encode, bitcode::Decode))]
+#[cfg_attr(feature = "serde", derive(databuf::Encode, databuf::Decode))]
 #[must_use]
 pub struct CostMatrix<T: DistanceValue> {
     /// The cost of substituting one character for another.
