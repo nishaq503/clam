@@ -33,15 +33,7 @@ where
 
     /// Returns a CSV header string for the cluster information.
     const fn csv_header() -> [&'static str; NUM_CLUSTER_FEATURES] {
-        [
-            "center_index",
-            "depth",
-            "cardinality",
-            "radius",
-            "lfd",
-            "span",
-            "num_children",
-        ]
+        ["center_index", "depth", "cardinality", "radius", "lfd", "span", "num_children"]
     }
 
     /// Returns a row of CSV data representing the cluster's information.

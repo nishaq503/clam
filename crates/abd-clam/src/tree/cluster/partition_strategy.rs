@@ -164,11 +164,7 @@ impl std::fmt::Display for BranchingFactor {
 
 impl BranchingFactor {
     /// Returns the branching factor for a cluster with the given the cardinality of the cluster, if not `Unbounded`.
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
+    #[expect(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     #[must_use]
     pub fn for_cardinality(&self, n: usize) -> Option<usize> {
         match self {
@@ -208,9 +204,7 @@ impl<'a> From<&'a str> for BranchingFactor {
             "unbounded" => Self::Unbounded,
             adaptive if adaptive.starts_with("adaptive(") && adaptive.ends_with(')') => {
                 let inner = &adaptive["adaptive(".len()..adaptive.len() - 1];
-                inner
-                    .parse::<usize>()
-                    .map_or(Self::Adaptive(128), |n| Self::Adaptive(n.max(3)))
+                inner.parse::<usize>().map_or(Self::Adaptive(128), |n| Self::Adaptive(n.max(3)))
             }
             fixed if fixed.starts_with("fixed(") && fixed.ends_with(')') => {
                 let inner = &fixed["fixed(".len()..fixed.len() - 1];
@@ -262,9 +256,7 @@ impl SpanReductionFactor {
             Self::Pi => core::f64::consts::PI,
             Self::Phi => crate::utils::PHI_F64,
         };
-        let parent_span = parent_span
-            .to_f64()
-            .unwrap_or_else(|| unreachable!("DistanceValue must be convertible to f64"));
+        let parent_span = parent_span.to_f64().unwrap_or_else(|| unreachable!("DistanceValue must be convertible to f64"));
         T::from_f64(parent_span / factor).unwrap_or_else(|| unreachable!("DistanceValue must be convertible from f64"))
     }
 }
@@ -340,13 +332,9 @@ impl<'a> From<&'a str> for SpanReductionFactor {
             "phi" => Self::Phi,
             fixed if fixed.starts_with("fixed(") && fixed.ends_with(')') => {
                 let inner = &fixed["fixed(".len()..fixed.len() - 1];
-                inner.parse::<f64>().map_or(Self::Sqrt2, |srf| {
-                    if 1.0 < srf && srf.is_finite() {
-                        Self::Fixed(srf)
-                    } else {
-                        Self::Sqrt2
-                    }
-                })
+                inner
+                    .parse::<f64>()
+                    .map_or(Self::Sqrt2, |srf| if 1.0 < srf && srf.is_finite() { Self::Fixed(srf) } else { Self::Sqrt2 })
             }
             _ => value.parse::<f64>().map_or(Self::Sqrt2, Self::from),
         }

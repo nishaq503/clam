@@ -62,12 +62,7 @@ impl MsaQuality for PairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
@@ -83,21 +78,12 @@ impl MsaQuality for PairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 }
 
 /// Applies a pairwise scorer to all pairs of sequences in the MSA.
-pub fn apply_pairwise<S, F: Fn(&S, &S) -> f64>(
-    sequences: &[S],
-    indices: &[usize],
-    scorer: F,
-) -> impl Iterator<Item = f64> {
+pub fn apply_pairwise<S, F: Fn(&S, &S) -> f64>(sequences: &[S], indices: &[usize], scorer: F) -> impl Iterator<Item = f64> {
     indices
         .iter()
         .enumerate()
@@ -120,22 +106,16 @@ pub fn par_apply_pairwise<S: Send + Sync, F: Fn(&S, &S) -> f64 + Send + Sync>(
 
 /// Scores a single pairwise alignment in the MSA, applying a penalty for gaps and mismatches.
 fn ps_inner<S: Sequence, T: DistanceValue>(s1: &S, s2: &S, cost_matrix: &CostMatrix<T>) -> f64 {
-    let score = s1
-        .as_ref()
-        .iter()
-        .zip(s2.as_ref().iter())
-        .fold(T::zero(), |score, (&a, &b)| {
-            if a == b {
-                score
-            } else if a == S::GAP || b == S::GAP {
-                score + cost_matrix.gap_open_cost()
-            } else {
-                // a != b
-                score + cost_matrix.sub_cost(a, b)
-            }
-        });
+    let score = s1.as_ref().iter().zip(s2.as_ref().iter()).fold(T::zero(), |score, (&a, &b)| {
+        if a == b {
+            score
+        } else if a == S::GAP || b == S::GAP {
+            score + cost_matrix.gap_open_cost()
+        } else {
+            // a != b
+            score + cost_matrix.sub_cost(a, b)
+        }
+    });
 
-    score
-        .to_f64()
-        .unwrap_or_else(|| unreachable!("DistanceValue to_f64 conversion failed"))
+    score.to_f64().unwrap_or_else(|| unreachable!("DistanceValue to_f64 conversion failed"))
 }

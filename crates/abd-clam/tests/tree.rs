@@ -146,11 +146,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
         assert_eq!(root.cardinality(), car, "Cardinality mismatch: {root}");
         assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
-        assert!(
-            root.radius() <= max_hypot / 2.0,
-            "Radius too large: {:.6}",
-            root.radius()
-        );
+        assert!(root.radius() <= max_hypot / 2.0, "Radius too large: {:.6}", root.radius());
     }
 
     Ok(())

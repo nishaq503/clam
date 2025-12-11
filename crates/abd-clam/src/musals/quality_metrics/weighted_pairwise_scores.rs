@@ -65,12 +65,7 @@ impl MsaQuality for WeightedPairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
@@ -86,12 +81,7 @@ impl MsaQuality for WeightedPairwiseScores {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 }
 
@@ -125,7 +115,5 @@ fn wsp_inner<S: Sequence, T: DistanceValue>(s1: &S, s2: &S, cost_matrix: &CostMa
             }
         });
 
-    score
-        .to_f64()
-        .unwrap_or_else(|| unreachable!("DistanceValue to_f64 conversion failed"))
+    score.to_f64().unwrap_or_else(|| unreachable!("DistanceValue to_f64 conversion failed"))
 }

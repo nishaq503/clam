@@ -33,9 +33,7 @@ pub enum VectorTree {
 
 #[expect(clippy::type_complexity)]
 pub enum ShellTree {
-    Levenshtein(
-        Tree<String, MusalsSequence, u32, (), Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>>,
-    ),
+    Levenshtein(Tree<String, MusalsSequence, u32, (), Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>>),
     Euclidean(VectorTree),
     Cosine(VectorTree),
 }
@@ -78,8 +76,7 @@ impl ShellTree {
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {
                     let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
-                    let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1)
-                        .map_err(|e| e.to_string())?;
+                    let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
                     let metric = move |a: &MusalsSequence, b: &MusalsSequence| -> u32 {
                         let distances = sz_engine.compute(&sz_device, &[a.as_ref()], &[b.as_ref()]).unwrap();
                         distances[0] as u32
@@ -126,12 +123,7 @@ impl ShellTree {
     }
 
     /// Search the tree with the given queries and algorithms.
-    pub fn search<P: AsRef<Path> + core::fmt::Debug>(
-        &self,
-        queries: ShellData,
-        algorithms: &[ShellCakes],
-        out_path: P,
-    ) -> Result<(), String> {
+    pub fn search<P: AsRef<Path> + core::fmt::Debug>(&self, queries: ShellData, algorithms: &[ShellCakes], out_path: P) -> Result<(), String> {
         match self {
             Self::Levenshtein(tree) => match queries {
                 ShellData::String(queries) => {
@@ -200,8 +192,7 @@ impl ShellTree {
         let tree = match metric_name {
             "lev" => {
                 let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
-                let sz_engine =
-                    stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
+                let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
                 let metric = move |a: &MusalsSequence, b: &MusalsSequence| -> u32 {
                     let distances = sz_engine.compute(&sz_device, &[a.as_ref()], &[b.as_ref()]).unwrap();
                     distances[0] as u32
@@ -294,12 +285,7 @@ impl VectorTree {
     }
 
     /// Search the tree with the given queries and algorithms.
-    pub fn search<P: AsRef<Path> + core::fmt::Debug>(
-        &self,
-        queries: ShellData,
-        algorithms: &[ShellCakes],
-        out_path: P,
-    ) -> Result<(), String> {
+    pub fn search<P: AsRef<Path> + core::fmt::Debug>(&self, queries: ShellData, algorithms: &[ShellCakes], out_path: P) -> Result<(), String> {
         match (self, queries) {
             (Self::F32(tree), ShellData::F32(queries)) => search(tree, &queries, algorithms, out_path),
             (Self::F64(tree), ShellData::F64(queries)) => search(tree, &queries, algorithms, out_path),
@@ -343,12 +329,7 @@ impl std::fmt::Display for ShellTree {
     }
 }
 
-fn search<Id, I, T, A, M, P>(
-    tree: &Tree<Id, I, T, A, M>,
-    queries: &[I],
-    algs: &[ShellCakes],
-    out_path: P,
-) -> Result<(), String>
+fn search<Id, I, T, A, M, P>(tree: &Tree<Id, I, T, A, M>, queries: &[I], algs: &[ShellCakes], out_path: P) -> Result<(), String>
 where
     T: DistanceValue + 'static,
     M: Fn(&I, &I) -> T,
@@ -371,10 +352,7 @@ where
             println!("Result {}: {result:?}", alg.name());
 
             // Convert result to f64 for serialization consistency
-            let neighbors: Vec<(usize, f64)> = result
-                .into_iter()
-                .map(|(idx, dist)| (idx, dist.to_f64().unwrap()))
-                .collect();
+            let neighbors: Vec<(usize, f64)> = result.into_iter().map(|(idx, dist)| (idx, dist.to_f64().unwrap())).collect();
 
             query_result.algorithms.push(AlgorithmResult {
                 algorithm: alg.name(),

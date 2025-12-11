@@ -70,12 +70,7 @@ pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(I
 }
 
 /// Parallel version of [`geometric_median`].
-pub fn par_geometric_median<
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: (Fn(&I, &I) -> T) + Send + Sync,
->(
+pub fn par_geometric_median<Id: Send + Sync, I: Send + Sync, T: DistanceValue + Send + Sync, M: (Fn(&I, &I) -> T) + Send + Sync>(
     items: &[(Id, I)],
     metric: &M,
 ) -> usize {

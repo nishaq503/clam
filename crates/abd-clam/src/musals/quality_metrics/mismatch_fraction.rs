@@ -59,12 +59,7 @@ impl MsaQuality for MismatchFraction {
         Self: Sized,
     {
         let (mean, std_dev, min, max) = mu_sigma_min_max(mm_inner(&msa_tree.items));
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
@@ -77,12 +72,7 @@ impl MsaQuality for MismatchFraction {
         Self: Sized + Send + Sync,
     {
         let (mean, std_dev, min, max) = mu_sigma_min_max(par_mm_inner(&msa_tree.items));
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 }
 
@@ -90,11 +80,7 @@ impl MsaQuality for MismatchFraction {
 fn mm_inner<Id, I: AsRef<[u8]>>(seqs: &[(Id, I)]) -> Vec<f64> {
     seqs.iter()
         .enumerate()
-        .flat_map(|(i, (_, s1))| {
-            seqs.iter()
-                .skip(i + 1)
-                .map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref()))
-        })
+        .flat_map(|(i, (_, s1))| seqs.iter().skip(i + 1).map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref())))
         .collect()
 }
 
@@ -108,10 +94,6 @@ fn mm_single(s1: &[u8], s2: &[u8]) -> f64 {
 fn par_mm_inner<Id: Send + Sync, I: AsRef<[u8]> + Send + Sync>(seqs: &[(Id, I)]) -> Vec<f64> {
     seqs.par_iter()
         .enumerate()
-        .flat_map(|(i, (_, s1))| {
-            seqs.par_iter()
-                .skip(i + 1)
-                .map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref()))
-        })
+        .flat_map(|(i, (_, s1))| seqs.par_iter().skip(i + 1).map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref())))
         .collect()
 }

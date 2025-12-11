@@ -65,12 +65,7 @@ impl MsaQuality for DistanceDistortion {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
@@ -86,12 +81,7 @@ impl MsaQuality for DistanceDistortion {
         let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
         let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 }
 
@@ -107,8 +97,6 @@ fn dd_inner<S: Sequence, T: DistanceValue, M: Fn(&S, &S) -> T>(s1: &S, s2: &S, m
     if m == T::zero() {
         1.0
     } else {
-        ham as f64
-            / m.to_f64()
-                .unwrap_or_else(|| unreachable!("DistanceValue conversion to f64 failed"))
+        ham as f64 / m.to_f64().unwrap_or_else(|| unreachable!("DistanceValue conversion to f64 failed"))
     }
 }

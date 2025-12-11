@@ -12,10 +12,7 @@ pub use partition_strategy::{BranchingFactor, PartitionStrategy, SpanReductionFa
 /// A cluster in the `Tree`.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", expect(clippy::unsafe_derive_deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
 #[must_use]
 pub struct Cluster<T, A> {
     /// Depth of this cluster in the tree, with root at depth 0.
@@ -67,11 +64,7 @@ where
         } else if self.cardinality == 2 {
             fields.push(format!("non center: {}", self.center_index + 1));
         } else {
-            fields.push(format!(
-                "indices: {}..{}",
-                self.center_index + 1,
-                self.center_index + self.cardinality
-            ));
+            fields.push(format!("indices: {}..{}", self.center_index + 1, self.center_index + self.cardinality));
         }
 
         if let Some(annotation) = &self.annotation {
@@ -350,10 +343,7 @@ impl<T, A> Cluster<T, A> {
         if predicate(self) {
             vec![self]
         } else if let Some((children, _)) = &self.children {
-            children
-                .iter()
-                .flat_map(|child| child.select_clusters(predicate))
-                .collect()
+            children.iter().flat_map(|child| child.select_clusters(predicate)).collect()
         } else {
             vec![]
         }
@@ -369,10 +359,7 @@ impl<T, A> Cluster<T, A> {
         if predicate(self) {
             vec![self]
         } else if let Some((children, _)) = &mut self.children {
-            children
-                .iter_mut()
-                .flat_map(|child| child.select_clusters_mut(predicate))
-                .collect()
+            children.iter_mut().flat_map(|child| child.select_clusters_mut(predicate)).collect()
         } else {
             vec![]
         }

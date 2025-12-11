@@ -11,9 +11,7 @@ use core::{
 use super::{Addition, Multiplication};
 
 /// Collections of `Number`s can be used to calculate distances.
-pub trait Number:
-    Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr
-{
+pub trait Number: Addition + Multiplication + PartialEq + Clone + Send + Sync + Debug + Display + Default + FromStr {
     /// The minimum possible value.
     const MIN: Self;
 

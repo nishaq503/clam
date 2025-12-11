@@ -17,21 +17,11 @@ pub fn config_group(group: &mut criterion::BenchmarkGroup<'_, criterion::measure
 }
 
 /// Generates random data for benchmarking distance computations.
-pub fn gen_data<F: num_traits::Float + SampleUniform>(
-    car: usize,
-    dim: usize,
-    min_val: F,
-    max_val: F,
-    seed: u64,
-) -> Vec<Vec<F>> {
+pub fn gen_data<F: num_traits::Float + SampleUniform>(car: usize, dim: usize, min_val: F, max_val: F, seed: u64) -> Vec<Vec<F>> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     (0..car)
-        .map(|_| {
-            (0..dim)
-                .map(|_| rand::Rng::random_range(&mut rng, min_val..=max_val))
-                .collect()
-        })
+        .map(|_| (0..dim).map(|_| rand::Rng::random_range(&mut rng, min_val..=max_val)).collect())
         .collect()
 }
 
@@ -43,12 +33,7 @@ macro_rules! bench_dual_dist_fn {
             b.iter_with_large_drop(|| {
                 $data
                     .iter()
-                    .map(|x| {
-                        $data
-                            .iter()
-                            .map(|y| std::hint::black_box($distance_fn(x, y)))
-                            .collect::<Vec<_>>()
-                    })
+                    .map(|x| $data.iter().map(|y| std::hint::black_box($distance_fn(x, y))).collect::<Vec<_>>())
                     .collect::<Vec<_>>()
             });
         });
@@ -63,12 +48,7 @@ macro_rules! bench_self_dist_fn {
 
         let id = BenchmarkId::new($id, $dim);
         $group.bench_with_input(id, &$dim, |b, _| {
-            b.iter_with_large_drop(|| {
-                $data
-                    .iter()
-                    .map(|x| std::hint::black_box($distance_fn(x)))
-                    .collect::<Vec<_>>()
-            });
+            b.iter_with_large_drop(|| $data.iter().map(|x| std::hint::black_box($distance_fn(x))).collect::<Vec<_>>());
         });
 
         $group.throughput(criterion::Throughput::Elements((car * car) as u64));
@@ -175,9 +155,7 @@ macro_rules! bench_many_dist_fns {
 
         config_group(&mut group, $car);
 
-        let dims = (0..=$max_dim_pow)
-            .map(|d| 1_000 * 2_u32.pow(d) as usize)
-            .collect::<Vec<_>>();
+        let dims = (0..=$max_dim_pow).map(|d| 1_000 * 2_u32.pow(d) as usize).collect::<Vec<_>>();
 
         for &dim in &dims {
             let data = gen_data::<$type>($car, dim, 1.0, 2.0, $seed);
@@ -203,12 +181,7 @@ macro_rules! bench_many_dist_fns {
             #[cfg(feature = "simd-1024")]
             bench_simd_fns!("simd-1024", dim, &mut group, data);
 
-            #[cfg(any(
-                feature = "simd-128",
-                feature = "simd-256",
-                feature = "simd-512",
-                feature = "simd-1024"
-            ))]
+            #[cfg(any(feature = "simd-128", feature = "simd-256", feature = "simd-512", feature = "simd-1024"))]
             bench_all_simd_lanes_fns!("std-simd", dim, &mut group, data);
         }
 

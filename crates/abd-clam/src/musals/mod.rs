@@ -8,10 +8,7 @@ mod alignment;
 mod quality_metrics;
 
 pub use alignment::{CostMatrix, Sequence};
-pub use quality_metrics::{
-    DistanceDistortion, GapFraction, MismatchFraction, PairwiseScores, QualityMetric, QualityMetricResult,
-    WeightedPairwiseScores,
-};
+pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, PairwiseScores, QualityMetric, QualityMetricResult, WeightedPairwiseScores};
 
 use alignment::Msa;
 use quality_metrics::MsaQuality;
@@ -24,41 +21,21 @@ where
     /// Returns a new tree containing the multiple sequence alignment of the sequences in the original tree.
     pub fn into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
         ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
-
         let msa = Msa::from_tree(&self, cost_matrix);
-
-        self.items = self
-            .items
-            .into_iter()
-            .zip(msa)
-            .map(|((id, _), aligned_seq)| (id, aligned_seq))
-            .collect();
-
+        self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
     }
     /// Computes all quality metrics for the MSA represented by this tree.
-    pub fn compute_quality_metric(
-        &self,
-        quality_metric: &QualityMetric,
-        cost_matrix: &CostMatrix<T>,
-    ) -> QualityMetricResult
+    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
         M: Fn(&S, &S) -> T,
     {
         match quality_metric {
             QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(self, cost_matrix)),
-            QualityMetric::MismatchFraction => {
-                QualityMetricResult::MismatchFraction(MismatchFraction::compute(self, cost_matrix))
-            }
-            QualityMetric::PairwiseScores => {
-                QualityMetricResult::PairwiseScores(PairwiseScores::compute(self, cost_matrix))
-            }
-            QualityMetric::WeightedPairwiseScores => {
-                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::compute(self, cost_matrix))
-            }
-            QualityMetric::DistanceDistortion => {
-                QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(self, cost_matrix))
-            }
+            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(self, cost_matrix)),
+            QualityMetric::PairwiseScores => QualityMetricResult::PairwiseScores(PairwiseScores::compute(self, cost_matrix)),
+            QualityMetric::WeightedPairwiseScores => QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::compute(self, cost_matrix)),
+            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(self, cost_matrix)),
         }
     }
 }
@@ -73,41 +50,23 @@ where
 {
     /// Parallel version of [`Self::into_msa`].
     pub fn par_into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
         let msa = Msa::par_from_tree(&self, cost_matrix);
-
-        self.items = self
-            .items
-            .into_par_iter()
-            .zip(msa)
-            .map(|((id, _), aligned_seq)| (id, aligned_seq))
-            .collect();
-
+        self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
     }
 
     /// Parallel version of [`Self::compute_quality_metric`].
-    pub fn par_compute_quality_metric(
-        &self,
-        quality_metric: &QualityMetric,
-        cost_matrix: &CostMatrix<T>,
-    ) -> QualityMetricResult
+    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
         M: Fn(&S, &S) -> T,
     {
         match quality_metric {
             QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(self, cost_matrix)),
-            QualityMetric::MismatchFraction => {
-                QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self, cost_matrix))
-            }
-            QualityMetric::PairwiseScores => {
-                QualityMetricResult::PairwiseScores(PairwiseScores::par_compute(self, cost_matrix))
-            }
-            QualityMetric::WeightedPairwiseScores => {
-                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::par_compute(self, cost_matrix))
-            }
-            QualityMetric::DistanceDistortion => {
-                QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(self, cost_matrix))
-            }
+            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self, cost_matrix)),
+            QualityMetric::PairwiseScores => QualityMetricResult::PairwiseScores(PairwiseScores::par_compute(self, cost_matrix)),
+            QualityMetric::WeightedPairwiseScores => QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::par_compute(self, cost_matrix)),
+            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(self, cost_matrix)),
         }
     }
 }
@@ -127,24 +86,10 @@ mod tests {
         Id: Eq + core::fmt::Debug,
         S: Sequence + Eq + core::fmt::Debug,
     {
-        assert_eq!(
-            original.cardinality(),
-            aligned.cardinality(),
-            "Number of sequences should match."
-        );
+        assert_eq!(original.cardinality(), aligned.cardinality(), "Number of sequences should match.");
 
-        let max_len = original
-            .items
-            .iter()
-            .map(|(_, seq)| seq.as_ref().len())
-            .max()
-            .unwrap_or(0);
-        let aligned_max_len = aligned
-            .items
-            .iter()
-            .map(|(_, seq)| seq.as_ref().len())
-            .max()
-            .unwrap_or(0);
+        let max_len = original.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
+        let aligned_max_len = aligned.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         assert!(
             aligned_max_len >= max_len,
             "Aligned sequences should be at least as long as the longest original sequence."
@@ -157,12 +102,7 @@ mod tests {
         for (i, ((o_id, o_seq), (a_id, a_seq))) in original.items.into_iter().zip(aligned.items).enumerate() {
             assert_eq!(o_id, a_id, "Sequence IDs at index {} do not match after alignment.", i);
 
-            assert_eq!(
-                o_seq,
-                a_seq.without_gaps(),
-                "Sequence at index {} does not match after removing gaps.",
-                i
-            );
+            assert_eq!(o_seq, a_seq.without_gaps(), "Sequence at index {} does not match after removing gaps.", i);
         }
     }
 
@@ -202,9 +142,7 @@ mod tests {
         let sequences = (0..car)
             .map(|_| {
                 let len: usize = rng.random_range(min_len..=max_len);
-                (0..len)
-                    .map(|_| characters[rng.random_range(0..characters.len())])
-                    .collect::<String>()
+                (0..len).map(|_| characters[rng.random_range(0..characters.len())]).collect::<String>()
             })
             .collect::<Vec<String>>();
 

@@ -12,12 +12,7 @@ use crate::{
 /// This function runs the algorithm on the provided queries and measures the time taken to complete them. It uses only
 /// a single thread for the measurement.
 #[allow(clippy::cast_precision_loss, clippy::while_float)]
-pub fn measure_throughput<Id, I, T, A, M, Alg>(
-    tree: &Tree<Id, I, T, A, M>,
-    n_queries: usize,
-    alg: &Alg,
-    min_time_secs: f64,
-) -> f64
+pub fn measure_throughput<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
@@ -39,12 +34,7 @@ where
 
 /// Parallel version of [`measure_throughput`].
 #[allow(clippy::cast_precision_loss, clippy::while_float)]
-pub fn par_measure_throughput<Id, I, T, A, M, Alg>(
-    tree: &Tree<Id, I, T, A, M>,
-    n_queries: usize,
-    alg: &Alg,
-    min_time_secs: f64,
-) -> f64
+pub fn par_measure_throughput<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, A, M>, n_queries: usize, alg: &Alg, min_time_secs: f64) -> f64
 where
     Id: Send + Sync,
     I: Send + Sync,
@@ -61,10 +51,7 @@ where
 
     let start = std::time::Instant::now();
     while start.elapsed() < min_time {
-        let _results = queries
-            .par_iter()
-            .map(|query| alg.par_search(tree, query))
-            .collect::<Vec<_>>();
+        let _results = queries.par_iter().map(|query| alg.par_search(tree, query)).collect::<Vec<_>>();
         total_queries += queries.len();
     }
     total_queries as f64 / start.elapsed().as_secs_f64()

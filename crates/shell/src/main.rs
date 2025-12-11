@@ -66,9 +66,7 @@ fn main() -> Result<(), String> {
         .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
     let metric = args.metric;
     let sample_size = args.sample_size;
-    let mut rng = args
-        .seed
-        .map_or_else(rand::rngs::StdRng::from_os_rng, rand::rngs::StdRng::seed_from_u64);
+    let mut rng = args.seed.map_or_else(rand::rngs::StdRng::from_os_rng, rand::rngs::StdRng::seed_from_u64);
 
     match args.command {
         Commands::GenerateData { action } => match action {
@@ -79,16 +77,7 @@ fn main() -> Result<(), String> {
                 partitions,
                 min_val,
                 max_val,
-            } => commands::generate_data::generate_dataset(
-                num_vectors,
-                dimensions,
-                out_path,
-                data_type,
-                partitions,
-                min_val,
-                max_val,
-                &mut rng,
-            ),
+            } => commands::generate_data::generate_dataset(num_vectors, dimensions, out_path, data_type, partitions, min_val, max_val, &mut rng),
         },
         Commands::Cakes { action } => match action {
             commands::cakes::CakesAction::Build => {
@@ -106,18 +95,9 @@ fn main() -> Result<(), String> {
         Commands::Musals { action, cost_matrix } => match action {
             commands::musals::MusalsAction::Build { save_fasta } => {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::musals::build_msa(
-                    inp_data,
-                    &metric,
-                    args.iterative_partition,
-                    &cost_matrix,
-                    out_path,
-                    save_fasta,
-                )
+                commands::musals::build_msa(inp_data, &metric, args.iterative_partition, &cost_matrix, out_path, save_fasta)
             }
-            commands::musals::MusalsAction::Evaluate { quality_metrics } => {
-                commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path)
-            }
+            commands::musals::MusalsAction::Evaluate { quality_metrics } => commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path),
         },
         // Commands::Mbed { action, .. } => { todo!() }
     }

@@ -10,10 +10,7 @@ mod private {
 }
 
 /// A trait for floating-point types that can be used with BLAS-accelerated distance functions.
-pub trait BlasFloat:
-    private::Sealed + num_traits::Float + rust_blas::Copy + rust_blas::Axpy + rust_blas::Nrm2 + rust_blas::Dot
-{
-}
+pub trait BlasFloat: private::Sealed + num_traits::Float + rust_blas::Copy + rust_blas::Axpy + rust_blas::Nrm2 + rust_blas::Dot {}
 
 impl BlasFloat for f32 {}
 impl BlasFloat for f64 {}

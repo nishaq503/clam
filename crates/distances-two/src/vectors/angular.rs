@@ -37,11 +37,7 @@ where
         .fold((T::zero(), T::zero(), T::zero()), |(ab, aa_sq, bb_sq), (&x, &y)| {
             (ab + x * y, aa_sq + x * x, bb_sq + y * y)
         });
-    if ab.is_zero() {
-        T::zero()
-    } else {
-        ab / (aa_sq * bb_sq).sqrt()
-    }
+    if ab.is_zero() { T::zero() } else { ab / (aa_sq * bb_sq).sqrt() }
 }
 
 /// The cosine similarity between two vectors that have been L2-normalized.
@@ -61,9 +57,5 @@ where
     S: AsRef<[T]>,
     T: num_traits::Num + Copy,
 {
-    a.as_ref()
-        .iter()
-        .zip(b.as_ref())
-        .map(|(&x, &y)| x * y)
-        .fold(T::zero(), |acc, val| acc + val)
+    a.as_ref().iter().zip(b.as_ref()).map(|(&x, &y)| x * y).fold(T::zero(), |acc, val| acc + val)
 }

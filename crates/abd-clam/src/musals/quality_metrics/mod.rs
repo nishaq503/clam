@@ -179,11 +179,9 @@ pub trait MsaQuality: serde::Serialize + for<'de> serde::Deserialize<'de> {
 fn mu_sigma_min_max<I: AsRef<[f64]>>(values: I) -> (f64, f64, f64, f64) {
     let values = values.as_ref();
 
-    let [sum, min, max] = values
-        .iter()
-        .fold([0.0, f64::INFINITY, f64::NEG_INFINITY], |[mean, min, max], &x| {
-            [mean + x, min.min(x), max.max(x)]
-        });
+    let [sum, min, max] = values.iter().fold([0.0, f64::INFINITY, f64::NEG_INFINITY], |[mean, min, max], &x| {
+        [mean + x, min.min(x), max.max(x)]
+    });
 
     let num_pairs = values.len() as f64;
     let mean = sum / num_pairs;

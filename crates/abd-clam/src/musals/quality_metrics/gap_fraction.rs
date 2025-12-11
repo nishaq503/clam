@@ -65,12 +65,7 @@ impl MsaQuality for GapFraction {
             .map(|(_, seq)| seq.gap_count() as f64 / msa_width as f64)
             .collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(gap_fractions);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 
     fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
@@ -89,11 +84,6 @@ impl MsaQuality for GapFraction {
             .map(|(_, seq)| seq.gap_count() as f64 / msa_width as f64)
             .collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(gap_fractions);
-        Self {
-            mean,
-            std_dev,
-            min,
-            max,
-        }
+        Self { mean, std_dev, min, max }
     }
 }

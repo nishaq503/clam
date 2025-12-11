@@ -20,9 +20,7 @@ pub fn line(max: i32) -> Vec<i32> {
 }
 
 pub fn grid(max: i32) -> Vec<(f32, f32)> {
-    (-max..=max)
-        .flat_map(|x| (-max..=max).map(move |y| (x as f32, y as f32)))
-        .collect()
+    (-max..=max).flat_map(|x| (-max..=max).map(move |y| (x as f32, y as f32))).collect()
 }
 
 pub fn tabular(car: usize, dim: usize, min: f32, max: f32) -> Vec<Vec<f32>> {

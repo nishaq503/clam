@@ -51,13 +51,11 @@ impl OutputFormat {
     {
         match Self::from_path(&path)? {
             Self::Json => {
-                let content =
-                    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
+                let content = std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
                 serde_json::from_str(&content).map_err(|e| format!("Failed to parse JSON from file {path:?}: {e}"))
             }
             Self::Yaml => {
-                let content =
-                    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
+                let content = std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file {path:?}: {e}"))?;
                 serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse YAML from file {path:?}: {e}"))
             }
         }
@@ -123,11 +121,7 @@ impl InputFormat {
     }
 
     /// Reads the input data from the given path based on the input format.
-    pub fn read<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
-        path: P,
-        sample_size: Option<usize>,
-        rng: &mut R,
-    ) -> Result<ShellData, String> {
+    pub fn read<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(path: P, sample_size: Option<usize>, rng: &mut R) -> Result<ShellData, String> {
         let mut data = match Self::from_path(&path)? {
             Self::Npy => npy::NpyType::read(path),
             Self::Fasta => fasta::read(path).map(ShellData::String),

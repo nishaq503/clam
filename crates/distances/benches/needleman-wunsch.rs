@@ -38,12 +38,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::nw_distance::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -55,12 +50,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_recursive::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -72,12 +62,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_iterative::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -94,12 +79,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::nw_distance::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::nw_distance::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -111,12 +91,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_recursive::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_recursive::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })
@@ -128,12 +103,7 @@ fn bench_with_edits(c: &mut Criterion) {
                 black_box({
                     sequences
                         .iter()
-                        .map(|x| {
-                            sequences
-                                .iter()
-                                .map(|y| needleman_wunsch::edits_iterative::<u32>(x, y))
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|x| sequences.iter().map(|y| needleman_wunsch::edits_iterative::<u32>(x, y)).collect::<Vec<_>>())
                         .collect::<Vec<_>>()
                 })
             })

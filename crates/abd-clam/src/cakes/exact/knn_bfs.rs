@@ -55,10 +55,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                     }
                 } else {
                     profi::prof!("KnnBfs::process_parent");
-                    for child in cluster
-                        .children()
-                        .unwrap_or_else(|| unreachable!("Cluster is a parent"))
-                    {
+                    for child in cluster.children().unwrap_or_else(|| unreachable!("Cluster is a parent")) {
                         let d = tree.distance_to_center(query, child);
                         hits.push((child.center_index(), d));
                         next_candidates.push((child, d_max(child, d)));
@@ -89,10 +86,7 @@ where
 
 /// Returns those candidates that are needed to guarantee the k-nearest
 /// neighbors.
-fn filter_candidates<T: DistanceValue, A>(
-    mut candidates: Vec<(&Cluster<T, A>, T)>,
-    k: usize,
-) -> Vec<(&Cluster<T, A>, T)> {
+fn filter_candidates<T: DistanceValue, A>(mut candidates: Vec<(&Cluster<T, A>, T)>, k: usize) -> Vec<(&Cluster<T, A>, T)> {
     profi::prof!("KnnBfs::filter_candidates");
 
     let threshold_index = quick_partition(&mut candidates, k);

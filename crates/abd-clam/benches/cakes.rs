@@ -75,15 +75,11 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
 
     let all_leaves = all_clusters.iter().filter(|c| c.is_leaf()).copied().collect::<Vec<_>>();
     let leaf_fraction = all_leaves.len() as f64 / size_of_tree as f64;
-    let mean_leaf_cardinality =
-        all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
+    let mean_leaf_cardinality = all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
 
     let singleton_fraction = all_leaves.iter().filter(|c| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
 
-    println!(
-        "Tree stats for dataset with cardinality {} after multiplier {multiplier}:",
-        tree.cardinality()
-    );
+    println!("Tree stats for dataset with cardinality {} after multiplier {multiplier}:", tree.cardinality());
     println!(
         "    Number of clusters: {size_of_tree}, Ratio: {:.8}",
         size_of_tree as f64 / tree.cardinality() as f64
@@ -112,9 +108,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
     branching_factors: &[usize],
     ks: &[usize],
 ) {
-    let mut items = dataset
-        .read_train(base, if shuffle { Some(rng) } else { None })
-        .unwrap();
+    let mut items = dataset.read_train(base, if shuffle { Some(rng) } else { None }).unwrap();
     let metric = dataset.metric();
     let queries = dataset.read_test(base, if shuffle { Some(rng) } else { None }).unwrap();
     let queries = queries[..(max_queries.min(queries.len()))].to_vec();
@@ -131,13 +125,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
             // We have had at least one iteration, so we augment the data with small random noise
             let dimensionality = items[0].len();
             let dimensional_error = augmentation_error / (dimensionality as f32).sqrt();
-            let perturbations = symagen::random_data::random_tabular(
-                items.len(),
-                dimensionality,
-                1.0 - dimensional_error,
-                1.0 + dimensional_error,
-                rng,
-            );
+            let perturbations = symagen::random_data::random_tabular(items.len(), dimensionality, 1.0 - dimensional_error, 1.0 + dimensional_error, rng);
             items = items
                 .into_par_iter()
                 .zip(perturbations)
@@ -237,17 +225,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             continue; // Targeting dataset for hyperparameter tuning
         }
         // For the paper, only use the first 3 datasets
-        run_group(
-            c,
-            &mut rng,
-            dataset,
-            &base,
-            max_items,
-            max_queries,
-            shuffle,
-            &branching_factors,
-            &ks,
-        );
+        run_group(c, &mut rng, dataset, &base, max_items, max_queries, shuffle, &branching_factors, &ks);
     }
 }
 

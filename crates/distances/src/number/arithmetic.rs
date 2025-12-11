@@ -7,9 +7,7 @@ use core::{
 
 /// The `Addition` trait provides the additive identity and operations for a
 /// `Number` type.
-pub trait Addition:
-    Copy + PartialOrd + Add<Output = Self> + AddAssign<Self> + Sum<Self> + Sub<Self, Output = Self> + SubAssign<Self>
-{
+pub trait Addition: Copy + PartialOrd + Add<Output = Self> + AddAssign<Self> + Sum<Self> + Sub<Self, Output = Self> + SubAssign<Self> {
     /// The additive identity.
     const ZERO: Self;
 
@@ -56,13 +54,7 @@ impl Addition for f64 {
 /// The `Multiplication` trait provides the multiplicative identity and
 /// operations for a `Number` type.
 pub trait Multiplication:
-    Addition
-    + Mul<Output = Self>
-    + MulAssign<Self>
-    + Div<Self, Output = Self>
-    + DivAssign<Self>
-    + Rem<Self, Output = Self>
-    + RemAssign<Self>
+    Addition + Mul<Output = Self> + MulAssign<Self> + Div<Self, Output = Self> + DivAssign<Self> + Rem<Self, Output = Self> + RemAssign<Self>
 {
     /// The multiplicative identity.
     const ONE: Self;

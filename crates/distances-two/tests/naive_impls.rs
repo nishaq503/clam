@@ -9,11 +9,7 @@ macro_rules! assert_dist_eq {
     ($x:expr, $y:expr, $naive_fn:ident, $dist_fn:expr, $tol:expr) => {{
         let e_dist = naive_impls::$naive_fn($x, $y);
         let a_dist = $dist_fn($x, $y);
-        let ratio = if e_dist == 0.0 {
-            0.0
-        } else {
-            (e_dist - a_dist).abs() / e_dist.abs()
-        };
+        let ratio = if e_dist == 0.0 { 0.0 } else { (e_dist - a_dist).abs() / e_dist.abs() };
         assert_float_eq!(ratio, 0.0, abs <= $tol);
     }};
 }
@@ -23,11 +19,7 @@ macro_rules! assert_dist_lanes_eq {
     ($x:expr, $y:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty, $lanes:expr) => {{
         let e_dist = naive_impls::$naive_fn::<$ty>($x, $y);
         let a_dist = distances_two::std_simd::$dist_fn::<$ty, _, $lanes>($x, $y);
-        let ratio = if e_dist == 0.0 {
-            0.0
-        } else {
-            (e_dist - a_dist).abs() / e_dist.abs()
-        };
+        let ratio = if e_dist == 0.0 { 0.0 } else { (e_dist - a_dist).abs() / e_dist.abs() };
         assert_float_eq!(ratio, 0.0, abs <= $tol);
     }};
 }
@@ -37,11 +29,7 @@ macro_rules! assert_self_dist_lanes_eq {
     ($x:expr, $naive_fn:ident, $dist_fn:ident, $tol:expr, $ty:ty, $lanes:expr) => {{
         let e_dist = naive_impls::$naive_fn::<$ty>($x);
         let a_dist = distances_two::std_simd::$dist_fn::<$ty, _, $lanes>($x);
-        let ratio = if e_dist == 0.0 {
-            0.0
-        } else {
-            (e_dist - a_dist).abs() / e_dist.abs()
-        };
+        let ratio = if e_dist == 0.0 { 0.0 } else { (e_dist - a_dist).abs() / e_dist.abs() };
         assert_float_eq!(ratio, 0.0, abs <= $tol);
     }};
 }
@@ -75,11 +63,7 @@ macro_rules! assert_self_dist_eq {
     ($x:expr, $naive_fn:ident, $dist_fn:expr, $tol:expr) => {{
         let e_dist = naive_impls::$naive_fn($x);
         let a_dist = $dist_fn($x);
-        let ratio = if e_dist == 0.0 {
-            0.0
-        } else {
-            (e_dist - a_dist).abs() / e_dist.abs()
-        };
+        let ratio = if e_dist == 0.0 { 0.0 } else { (e_dist - a_dist).abs() / e_dist.abs() };
         assert_float_eq!(ratio, 0.0, abs <= $tol);
     }};
 }
@@ -146,11 +130,7 @@ pub fn l3<F: num_traits::Float>(x: &[F], y: &[F]) -> F {
 
 /// Computes the L4-norm between two vectors.
 pub fn l4<F: num_traits::Float>(x: &[F], y: &[F]) -> F {
-    iter_abs_diff(x, y)
-        .map(|d| d.powi(4))
-        .fold(F::zero(), |acc, d4| acc + d4)
-        .sqrt()
-        .sqrt()
+    iter_abs_diff(x, y).map(|d| d.powi(4)).fold(F::zero(), |acc, d4| acc + d4).sqrt().sqrt()
 }
 
 /// Computes the Chebyshev (L∞) distance between two vectors.
@@ -160,10 +140,7 @@ pub fn l_inf<F: num_traits::Float>(x: &[F], y: &[F]) -> F {
 
 /// Computes the dot product of two vectors.
 pub fn dot<F: num_traits::Float>(x: &[F], y: &[F]) -> F {
-    x.iter()
-        .zip(y.iter())
-        .map(|(&x, &y)| x * y)
-        .fold(F::zero(), |acc, p| acc + p)
+    x.iter().zip(y.iter()).map(|(&x, &y)| x * y).fold(F::zero(), |acc, p| acc + p)
 }
 
 /// Computes the l2-norm of a vector.
@@ -180,19 +157,9 @@ pub fn cosine<F: num_traits::Float>(x: &[F], y: &[F]) -> F {
 }
 
 /// Generates random data for testing.
-pub fn gen_data<F: num_traits::Float + rand::distr::uniform::SampleUniform>(
-    car: usize,
-    dim: usize,
-    min_val: F,
-    max_val: F,
-    seed: u64,
-) -> Vec<Vec<F>> {
+pub fn gen_data<F: num_traits::Float + rand::distr::uniform::SampleUniform>(car: usize, dim: usize, min_val: F, max_val: F, seed: u64) -> Vec<Vec<F>> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     (0..car)
-        .map(|_| {
-            (0..dim)
-                .map(|_| rand::Rng::random_range(&mut rng, min_val..=max_val))
-                .collect()
-        })
+        .map(|_| (0..dim).map(|_| rand::Rng::random_range(&mut rng, min_val..=max_val)).collect())
         .collect()
 }

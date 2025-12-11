@@ -23,12 +23,7 @@ use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 ///
 /// - If the dataset and metric are deemed an incompatible combination. See
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
-pub fn build_new_tree<P: AsRef<Path>>(
-    inp_data: ShellData,
-    metric: &Metric,
-    iterative_partition: bool,
-    out_dir: P,
-) -> Result<(), String> {
+pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: &Metric, iterative_partition: bool, out_dir: P) -> Result<(), String> {
     let tree = ShellTree::new(inp_data, metric, iterative_partition)?;
     tree.write_to(out_dir, None)
 }

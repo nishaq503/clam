@@ -64,15 +64,9 @@ impl<T> DistanceValue for T where
 }
 
 /// A trait for types that can be used as floating-point distance values in clustering algorithms.
-pub trait FloatDistanceValue:
-    DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self>
-{
-}
+pub trait FloatDistanceValue: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
 
-impl<T> FloatDistanceValue for T where
-    T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self>
-{
-}
+impl<T> FloatDistanceValue for T where T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
 
 // /// A trait for types that can be used as floating-point distance values in
 // /// clustering algorithms.

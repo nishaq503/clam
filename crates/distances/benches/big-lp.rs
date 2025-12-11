@@ -12,13 +12,7 @@ use distances::{
     vectors::{euclidean, l3_norm, l4_norm, manhattan, minkowski},
 };
 
-fn bench_one<T: Number, U: Float>(
-    group: &mut BenchmarkGroup<'_, measurement::WallTime>,
-    p: i32,
-    x: &[T],
-    y: &[T],
-    metric: impl Fn(&[T], &[T]) -> U,
-) {
+fn bench_one<T: Number, U: Float>(group: &mut BenchmarkGroup<'_, measurement::WallTime>, p: i32, x: &[T], y: &[T], metric: impl Fn(&[T], &[T]) -> U) {
     let dimensionality = x.len();
 
     let id = BenchmarkId::new(format!("L{p}_concrete"), dimensionality);
@@ -40,13 +34,7 @@ fn big_lp_norms(c: &mut Criterion) {
 
     for d in 2..=4 {
         let dimensionality = 10_u32.pow(d) as usize;
-        let data = random_data::random_tabular(
-            cardinality,
-            dimensionality,
-            min_val,
-            max_val,
-            &mut rand::rngs::StdRng::seed_from_u64(d as u64),
-        );
+        let data = random_data::random_tabular(cardinality, dimensionality, min_val, max_val, &mut rand::rngs::StdRng::seed_from_u64(d as u64));
 
         for (i, &metric) in metrics.iter().enumerate() {
             let p = i as i32 + 1;

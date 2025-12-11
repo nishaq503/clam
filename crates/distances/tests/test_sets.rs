@@ -131,9 +131,7 @@ fn hausdorff_test() {
     // Helper function to generate a vector of random points with given count and dimension
     fn gen_points(count: usize, dim: usize) -> Vec<Vec<u16>> {
         let mut rng = rand::rng();
-        (0..count)
-            .map(|_| (0..dim).map(|_| rng.random_range(0..100)).collect())
-            .collect()
+        (0..count).map(|_| (0..dim).map(|_| rng.random_range(0..100)).collect()).collect()
     }
 
     // Generate random sets of points for Hausdorff distance testing

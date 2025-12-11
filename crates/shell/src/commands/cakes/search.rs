@@ -45,12 +45,7 @@ pub struct AlgorithmResult {
 ///
 /// # Returns
 /// A `Result` containing either `Ok(())` if the search was successful, or `Err(String)` if an error occurred.
-pub fn search_tree<P: AsRef<Path> + core::fmt::Debug>(
-    tree_dir: P,
-    queries: ShellData,
-    algorithms: &[ShellCakes],
-    out_path: P,
-) -> Result<(), String> {
+pub fn search_tree<P: AsRef<Path> + core::fmt::Debug>(tree_dir: P, queries: ShellData, algorithms: &[ShellCakes], out_path: P) -> Result<(), String> {
     // Create parent directory if it doesn't exist
     if let Some(parent) = out_path.as_ref().parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {e}"))?;

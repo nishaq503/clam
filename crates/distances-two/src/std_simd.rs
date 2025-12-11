@@ -29,14 +29,10 @@ where
             acc + diff * diff
         });
 
-    let sum_rem = a_chunks
-        .remainder()
-        .iter()
-        .zip(b_chunks.remainder().iter())
-        .fold(T::zero(), |acc, (&x, &y)| {
-            let diff = x - y;
-            acc + diff * diff
-        });
+    let sum_rem = a_chunks.remainder().iter().zip(b_chunks.remainder().iter()).fold(T::zero(), |acc, (&x, &y)| {
+        let diff = x - y;
+        acc + diff * diff
+    });
 
     sum_simd.as_array().iter().fold(sum_rem, |acc, &v| acc + v)
 }
@@ -47,9 +43,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     euclidean_sq::<_, _, LANES>(a, b).sqrt()
 }
@@ -60,9 +54,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     let a = a.as_ref();
     let b = b.as_ref();
@@ -92,9 +84,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     let mut a_chunks = a.as_ref().chunks_exact(LANES);
 
@@ -114,9 +104,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     norm_l2_sq::<_, _, LANES>(a).sqrt()
 }
@@ -127,9 +115,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     T::one() - cosine_similarity(a, b)
 }
@@ -140,9 +126,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     let a = a.as_ref();
     let b = b.as_ref();
@@ -160,10 +144,13 @@ where
             |(ab_acc, aa_acc, bb_acc), (x, y)| (ab_acc + x * y, aa_acc + x * x, bb_acc + y * y),
         );
 
-    let (ab_sum_rem, aa_sum_rem, bb_sum_rem) = a_chunks.remainder().iter().zip(b_chunks.remainder().iter()).fold(
-        (T::zero(), T::zero(), T::zero()),
-        |(ab_acc, aa_acc, bb_acc), (&x, &y)| (ab_acc + x * y, aa_acc + x * x, bb_acc + y * y),
-    );
+    let (ab_sum_rem, aa_sum_rem, bb_sum_rem) = a_chunks
+        .remainder()
+        .iter()
+        .zip(b_chunks.remainder().iter())
+        .fold((T::zero(), T::zero(), T::zero()), |(ab_acc, aa_acc, bb_acc), (&x, &y)| {
+            (ab_acc + x * y, aa_acc + x * x, bb_acc + y * y)
+        });
 
     let ab = ab_sum_simd.as_array().iter().fold(ab_sum_rem, |acc, &v| acc + v);
     if ab.is_zero() {
@@ -181,9 +168,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     T::one() - dot_product(a, b)
 }
@@ -194,9 +179,7 @@ where
     T: num_traits::Float + SimdElement,
     S: AsRef<[T]>,
     LaneCount<LANES>: SupportedLaneCount,
-    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>>
-        + core::ops::Mul<Output = Simd<T, LANES>>
-        + core::ops::Add<Output = Simd<T, LANES>>,
+    Simd<T, LANES>: core::ops::Sub<Output = Simd<T, LANES>> + core::ops::Mul<Output = Simd<T, LANES>> + core::ops::Add<Output = Simd<T, LANES>>,
 {
     dot_product(a, b)
 }

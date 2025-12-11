@@ -12,12 +12,7 @@ use distances::{
 #[test_case(euclidean, simd::euclidean_f32, Some(blas::euclidean_f32), 10_f32; "euclidean_f32")]
 #[test_case(cosine, simd::cosine_f32, Some(blas::cosine_f32), 1_f32; "cosine_f32")]
 #[test_case(dot_product, simd::dot_product_f32, None, 1_f32; "dot_product_f32")]
-fn simd_distances_f32(
-    naive_fn: fn(&[f32], &[f32]) -> f32,
-    simd_fn: fn(&[f32], &[f32]) -> f32,
-    blas_fn: Option<fn(&[f32], &[f32]) -> f32>,
-    limit: f32,
-) {
+fn simd_distances_f32(naive_fn: fn(&[f32], &[f32]) -> f32, simd_fn: fn(&[f32], &[f32]) -> f32, blas_fn: Option<fn(&[f32], &[f32]) -> f32>, limit: f32) {
     let (cardinality, dimensionality) = (100, 2_usize.pow(12));
 
     let limit = limit.abs();
@@ -51,24 +46,14 @@ fn simd_distances_f32(
         }
     }
 
-    assert!(
-        failures.is_empty(),
-        "{} non-empty failures, {:?} ...",
-        failures.len(),
-        &failures[..5]
-    );
+    assert!(failures.is_empty(), "{} non-empty failures, {:?} ...", failures.len(), &failures[..5]);
 }
 
 #[test_case(euclidean_sq, simd::euclidean_sq_f64, None, 10_f64; "euclidean_sq_f64")]
 #[test_case(euclidean, simd::euclidean_f64, Some(blas::euclidean_f64), 10_f64; "euclidean_f64")]
 #[test_case(cosine, simd::cosine_f64, Some(blas::cosine_f64), 1_f64; "cosine_f64")]
 #[test_case(dot_product, simd::dot_product_f64, None, 1_f64; "dot_product_f64")]
-fn simd_distances_f64(
-    naive_fn: fn(&[f64], &[f64]) -> f64,
-    simd_fn: fn(&[f64], &[f64]) -> f64,
-    blas_fn: Option<fn(&[f64], &[f64]) -> f64>,
-    limit: f64,
-) {
+fn simd_distances_f64(naive_fn: fn(&[f64], &[f64]) -> f64, simd_fn: fn(&[f64], &[f64]) -> f64, blas_fn: Option<fn(&[f64], &[f64]) -> f64>, limit: f64) {
     let (cardinality, dimensionality) = (100, 2_usize.pow(12));
 
     let limit = limit.abs();
@@ -102,10 +87,5 @@ fn simd_distances_f64(
         }
     }
 
-    assert!(
-        failures.is_empty(),
-        "{} non-empty failures, {:?} ...",
-        failures.len(),
-        &failures[..5]
-    );
+    assert!(failures.is_empty(), "{} non-empty failures, {:?} ...", failures.len(), &failures[..5]);
 }

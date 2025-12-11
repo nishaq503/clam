@@ -126,11 +126,7 @@ macro_rules! impl_simd {
                         |(ab, aa_sq, bb_sq), (a, b)| (ab + a * b, aa_sq + a * a, bb_sq + b * b),
                     );
 
-                let (ab, aa_sq, bb_sq) = (
-                    ab.horizontal_add(),
-                    aa_sq.horizontal_add(),
-                    bb_sq.horizontal_add(),
-                );
+                let (ab, aa_sq, bb_sq) = (ab.horizontal_add(), aa_sq.horizontal_add(), bb_sq.horizontal_add());
 
                 let (rem_ab, rem_aa_sq, rem_bb_sq) = a_chunks
                     .remainder()
@@ -142,11 +138,7 @@ macro_rules! impl_simd {
 
                 let (ab, aa_sq, bb_sq) = (ab + rem_ab, aa_sq + rem_aa_sq, bb_sq + rem_bb_sq);
 
-                if ab == 0.0 {
-                    0.0
-                } else {
-                    ab / (aa_sq * bb_sq).sqrt()
-                }
+                if ab == 0.0 { 0.0 } else { ab / (aa_sq * bb_sq).sqrt() }
             }
 
             fn cosine_normalized(self, other: Self) -> Self::Inner {

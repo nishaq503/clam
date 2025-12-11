@@ -25,11 +25,7 @@ where
         let (mut hits, subsumed, straddlers) = tree_search(tree, &tree.root, query, self.0);
 
         // Add all items from fully subsumed clusters
-        hits.extend(
-            subsumed
-                .into_iter()
-                .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster)),
-        );
+        hits.extend(subsumed.into_iter().flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster)));
 
         // Check all items from straddling clusters
         hits.extend(straddlers.into_iter().flat_map(|cluster| {
@@ -178,10 +174,7 @@ where
         None => (centers, Vec::new(), vec![cluster]), // Leaf cluster
         Some(children) => {
             // Recurse into children
-            let returns = children
-                .par_iter()
-                .map(|child| par_tree_search(tree, child, query, radius))
-                .collect::<Vec<_>>();
+            let returns = children.par_iter().map(|child| par_tree_search(tree, child, query, radius)).collect::<Vec<_>>();
 
             for (child_centers, child_subsumed, child_straddlers) in returns {
                 centers.extend(child_centers);

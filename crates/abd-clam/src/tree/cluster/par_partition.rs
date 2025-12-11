@@ -8,12 +8,7 @@ use super::{Cluster, lfd_estimate, reorder_items_in_place};
 
 impl<T, A> Cluster<T, A> {
     /// Parallel version of [`Self::new_root`].
-    pub(crate) fn par_new_root<Id, I, M, P, Ann>(
-        items: &mut [(Id, I)],
-        metric: &M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-    ) -> Self
+    pub(crate) fn par_new_root<Id, I, M, P, Ann>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
@@ -43,9 +38,7 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool + Send + Sync,
         Ann: Fn(&Self) -> Option<A> + Send + Sync,
     {
-        ftlog::info!(
-            "Creating a new root cluster with iterative partitioning up to recursion depth {max_recursion_depth}"
-        );
+        ftlog::info!("Creating a new root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
 
         let predicate = &strategy.predicate;
 
@@ -53,9 +46,7 @@ impl<T, A> Cluster<T, A> {
         let iterative_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
         let iterative_strategy = strategy.with_predicate(iterative_predicate);
         let mut root = Self::par_new(0, 0, items, metric, &iterative_strategy, annotator);
-        ftlog::info!(
-            "Finished creating the root cluster with iterative partitioning up to recursion depth {max_recursion_depth}"
-        );
+        ftlog::info!("Finished creating the root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
 
         // Find unfinished leaves that still satisfy the original predicate
         let unfinished_selector = |c: &Self| c.is_leaf() && predicate(c);
@@ -86,14 +77,7 @@ impl<T, A> Cluster<T, A> {
                     };
 
                     // Re-partition the leaf and replace it in the tree
-                    *leaf = Self::par_new(
-                        leaf.depth,
-                        leaf.center_index,
-                        leaf_items,
-                        metric,
-                        &iterative_strategy,
-                        annotator,
-                    );
+                    *leaf = Self::par_new(leaf.depth, leaf.center_index, leaf_items, metric, &iterative_strategy, annotator);
 
                     // Return any new unfinished leaves
                     leaf.select_clusters_mut(&unfinished_selector)
@@ -107,14 +91,7 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Parallel version of [`Self::new`].
-    fn par_new<Id, I, M, P, Ann>(
-        depth: usize,
-        center_index: usize,
-        items: &mut [(Id, I)],
-        metric: &M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-    ) -> Self
+    fn par_new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
@@ -149,9 +126,7 @@ impl<T, A> Cluster<T, A> {
             child_items.push((r_items, (nr, rci)));
 
             while !child_items.is_full() {
-                let (items, (_, ci)) = child_items
-                    .pop()
-                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
+                let (items, (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() <= 2 {
                     break;
                 }
@@ -166,36 +141,25 @@ impl<T, A> Cluster<T, A> {
                 child_items.push((r_items, (nr, rci)));
             }
 
-            child_items
-                .take_items()
-                .map(|(c_items, (_, ci))| (ci, c_items))
-                .collect::<Vec<_>>()
+            child_items.take_items().map(|(c_items, (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         } else {
             let max_span = strategy.span_reduction.max_child_span_for(span);
 
             let mut child_items = SizedHeap::new(None);
 
-            let (l_span, r_span) = rayon::join(
-                || par_span_estimate(l_items, metric),
-                || par_span_estimate(r_items, metric),
-            );
+            let (l_span, r_span) = rayon::join(|| par_span_estimate(l_items, metric), || par_span_estimate(r_items, metric));
 
             child_items.push((l_items, (l_span, lci)));
             child_items.push((r_items, (r_span, rci)));
 
             while child_items.peek().is_some_and(|(_, (s, _))| *s > max_span) {
-                let (items, (_, ci)) = child_items
-                    .pop()
-                    .unwrap_or_else(|| unreachable!("child_items is not empty"));
+                let (items, (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() <= 2 {
                     break;
                 }
                 let ([l_items, r_items], _) = par_bipolar_split(items, metric, None);
 
-                let (l_span, r_span) = rayon::join(
-                    || par_span_estimate(l_items, metric),
-                    || par_span_estimate(r_items, metric),
-                );
+                let (l_span, r_span) = rayon::join(|| par_span_estimate(l_items, metric), || par_span_estimate(r_items, metric));
                 let lci = ci;
                 let rci = ci + l_items.len();
 
@@ -203,17 +167,10 @@ impl<T, A> Cluster<T, A> {
                 child_items.push((r_items, (r_span, rci)));
             }
 
-            child_items
-                .take_items()
-                .map(|(c_items, (_, ci))| (ci, c_items))
-                .collect::<Vec<_>>()
+            child_items.take_items().map(|(c_items, (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         };
         child_items.sort_by_key(|&(c_index, _)| c_index);
-        ftlog::debug!(
-            "Created {} child clusters for a cluster at depth {}",
-            child_items.len(),
-            cluster.depth
-        );
+        ftlog::debug!("Created {} child clusters for a cluster at depth {}", child_items.len(), cluster.depth);
 
         let children = child_items
             .into_par_iter()
@@ -228,11 +185,7 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Creates a new `Cluster` as a leaf.
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
+    #[expect(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn par_new_leaf<Id, I, M>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M) -> (Self, usize)
     where
         Id: Send + Sync,
@@ -284,11 +237,7 @@ impl<T, A> Cluster<T, A> {
             par_swap_center_to_front(&mut items[..n], metric);
         }
 
-        let radial_distances = items
-            .par_iter()
-            .skip(1)
-            .map(|(_, item)| metric(&items[0].1, item))
-            .collect::<Vec<_>>();
+        let radial_distances = items.par_iter().skip(1).map(|(_, item)| metric(&items[0].1, item)).collect::<Vec<_>>();
         let (radius_index, radius) = radial_distances
             .iter()
             .enumerate()
@@ -391,11 +340,7 @@ where
 /// - An array containing the two partitions of items.
 /// - The span of the partition (distance between the two poles).
 #[expect(clippy::tuple_array_conversions)]
-pub fn par_bipolar_split<'a, Id, I, T, M>(
-    items: &'a mut [(Id, I)],
-    metric: &M,
-    left_pole_index: Option<usize>,
-) -> ([&'a mut [(Id, I)]; 2], T)
+pub fn par_bipolar_split<'a, Id, I, T, M>(items: &'a mut [(Id, I)], metric: &M, left_pole_index: Option<usize>) -> ([&'a mut [(Id, I)]; 2], T)
 where
     Id: Send + Sync,
     I: Send + Sync,
@@ -426,11 +371,7 @@ where
 
     // Compute distances from the left pole to all other items
     let left_pole = &items[0].1;
-    let mut left_distances = items
-        .par_iter()
-        .skip(1)
-        .map(|(_, item)| metric(left_pole, item))
-        .collect::<Vec<_>>();
+    let mut left_distances = items.par_iter().skip(1).map(|(_, item)| metric(left_pole, item)).collect::<Vec<_>>();
 
     // Find the item farthest from the left pole
     let (right_pole_index, span) = left_distances

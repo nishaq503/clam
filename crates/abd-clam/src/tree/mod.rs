@@ -60,13 +60,7 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new_iterative(
-            items,
-            metric,
-            &PartitionStrategy::default(),
-            &|_| None,
-            max_recursive_depth,
-        )
+        Self::new_iterative(items, metric, &PartitionStrategy::default(), &|_| None, max_recursive_depth)
     }
 
     /// Parallel version of [`Self::new_minimal`].
@@ -104,13 +98,7 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new_iterative(
-            items,
-            metric,
-            &PartitionStrategy::default(),
-            &|_| None,
-            max_recursive_depth,
-        )
+        Self::par_new_iterative(items, metric, &PartitionStrategy::default(), &|_| None, max_recursive_depth)
     }
 }
 
@@ -224,12 +212,7 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new<P, Ann>(
-        mut items: Vec<(Id, I)>,
-        metric: M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-    ) -> Result<Self, &'static str>
+    pub fn new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
         Ann: Fn(&Cluster<T, A>) -> Option<A>,
@@ -241,10 +224,7 @@ where
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator);
 
-        ftlog::info!(
-            "Finished creating tree with {} items with recursive partitioning",
-            items.len()
-        );
+        ftlog::info!("Finished creating tree with {} items with recursive partitioning", items.len());
 
         Ok(Self { items, root, metric })
     }
@@ -280,10 +260,7 @@ where
 
         let root = Cluster::new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
 
-        ftlog::info!(
-            "Finished creating tree with {} items using iterative partitioning",
-            items.len()
-        );
+        ftlog::info!("Finished creating tree with {} items using iterative partitioning", items.len());
 
         Ok(Self { items, root, metric })
     }
@@ -326,12 +303,7 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn par_new<P, Ann>(
-        mut items: Vec<(Id, I)>,
-        metric: M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-    ) -> Result<Self, &'static str>
+    pub fn par_new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
         Ann: Fn(&Cluster<T, A>) -> Option<A> + Send + Sync,
@@ -339,17 +311,11 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!(
-            "Creating tree with {} items using parallel recursive partitioning",
-            items.len()
-        );
+        ftlog::info!("Creating tree with {} items using parallel recursive partitioning", items.len());
 
         let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator);
 
-        ftlog::info!(
-            "Finished creating tree with {} items using parallel recursive partitioning",
-            items.len()
-        );
+        ftlog::info!("Finished creating tree with {} items using parallel recursive partitioning", items.len());
 
         Ok(Self { items, root, metric })
     }
@@ -373,17 +339,11 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!(
-            "Creating tree with {} items using parallel iterative partitioning",
-            items.len()
-        );
+        ftlog::info!("Creating tree with {} items using parallel iterative partitioning", items.len());
 
         let root = Cluster::par_new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
 
-        ftlog::info!(
-            "Finished creating tree with {} items using parallel iterative partitioning",
-            items.len()
-        );
+        ftlog::info!("Finished creating tree with {} items using parallel iterative partitioning", items.len());
 
         Ok(Self { items, root, metric })
     }

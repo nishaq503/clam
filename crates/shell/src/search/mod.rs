@@ -34,11 +34,7 @@ impl core::fmt::Display for ShellCakes {
 }
 
 fn display_params(params: &HashMap<String, String>) -> String {
-    params
-        .iter()
-        .map(|(k, v)| format!("{k}={v}"))
-        .collect::<Vec<String>>()
-        .join(", ")
+    params.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<String>>().join(", ")
 }
 
 impl FromStr for ShellCakes {
@@ -137,12 +133,8 @@ where
     T: FromStr,
     T::Err: std::fmt::Display,
 {
-    let value_str = params
-        .get(key)
-        .ok_or_else(|| format!("Missing parameter '{key}' for {alg_name}"))?;
-    value_str
-        .parse::<T>()
-        .map_err(|e| format!("Invalid value for '{key}' for {alg_name}: {e}"))
+    let value_str = params.get(key).ok_or_else(|| format!("Missing parameter '{key}' for {alg_name}"))?;
+    value_str.parse::<T>().map_err(|e| format!("Invalid value for '{key}' for {alg_name}: {e}"))
 }
 
 #[cfg(test)]

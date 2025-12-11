@@ -3,12 +3,12 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 define_type!(
-    F32x32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32,
-    f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32
+    F32x32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32,
+    f32, f32, f32
 );
 impl_type!(
-    F32x32, f32, 32, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21,
-    x22, x23, x24, x25, x26, x27, x28, x29, x30, x31
+    F32x32, f32, 32, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28,
+    x29, x30, x31
 );
 
 impl F32x32 {
@@ -20,10 +20,9 @@ impl F32x32 {
     pub fn from_slice(slice: &[f32]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
         Self(
-            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7], slice[8], slice[9],
-            slice[10], slice[11], slice[12], slice[13], slice[14], slice[15], slice[16], slice[17], slice[18],
-            slice[19], slice[20], slice[21], slice[22], slice[23], slice[24], slice[25], slice[26], slice[27],
-            slice[28], slice[29], slice[30], slice[31],
+            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7], slice[8], slice[9], slice[10], slice[11], slice[12], slice[13],
+            slice[14], slice[15], slice[16], slice[17], slice[18], slice[19], slice[20], slice[21], slice[22], slice[23], slice[24], slice[25], slice[26],
+            slice[27], slice[28], slice[29], slice[30], slice[31],
         )
     }
 

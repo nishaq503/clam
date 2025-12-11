@@ -64,14 +64,9 @@ impl AnnDataset {
         self.subset_path(base, "Train")
     }
 
-    pub fn read_train<P: AsRef<Path>, R: rand::Rng>(
-        &self,
-        base: &P,
-        rng: Option<&mut R>,
-    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    pub fn read_train<P: AsRef<Path>, R: rand::Rng>(&self, base: &P, rng: Option<&mut R>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         let path = self.train_path(base)?;
-        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let mut vec = array2_to_vec_f32(&arr);
         if let Some(rng) = rng {
             vec.shuffle(rng);
@@ -83,14 +78,9 @@ impl AnnDataset {
         self.subset_path(base, "Test")
     }
 
-    pub fn read_test<P: AsRef<Path>, R: rand::Rng>(
-        &self,
-        base: &P,
-        rng: Option<&mut R>,
-    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    pub fn read_test<P: AsRef<Path>, R: rand::Rng>(&self, base: &P, rng: Option<&mut R>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         let path = self.test_path(base)?;
-        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let mut vec = array2_to_vec_f32(&arr);
         if let Some(rng) = rng {
             vec.shuffle(rng);
@@ -99,11 +89,7 @@ impl AnnDataset {
     }
 
     fn subset_path<P: AsRef<Path>>(&self, base: &P, subset: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = base.as_ref().join(format!(
-            "{}-{}.npy",
-            self.file_name_prefix(),
-            subset.to_ascii_lowercase()
-        ));
+        let path = base.as_ref().join(format!("{}-{}.npy", self.file_name_prefix(), subset.to_ascii_lowercase()));
         if path.exists() {
             Ok(path)
         } else {
@@ -121,9 +107,7 @@ pub fn base_dir() -> Result<PathBuf, String> {
         .map(|p| p.join("../../../data/ann_data"))
         .map_err(|e| format!("Failed to get workspace directory: {e}"))?;
 
-    let base = std::env::var("ANN_BENCHMARKS_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| workspace_dir);
+    let base = std::env::var("ANN_BENCHMARKS_DIR").map(PathBuf::from).unwrap_or_else(|_| workspace_dir);
 
     base.canonicalize()
         .map_err(|e| format!("Failed to canonicalize base directory: {e} ({base:?})"))

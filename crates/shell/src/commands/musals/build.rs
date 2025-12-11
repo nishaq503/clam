@@ -14,9 +14,7 @@ pub fn build_msa<P: AsRef<Path>>(
     save_fasta: bool,
 ) -> Result<(), String> {
     let out_dir = out_dir.as_ref();
-    let parent = out_dir
-        .parent()
-        .ok_or_else(|| format!("Output path '{out_dir:?}' has no parent directory"))?;
+    let parent = out_dir.parent().ok_or_else(|| format!("Output path '{out_dir:?}' has no parent directory"))?;
     if !parent.exists() {
         return Err(format!("Output directory '{parent:?}' does not exist"));
     }

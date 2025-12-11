@@ -14,8 +14,7 @@ fn test_levenshtein() -> Result<(), String> {
         let dist = distances::strings::levenshtein::<usize>(x, y);
 
         let device = DeviceScope::default().map_err(|e| format!("Failed to create DeviceScope: {e}"))?;
-        let szla_engine = LevenshteinDistances::new(&device, 0, 1, 1, 1)
-            .map_err(|e| format!("Failed to create LevenshteinDistances: {e}"))?;
+        let szla_engine = LevenshteinDistances::new(&device, 0, 1, 1, 1).map_err(|e| format!("Failed to create LevenshteinDistances: {e}"))?;
         let szla_vec = szla_engine
             .compute(&device, &[x], &[y])
             .map_err(|e| format!("Failed to compute distance: {e}"))?;

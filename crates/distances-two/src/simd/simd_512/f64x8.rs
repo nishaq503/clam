@@ -13,9 +13,7 @@ impl F64x8 {
     /// Will panic if the slice is not at least 8 elements long.
     pub fn from_slice(slice: &[f64]) -> Self {
         debug_assert!(slice.len() >= Self::lanes());
-        Self(
-            slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
-        )
+        Self(slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7])
     }
 
     /// Sum all lanes of the SIMD vector.

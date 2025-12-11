@@ -41,9 +41,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             leaf_into_hits(query, tree, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
-            let min_c = candidates
-                .peek()
-                .map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
+            let min_c = candidates.peek().map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
             if hits.is_full() && max_h < min_c {
                 // The closest candidate cannot improve our hits, so we can stop.
                 break;
@@ -83,10 +81,10 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     profi::prof!("KnnDfs::pop_till_leaf");
 
     let mut distance_computations = 0;
-    while candidates.peek().map_or_else(
-        || unreachable!("`candidates` is non-empty."),
-        |(cluster, _)| !cluster.is_leaf(),
-    ) {
+    while candidates
+        .peek()
+        .map_or_else(|| unreachable!("`candidates` is non-empty."), |(cluster, _)| !cluster.is_leaf())
+    {
         profi::prof!("pop-while-not-leaf");
 
         candidates.pop().and_then(|(parent, _)| parent.children()).map_or_else(
@@ -103,10 +101,9 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
         );
     }
 
-    let (leaf, d) = candidates.pop().map_or_else(
-        || unreachable!("`candidates` is non-empty."),
-        |(leaf, Reverse((_, _, d)))| (leaf, d),
-    );
+    let (leaf, d) = candidates
+        .pop()
+        .map_or_else(|| unreachable!("`candidates` is non-empty."), |(leaf, Reverse((_, _, d)))| (leaf, d));
     (leaf, d, distance_computations)
 }
 

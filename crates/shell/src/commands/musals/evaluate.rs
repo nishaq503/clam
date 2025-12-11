@@ -14,9 +14,7 @@ pub fn evaluate_msa<P: AsRef<Path>>(
     let out_path = out_path.as_ref();
 
     println!("Output path: {out_path:?}");
-    let out_dir = out_path
-        .parent()
-        .ok_or_else(|| "Output path must have a parent directory.".to_string())?;
+    let out_dir = out_path.parent().ok_or_else(|| "Output path must have a parent directory.".to_string())?;
     if !out_dir.exists() {
         std::fs::create_dir_all(out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
     }

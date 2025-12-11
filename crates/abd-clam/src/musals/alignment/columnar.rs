@@ -120,11 +120,7 @@ impl<S: Sequence> Columnar<S> {
         let top = Self::from_iter(top).with_gaps(&t_gaps);
         let bottom = Self::from_iter(self).with_gaps(&b_gaps);
 
-        bottom
-            .into_iter()
-            .zip(top)
-            .map(|(b_col, t_col)| b_col.append(t_col))
-            .collect()
+        bottom.into_iter().zip(top).map(|(b_col, t_col)| b_col.append(t_col)).collect()
     }
 
     /// Appends a row to the columnar structure.

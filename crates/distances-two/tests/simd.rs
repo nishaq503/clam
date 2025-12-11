@@ -9,12 +9,7 @@ use test_case::test_case;
 mod naive_impls;
 
 /// Tests for SIMD accelerated Euclidean distance functions.
-#[cfg(any(
-    feature = "simd-128",
-    feature = "simd-256",
-    feature = "simd-512",
-    feature = "simd-1024"
-))]
+#[cfg(any(feature = "simd-128", feature = "simd-256", feature = "simd-512", feature = "simd-1024"))]
 #[test_case(10, 2; "10x2")]
 #[test_case(100, 10; "100x10")]
 #[test_case(100, 100; "100x100")]
@@ -59,12 +54,7 @@ fn simd_distances(car: usize, dim: usize) {
     }
 }
 
-#[cfg(any(
-    feature = "simd-128",
-    feature = "simd-256",
-    feature = "simd-512",
-    feature = "simd-1024"
-))]
+#[cfg(any(feature = "simd-128", feature = "simd-256", feature = "simd-512", feature = "simd-1024"))]
 fn check_approx_eq_f32(x: &[f32], y: &[f32], tol: f32) {
     assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
     assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);
@@ -79,12 +69,7 @@ fn check_approx_eq_f32(x: &[f32], y: &[f32], tol: f32) {
     assert_simd_self_dist_eq!(y, norm_l2, norm_l2, tol, f32);
 }
 
-#[cfg(any(
-    feature = "simd-128",
-    feature = "simd-256",
-    feature = "simd-512",
-    feature = "simd-1024"
-))]
+#[cfg(any(feature = "simd-128", feature = "simd-256", feature = "simd-512", feature = "simd-1024"))]
 fn check_approx_eq_f64(x: &[f64], y: &[f64], tol: f64) {
     assert_dist_eq!(x, y, l2_sq, distances_two::simd::euclidean_sq, tol);
     assert_dist_eq!(x, y, l2, distances_two::simd::euclidean, tol);

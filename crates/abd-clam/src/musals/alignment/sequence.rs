@@ -112,20 +112,12 @@ pub trait Sequence: AsRef<[u8]> + Sized + Clone {
     /// # Errors
     ///
     /// If `self` is longer than `other`.
-    fn nw_table_one_way<T: DistanceValue>(
-        &self,
-        other: &Self,
-        cost_matrix: &CostMatrix<T>,
-    ) -> Result<DpTable<T>, String> {
+    fn nw_table_one_way<T: DistanceValue>(&self, other: &Self, cost_matrix: &CostMatrix<T>) -> Result<DpTable<T>, String> {
         // TODO: Consider a parallel implementation where cells on the same anti-diagonal are computed in parallel.
 
         let (x, y) = (self.as_ref(), other.as_ref());
         if x.len() > y.len() {
-            return Err(format!(
-                "`self` must not be longer than `other`. Got lengths {} and {}",
-                x.len(),
-                y.len()
-            ));
+            return Err(format!("`self` must not be longer than `other`. Got lengths {} and {}", x.len(), y.len()));
         }
 
         // Initialize the DP table.
@@ -178,10 +170,7 @@ pub trait Sequence: AsRef<[u8]> + Sized + Clone {
     /// Compute the Needleman-Wunsch distance between this sequence and another sequence.
     fn nw_distance<T: DistanceValue>(&self, other: &Self, cost_matrix: &CostMatrix<T>) -> T {
         let table = self.nw_table(other, cost_matrix);
-        table
-            .last()
-            .and_then(|row| row.last())
-            .map_or_else(T::zero, |&(d, _)| d)
+        table.last().and_then(|row| row.last()).map_or_else(T::zero, |&(d, _)| d)
     }
 
     /// Applies the given edits to the sequence.

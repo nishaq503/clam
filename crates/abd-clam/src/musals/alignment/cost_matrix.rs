@@ -49,16 +49,9 @@ impl<T: DistanceValue> CostMatrix<T> {
         let mut sub_matrix = [[default_sub; NUM_CHARS]; NUM_CHARS];
 
         // Set the diagonal to zero.
-        sub_matrix
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, row)| row[i] = T::zero());
+        sub_matrix.iter_mut().enumerate().for_each(|(i, row)| row[i] = T::zero());
 
-        Self {
-            sub_matrix,
-            gap_open,
-            gap_ext,
-        }
+        Self { sub_matrix, gap_open, gap_ext }
     }
 
     /// Cast the cost matrix to another distance value type.
@@ -87,9 +80,7 @@ impl<T: DistanceValue> CostMatrix<T> {
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
     pub fn default_affine(gap_open: Option<T>) -> Self {
-        let gap_open = gap_open.unwrap_or_else(|| {
-            T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
-        });
+        let gap_open = gap_open.unwrap_or_else(|| T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types")));
         Self::new(T::one(), gap_open, T::one())
     }
 
@@ -170,22 +161,14 @@ impl<T: DistanceValue> CostMatrix<T> {
     /// Linearly increase all costs in the matrix so that the minimum cost is
     /// zero and all non-zero costs are positive.
     pub fn normalize(self) -> Self {
-        let shift = self
-            .sub_matrix
-            .iter()
-            .flatten()
-            .fold(T::max_value(), |a, &b| if a < b { a } else { b });
+        let shift = self.sub_matrix.iter().flatten().fold(T::max_value(), |a, &b| if a < b { a } else { b });
 
         self.shift_down(shift)
     }
 
     /// Invert all costs in the matrix, i.e. subtract them from the maximum cost and then normalize.
     pub fn invert(mut self) -> Self {
-        let max_cost = self
-            .sub_matrix
-            .iter()
-            .flatten()
-            .fold(T::min_value(), |a, &b| if a > b { a } else { b });
+        let max_cost = self.sub_matrix.iter().flatten().fold(T::min_value(), |a, &b| if a > b { a } else { b });
 
         self.sub_matrix = self.sub_matrix.map(|row| row.map(|cost| max_cost - cost));
 
@@ -205,9 +188,7 @@ impl<T: DistanceValue> CostMatrix<T> {
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
     pub fn extended_iupac(gap_open: Option<T>) -> Self {
-        let gap_open = gap_open.unwrap_or_else(|| {
-            T::from_u8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types"))
-        });
+        let gap_open = gap_open.unwrap_or_else(|| T::from_u8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types")));
 
         // For each pair of IUPAC characters, the cost is 1 - n / m, where m is
         // the number possible pairs of nucleotides that can be represented by
@@ -266,12 +247,7 @@ impl<T: DistanceValue> CostMatrix<T> {
             .iter()
             .filter(|&&(a, _, _, _)| a == 'T')
             .map(|&(_, b, n, m)| ('U', b, n, m))
-            .chain(
-                costs
-                    .iter()
-                    .filter(|&&(_, b, _, _)| b == 'T')
-                    .map(|&(a, _, n, m)| (a, 'U', n, m)),
-            )
+            .chain(costs.iter().filter(|&&(_, b, _, _)| b == 'T').map(|&(a, _, n, m)| (a, 'U', n, m)))
             .collect::<Vec<_>>();
 
         // The initial matrix with the default costs, except for gaps which are
@@ -279,12 +255,9 @@ impl<T: DistanceValue> CostMatrix<T> {
         let matrix = Self::default()
             .with_sub_cost(b'-', b'.', T::zero())
             .with_sub_cost(b'.', b'-', T::zero())
-            .scale(
-                T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
-            );
+            .scale(T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 
-        let lcm_t =
-            T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
+        let lcm_t = T::from_u8(lcm).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"));
 
         // Add all costs to the matrix.
         costs
@@ -295,8 +268,7 @@ impl<T: DistanceValue> CostMatrix<T> {
                 (
                     a,
                     b,
-                    T::from_u8(n * (lcm / m))
-                        .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
+                    T::from_u8(n * (lcm / m)).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
                 )
             })
             .flat_map(|(a, b, cost)| {
@@ -327,9 +299,7 @@ impl<T: DistanceValue> CostMatrix<T> {
     /// * `gap_open`: The factor by which it is more expensive to open a gap
     ///   than to extend an existing gap. This defaults to 10.
     pub fn blosum62(gap_open: Option<T>) -> Self {
-        let gap_open = gap_open.unwrap_or_else(|| {
-            T::from_u8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8"))
-        });
+        let gap_open = gap_open.unwrap_or_else(|| T::from_u8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 
         #[rustfmt::skip]
         let costs = [
@@ -357,9 +327,10 @@ impl<T: DistanceValue> CostMatrix<T> {
 
         // Calculate the maximum difference between any two substitution costs.
         let max_delta = {
-            let (min, max) = costs.iter().flatten().fold((i8::MAX, i8::MIN), |(min, max), &cost| {
-                (Ord::min(min, cost), Ord::max(max, cost))
-            });
+            let (min, max) = costs
+                .iter()
+                .flatten()
+                .fold((i8::MAX, i8::MIN), |(min, max), &cost| (Ord::min(min, cost), Ord::max(max, cost)));
             if max > min { max - min } else { min - max }
         };
 
@@ -371,13 +342,9 @@ impl<T: DistanceValue> CostMatrix<T> {
         let matrix = Self::default()
             .with_sub_cost(b'-', b'.', T::zero())
             .with_sub_cost(b'.', b'-', T::zero())
-            .scale(
-                T::from_i8(max_delta)
-                    .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")),
-            );
+            .scale(T::from_i8(max_delta).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 
-        let max_delta_t = T::from_i8(max_delta)
-            .unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8: {max_delta}"));
+        let max_delta_t = T::from_i8(max_delta).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8: {max_delta}"));
 
         // Flatten the costs into a vector of (a, b, cost) tuples.
         codes
@@ -388,9 +355,7 @@ impl<T: DistanceValue> CostMatrix<T> {
                     (
                         a,
                         b,
-                        T::from_i8(cost).unwrap_or_else(|| {
-                            unreachable!("Every distance type should be large enough to hold i8: {cost}")
-                        }),
+                        T::from_i8(cost).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8: {cost}")),
                     )
                 })
             })
@@ -407,9 +372,7 @@ impl<T: DistanceValue> CostMatrix<T> {
             // Convert the characters to bytes.
             .map(|(a, b, cost)| (a as u8, b as u8, cost))
             // And combine them into a matrix.
-            .fold(matrix, |matrix, (a, b, cost)| {
-                matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost)
-            })
+            .fold(matrix, |matrix, (a, b, cost)| matrix.with_sub_cost(a, b, cost).with_sub_cost(b, a, cost))
             // Convert the matrix into a form that can be used to minimize the
             // edit distances.
             .invert()
@@ -466,30 +429,14 @@ where
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<Vec<[T; NUM_CHARS]>, _>>()
-            .map_err(|vec: Vec<T>| {
-                format!(
-                    "Invalid row length in CostMatrix: expected {}, got {}",
-                    NUM_CHARS,
-                    vec.len()
-                )
-            })
+            .map_err(|vec: Vec<T>| format!("Invalid row length in CostMatrix: expected {}, got {}", NUM_CHARS, vec.len()))
             .map_err(serde::de::Error::custom)?;
 
         let sub_matrix = sub_vec_arr
             .try_into()
-            .map_err(|vec: Vec<[T; 256]>| {
-                format!(
-                    "Invalid number of rows in CostMatrix: expected {}, got {}",
-                    NUM_CHARS,
-                    vec.len()
-                )
-            })
+            .map_err(|vec: Vec<[T; 256]>| format!("Invalid number of rows in CostMatrix: expected {}, got {}", NUM_CHARS, vec.len()))
             .map_err(serde::de::Error::custom)?;
 
-        Ok(Self {
-            sub_matrix,
-            gap_open,
-            gap_ext,
-        })
+        Ok(Self { sub_matrix, gap_open, gap_ext })
     }
 }

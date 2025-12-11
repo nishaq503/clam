@@ -26,11 +26,7 @@ fn vectors(car: usize, dim: usize) -> Result<(), String> {
     // Truncate all items to 3 decimal places for debugging
     let data = data
         .into_iter()
-        .map(|v| {
-            v.into_iter()
-                .map(|x| (x * 1000.0).trunc() / 1000.0)
-                .collect::<Vec<f32>>()
-        })
+        .map(|v| v.into_iter().map(|x| (x * 1000.0).trunc() / 1000.0).collect::<Vec<f32>>())
         .collect::<Vec<_>>();
 
     println!("Starting test with {} items of dimension {}", car, dim);
@@ -149,10 +145,7 @@ fn check_hits<T: DistanceValue>(expected: &[(usize, T)], actual: &[(usize, T)], 
     );
 
     for (i, (&(_, e), &(_, a))) in expected.iter().zip(actual.iter()).enumerate() {
-        assert_eq!(
-            e, a,
-            "{alg_name}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}",
-        );
+        assert_eq!(e, a, "{alg_name}: Distance mismatch at index {i}: \nexp {expected:?}, \ngot {actual:?}",);
     }
 
     Ok(())

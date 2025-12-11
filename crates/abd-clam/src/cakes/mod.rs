@@ -206,11 +206,7 @@ where
 
 /// The minimum possible distance from the query to any item in the cluster.
 pub(crate) fn d_min<T: DistanceValue, A>(cluster: &super::Cluster<T, A>, d: T) -> T {
-    if d < cluster.radius() {
-        T::zero()
-    } else {
-        d - cluster.radius()
-    }
+    if d < cluster.radius() { T::zero() } else { d - cluster.radius() }
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
@@ -237,10 +233,7 @@ pub(crate) fn d_max<T: DistanceValue, A>(cluster: &super::Cluster<T, A>, d: T) -
 /// - If any pair of inner vectors in `true_hits` and `pred_hits` do not have the same length.
 /// - If any of the distance values cannot be converted to `f64`.
 #[must_use]
-pub fn search_quality_stats<T: DistanceValue>(
-    true_hits: &[Vec<(usize, T)>],
-    pred_hits: &[Vec<(usize, T)>],
-) -> Vec<(String, f64)> {
+pub fn search_quality_stats<T: DistanceValue>(true_hits: &[Vec<(usize, T)>], pred_hits: &[Vec<(usize, T)>]) -> Vec<(String, f64)> {
     assert_eq!(true_hits.len(), pred_hits.len());
     assert!(!true_hits.is_empty());
     assert!(true_hits.iter().all(|v| !v.is_empty()));
@@ -266,11 +259,7 @@ pub fn search_quality_stats<T: DistanceValue>(
     recall_stats
         .into_iter()
         .map(|(name, value)| (format!("{name} recall"), value))
-        .chain(
-            d_err_stats
-                .into_iter()
-                .map(|(name, value)| (format!("{name} d_err "), value)),
-        )
+        .chain(d_err_stats.into_iter().map(|(name, value)| (format!("{name} d_err "), value)))
         .collect()
 }
 
@@ -286,17 +275,10 @@ pub fn search_quality_stats<T: DistanceValue>(
 fn compute_summary_stats(values: &[f64]) -> Vec<(&'static str, f64)> {
     let (min, max, sum) = values
         .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY, 0.0), |(min, max, sum), &v| {
-            (min.min(v), max.max(v), sum + v)
-        });
+        .fold((f64::INFINITY, f64::NEG_INFINITY, 0.0), |(min, max, sum), &v| (min.min(v), max.max(v), sum + v));
     let mean = sum / values.len() as f64;
     let std_dev = (values.iter().map(|&v| (v - mean).powi(2)).sum::<f64>() / values.len() as f64).sqrt();
-    vec![
-        ("min    ", min),
-        ("max    ", max),
-        ("mean   ", mean),
-        ("std_dev", std_dev),
-    ]
+    vec![("min    ", min), ("max    ", max), ("mean   ", mean), ("std_dev", std_dev)]
 }
 
 /// Computes the recall of approximate nearest neighbor search results for a single query.
@@ -325,11 +307,7 @@ fn compute_distance_error<T: DistanceValue>(true_hits: &[(usize, T)], pred_hits:
         .map(|((_, d_true), (_, d_pred))| {
             let d_true = d_true.to_f64().unwrap();
             let d_pred = d_pred.to_f64().unwrap();
-            if d_true == 0.0 || d_pred == 0.0 {
-                0.0
-            } else {
-                d_pred / d_true - 1.0
-            }
+            if d_true == 0.0 || d_pred == 0.0 { 0.0 } else { d_pred / d_true - 1.0 }
         })
         .sum::<f64>();
     err_sum / true_hits.len() as f64

@@ -38,9 +38,10 @@ use crate::{
 ///
 /// * [Cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity)
 pub fn cosine<T: Number, U: Float>(x: &[T], y: &[T]) -> U {
-    let [xx, yy, xy] = x.iter().zip(y.iter()).fold([T::ZERO; 3], |[xx, yy, xy], (&a, &b)| {
-        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-    });
+    let [xx, yy, xy] = x
+        .iter()
+        .zip(y.iter())
+        .fold([T::ZERO; 3], |[xx, yy, xy], (&a, &b)| [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]);
     let [xx, yy, xy] = [U::from(xx), U::from(yy), U::from(xy)];
 
     if xx < U::EPSILON || yy < U::EPSILON || xy < U::EPSILON {

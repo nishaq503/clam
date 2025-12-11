@@ -88,11 +88,7 @@ impl AnnDataset {
 
     /// Returns the path to the specified subset (train or test) of the dataset.
     fn subset_path<P: AsRef<Path>>(&self, base: &P, subset: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = base.as_ref().join(format!(
-            "{}-{}.npy",
-            self.file_name_prefix(),
-            subset.to_ascii_lowercase()
-        ));
+        let path = base.as_ref().join(format!("{}-{}.npy", self.file_name_prefix(), subset.to_ascii_lowercase()));
         if path.exists() {
             Ok(path)
         } else {
@@ -104,15 +100,9 @@ impl AnnDataset {
     }
 
     /// Reads the specified subset (train or test) of the dataset.
-    fn read_subset<P: AsRef<Path>, R: rand::Rng>(
-        &self,
-        base: &P,
-        subset: &str,
-        rng: Option<&mut R>,
-    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    fn read_subset<P: AsRef<Path>, R: rand::Rng>(&self, base: &P, subset: &str, rng: Option<&mut R>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         let path = self.subset_path(base, subset)?;
-        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let arr = ndarray_npy::read_npy::<_, ndarray::Array2<f32>>(path).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let mut vec = arr.outer_iter().map(|row| row.to_vec()).collect::<Vec<_>>();
         if let Some(rng) = rng {
             vec.shuffle(rng);
@@ -121,20 +111,12 @@ impl AnnDataset {
     }
 
     /// Reads the training subset of the dataset.
-    pub fn read_train<P: AsRef<Path>, R: rand::Rng>(
-        &self,
-        base: &P,
-        rng: Option<&mut R>,
-    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    pub fn read_train<P: AsRef<Path>, R: rand::Rng>(&self, base: &P, rng: Option<&mut R>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         self.read_subset(base, "train", rng)
     }
 
     /// Reads the test subset of the dataset.
-    pub fn read_test<P: AsRef<Path>, R: rand::Rng>(
-        &self,
-        base: &P,
-        rng: Option<&mut R>,
-    ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    pub fn read_test<P: AsRef<Path>, R: rand::Rng>(&self, base: &P, rng: Option<&mut R>) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
         self.read_subset(base, "test", rng)
     }
 }

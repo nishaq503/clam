@@ -61,9 +61,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             distance_computations += leaf_into_hits(query, tree, &mut hits, leaf, d);
 
             let max_h = hits.peek().map_or_else(T::max_value, |(_, &d)| d);
-            let min_c = candidates
-                .peek()
-                .map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
+            let min_c = candidates.peek().map_or_else(T::min_value, |(_, &Reverse((d_min, _, _)))| d_min);
 
             if hits.is_full()
                 && [

@@ -62,8 +62,7 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
         }
     }
 
-    let fmt =
-        InputFormat::from_path(&out_path).map_err(|e| format!("Failed to determine format from file extension: {e}"))?;
+    let fmt = InputFormat::from_path(&out_path).map_err(|e| format!("Failed to determine format from file extension: {e}"))?;
     match (&fmt, &data_type) {
         (InputFormat::Fasta, DataType::String) => {} // Valid
         (InputFormat::Fasta, _) => {
@@ -85,8 +84,7 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
     // Generate the data based on type
     let shell_data = match data_type {
         DataType::F32 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as f32, max_val as f32, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as f32, max_val as f32, rng);
             ShellData::F32(data)
         }
         DataType::F64 => {
@@ -98,18 +96,15 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
             ShellData::I8(data)
         }
         DataType::I16 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i16, max_val as i16, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i16, max_val as i16, rng);
             ShellData::I16(data)
         }
         DataType::I32 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i32, max_val as i32, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i32, max_val as i32, rng);
             ShellData::I32(data)
         }
         DataType::I64 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i64, max_val as i64, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as i64, max_val as i64, rng);
             ShellData::I64(data)
         }
         DataType::U8 => {
@@ -117,18 +112,15 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
             ShellData::U8(data)
         }
         DataType::U16 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u16, max_val as u16, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u16, max_val as u16, rng);
             ShellData::U16(data)
         }
         DataType::U32 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u32, max_val as u32, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u32, max_val as u32, rng);
             ShellData::U32(data)
         }
         DataType::U64 => {
-            let data =
-                symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u64, max_val as u64, rng);
+            let data = symagen::random_data::random_tabular(num_vectors, dimensions, min_val as u64, max_val as u64, rng);
             ShellData::U64(data)
         }
         DataType::String => generate_strings(num_vectors, dimensions, rng),
@@ -156,9 +148,7 @@ fn generate_strings<R: rand::Rng>(num_vectors: usize, avg_length: usize, rng: &m
     let max_len = avg_length + avg_length / 4;
 
     let data = symagen::random_data::random_string(num_vectors, min_len, max_len, alphabet, rng);
-    let metadata = (0..num_vectors)
-        .map(|i| format!(">seq_{}", i + 1))
-        .collect::<Vec<String>>();
+    let metadata = (0..num_vectors).map(|i| format!(">seq_{}", i + 1)).collect::<Vec<String>>();
 
     let data = metadata.into_iter().zip(data.into_iter().map(MusalsSequence)).collect();
 
@@ -166,16 +156,9 @@ fn generate_strings<R: rand::Rng>(num_vectors: usize, avg_length: usize, rng: &m
 }
 
 /// Write partitioned data to multiple files.
-fn write_partitions<P: AsRef<Path> + core::fmt::Debug>(
-    data: &ShellData,
-    out_path: P,
-    total_vectors: usize,
-    partitions: &[usize],
-) -> Result<(), String> {
+fn write_partitions<P: AsRef<Path> + core::fmt::Debug>(data: &ShellData, out_path: P, total_vectors: usize, partitions: &[usize]) -> Result<(), String> {
     let out_path = out_path.as_ref();
-    let out_dir = out_path
-        .parent()
-        .ok_or_else(|| "Output path must have a parent directory".to_string())?;
+    let out_dir = out_path.parent().ok_or_else(|| "Output path must have a parent directory".to_string())?;
     let filename = out_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -192,11 +175,7 @@ fn write_partitions<P: AsRef<Path> + core::fmt::Debug>(
         let count = (total_vectors * percentage) / 100;
 
         // Handle rounding issues: if this is the last partition, take all remaining vectors
-        let count = if idx == partitions.len() - 1 {
-            total_vectors - start_idx
-        } else {
-            count
-        };
+        let count = if idx == partitions.len() - 1 { total_vectors - start_idx } else { count };
 
         if count == 0 {
             return Err(format!(

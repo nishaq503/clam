@@ -57,11 +57,7 @@ fn read_array<P: AsRef<Path>>(path: P) -> Result<Vec<Vec<f32>>, String> {
     Ok(array.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(
-    tree: Tree<usize, Vec<f32>, f32, (), M>,
-    queries: &[Vec<f32>],
-    k: usize,
-) {
+fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<usize, Vec<f32>, f32, (), M>, queries: &[Vec<f32>], k: usize) {
     profi::prof!();
 
     // For each of the search algorithms, we change the metric to count distance computations separately.
@@ -77,12 +73,7 @@ fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(
 
     let oracles = dfs_results
         .iter()
-        .map(|res| {
-            res.iter()
-                .max_by_key(|&&(_, d)| MaxItem((), d))
-                .map(|&(_, radius)| RnnChess(radius))
-                .unwrap()
-        })
+        .map(|res| res.iter().max_by_key(|&&(_, d)| MaxItem((), d)).map(|&(_, radius)| RnnChess(radius)).unwrap())
         .collect::<Vec<_>>();
 
     let tree = tree.with_metric(oracle_metric);
@@ -94,11 +85,7 @@ fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(
 
     for (i, (res, oracle)) in dfs_results.into_iter().zip(oracle_results).enumerate() {
         assert_eq!(res.len(), k, "Query {i} expected {k} results, got {}", res.len());
-        assert!(
-            oracle.len() >= k,
-            "Query {i} expected at least {k} oracle results, got {}",
-            oracle.len()
-        );
+        assert!(oracle.len() >= k, "Query {i} expected at least {k} oracle results, got {}", oracle.len());
     }
 
     core::mem::drop(bfs_results);

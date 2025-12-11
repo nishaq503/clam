@@ -244,11 +244,7 @@ macro_rules! impl_distances {
                     return Naive::cosine_acc(a, b);
                 }
                 let mut i = 0;
-                let [mut xx, mut yy, mut xy] = [
-                    $name::splat(0 as $ty),
-                    $name::splat(0 as $ty),
-                    $name::splat(0 as $ty),
-                ];
+                let [mut xx, mut yy, mut xy] = [$name::splat(0 as $ty), $name::splat(0 as $ty), $name::splat(0 as $ty)];
                 while a.len() - $name::lanes() >= i {
                     let [xxs, yys, xys] = $name::cosine_inner(&a[i..i + $name::lanes()], &b[i..i + $name::lanes()]);
                     xx += xxs;
@@ -303,11 +299,9 @@ macro_rules! impl_naive {
             }
 
             fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
-                self.iter()
-                    .zip(other.iter())
-                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
-                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-                    })
+                self.iter().zip(other.iter()).fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                    [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                })
             }
 
             fn cosine(self, other: Self) -> Self::Output {
@@ -350,11 +344,9 @@ macro_rules! impl_naive {
             }
 
             fn cosine_acc(self, other: Self) -> [Self::Output; 3] {
-                self.iter()
-                    .zip(other.iter())
-                    .fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
-                        [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
-                    })
+                self.iter().zip(other.iter()).fold([0 as Self::Output; 3], |[xx, yy, xy], (&a, &b)| {
+                    [a.mul_add(a, xx), b.mul_add(b, yy), a.mul_add(b, xy)]
+                })
             }
 
             fn cosine(self, other: Self) -> Self::Output {

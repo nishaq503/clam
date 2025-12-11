@@ -10,11 +10,7 @@ pub fn absolute_difference<T: DistanceValue>(a: &T, b: &T) -> T {
 }
 
 pub fn manhattan<I: AsRef<[T]>, T: DistanceValue>(a: &I, b: &I) -> T {
-    a.as_ref()
-        .iter()
-        .zip(b.as_ref().iter())
-        .map(|(x, y)| absolute_difference(x, y))
-        .sum()
+    a.as_ref().iter().zip(b.as_ref().iter()).map(|(x, y)| absolute_difference(x, y)).sum()
 }
 
 pub fn hypotenuse<T: DistanceValue, U: Float>(a: &(T, T), b: &(T, T)) -> U {

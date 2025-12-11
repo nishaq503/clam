@@ -50,12 +50,7 @@ struct Args {
 }
 
 /// A placeholder main function.
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::while_float,
-    clippy::too_many_lines,
-    clippy::cognitive_complexity
-)]
+#[allow(clippy::cast_precision_loss, clippy::while_float, clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), String> {
     let args = Args::parse();
 
@@ -69,8 +64,7 @@ fn main() -> Result<(), String> {
 
     let out_dir = if let Some(dir) = args.out_dir {
         if !dir.exists() {
-            std::fs::create_dir_all(&dir)
-                .map_err(|e| format!("Failed to create output directory '{}': {e}", dir.display()))?;
+            std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create output directory '{}': {e}", dir.display()))?;
         } else if !dir.is_dir() {
             return Err(format!("Output path '{}' is not a directory.", dir.display()));
         }
@@ -85,16 +79,14 @@ fn main() -> Result<(), String> {
         }
         let out_dir = inp_dir.join("cakes-benchmarks");
         if !out_dir.exists() {
-            std::fs::create_dir_all(&out_dir)
-                .map_err(|e| format!("Failed to create output directory '{}': {e}", out_dir.display()))?;
+            std::fs::create_dir_all(&out_dir).map_err(|e| format!("Failed to create output directory '{}': {e}", out_dir.display()))?;
         }
         out_dir
     };
 
     let logs_dir = if let Some(dir) = args.log_dir {
         if !dir.exists() {
-            std::fs::create_dir_all(&dir)
-                .map_err(|e| format!("Failed to create log directory '{}': {e}", dir.display()))?;
+            std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create log directory '{}': {e}", dir.display()))?;
         } else if !dir.is_dir() {
             return Err(format!("Log path '{}' is not a directory.", dir.display()));
         }
@@ -102,8 +94,7 @@ fn main() -> Result<(), String> {
     } else {
         let logs_dir = out_dir.join("logs");
         if !logs_dir.exists() {
-            std::fs::create_dir_all(&logs_dir)
-                .map_err(|e| format!("Failed to create log directory '{}': {e}", logs_dir.display()))?;
+            std::fs::create_dir_all(&logs_dir).map_err(|e| format!("Failed to create log directory '{}': {e}", logs_dir.display()))?;
         }
         logs_dir
     };
@@ -134,12 +125,7 @@ fn main() -> Result<(), String> {
         }
         let data_out_dir = out_dir.join(dataset.file_name_prefix());
         if !data_out_dir.exists() {
-            std::fs::create_dir_all(&data_out_dir).map_err(|e| {
-                format!(
-                    "Failed to create data output directory '{}': {e}",
-                    data_out_dir.display()
-                )
-            })?;
+            std::fs::create_dir_all(&data_out_dir).map_err(|e| format!("Failed to create data output directory '{}': {e}", data_out_dir.display()))?;
         }
 
         let metric = dataset.metric();
@@ -164,16 +150,12 @@ fn main() -> Result<(), String> {
 
         for strategy in &strategies {
             let strategy = strategy.with_predicate(|b: &Cluster<f32, ()>| b.radius() > 1e-6);
-            ftlog::info!(
-                "Building CAKES index for dataset '{}' with strategy {strategy}",
-                dataset.name()
-            );
+            ftlog::info!("Building CAKES index for dataset '{}' with strategy {strategy}", dataset.name());
             let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
 
             let root_csv_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-tree.csv");
             if root_csv_path.exists() {
-                std::fs::remove_file(&root_csv_path)
-                    .map_err(|e| format!("Failed to remove existing file '{}': {e}", root_csv_path.display()))?;
+                std::fs::remove_file(&root_csv_path).map_err(|e| format!("Failed to remove existing file '{}': {e}", root_csv_path.display()))?;
             }
             tree.root().to_csv(&root_csv_path).map_err(|e| e.to_string())?;
             ftlog::info!("Wrote cluster tree to '{}'", root_csv_path.display());
@@ -183,8 +165,7 @@ fn main() -> Result<(), String> {
                 // let queries = utils::precompute_ips(queries);
 
                 ftlog::info!("Selecting fastest algorithm for dataset '{}'", dataset.name());
-                let (best_alg, expected_throughput) =
-                    selection::par_select_fastest_algorithm(&tree, args.q, args.selection_time, algorithms.as_slice());
+                let (best_alg, expected_throughput) = selection::par_select_fastest_algorithm(&tree, args.q, args.selection_time, algorithms.as_slice());
                 ftlog::info!(
                     "Selected algorithm {} with expected throughput {expected_throughput:.8} queries/sec",
                     best_alg.name()
@@ -202,42 +183,31 @@ fn main() -> Result<(), String> {
                 }
                 let time_taken = start.elapsed().as_secs_f64();
                 let throughput = total_queries as f64 / time_taken;
-                ftlog::info!(
-                    "Measured throughput for dataset '{}' is {throughput:.8} queries/sec",
-                    dataset.name()
-                );
+                ftlog::info!("Measured throughput for dataset '{}' is {throughput:.8} queries/sec", dataset.name());
 
                 ftlog::info!("Writing report...");
 
-                let (neighbors, distances): (Vec<Vec<u64>>, Vec<Vec<f32>>) = results
-                    .into_iter()
-                    .map(|row| row.into_iter().map(|(i, d)| (i as u64, d)).unzip())
-                    .unzip();
-                let neighbors_path =
-                    data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-neighbors.npy");
+                let (neighbors, distances): (Vec<Vec<u64>>, Vec<Vec<f32>>) =
+                    results.into_iter().map(|row| row.into_iter().map(|(i, d)| (i as u64, d)).unzip()).unzip();
+                let neighbors_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-neighbors.npy");
                 if neighbors_path.exists() {
-                    std::fs::remove_file(&neighbors_path)
-                        .map_err(|e| format!("Failed to remove existing file '{}': {e}", neighbors_path.display()))?;
+                    std::fs::remove_file(&neighbors_path).map_err(|e| format!("Failed to remove existing file '{}': {e}", neighbors_path.display()))?;
                 }
                 let neighbors_arr = nested_vec_to_arr(neighbors)?;
                 ndarray_npy::write_npy(&neighbors_path, &neighbors_arr).map_err(|e| e.to_string())?;
                 ftlog::info!("Wrote neighbors to '{}'", neighbors_path.display());
 
-                let distances_path =
-                    data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-distances.npy");
+                let distances_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-distances.npy");
                 if distances_path.exists() {
-                    std::fs::remove_file(&distances_path)
-                        .map_err(|e| format!("Failed to remove existing file '{}': {e}", distances_path.display()))?;
+                    std::fs::remove_file(&distances_path).map_err(|e| format!("Failed to remove existing file '{}': {e}", distances_path.display()))?;
                 }
                 let distances_arr = nested_vec_to_arr(distances)?;
                 ndarray_npy::write_npy(&distances_path, &distances_arr).map_err(|e| e.to_string())?;
                 ftlog::info!("Wrote distances to '{}'", distances_path.display());
 
-                let performance_path = data_out_dir
-                    .join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-performance.json");
+                let performance_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + &best_alg.name() + "-performance.json");
                 if performance_path.exists() {
-                    std::fs::remove_file(&performance_path)
-                        .map_err(|e| format!("Failed to remove existing file '{}': {e}", performance_path.display()))?;
+                    std::fs::remove_file(&performance_path).map_err(|e| format!("Failed to remove existing file '{}': {e}", performance_path.display()))?;
                 }
                 let performance = serde_json::json!({
                     "num_queries": queries.len(),
@@ -246,11 +216,8 @@ fn main() -> Result<(), String> {
                     "recall": 1.0,  // TODO: compute actual recall
                     "rd_err": 0.0,    // TODO: compute actual relative distance error
                 });
-                std::fs::write(
-                    &performance_path,
-                    serde_json::to_string_pretty(&performance).map_err(|e| e.to_string())?,
-                )
-                .map_err(|e| format!("Failed to write performance file '{}': {e}", performance_path.display()))?;
+                std::fs::write(&performance_path, serde_json::to_string_pretty(&performance).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("Failed to write performance file '{}': {e}", performance_path.display()))?;
                 ftlog::info!("Wrote performance report to '{}'", performance_path.display());
             }
 

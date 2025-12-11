@@ -34,8 +34,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             tree,
             &tree.root,
             query,
-            T::from_f64(radius)
-                .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+            T::from_f64(radius).unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
         );
 
         // Count the number of confirmed hits.
@@ -56,8 +55,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                 tree,
                 &tree.root,
                 query,
-                T::from_f64(radius)
-                    .unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
+                T::from_f64(radius).unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
             );
             // Recount the number of confirmed hits.
             num_confirmed = count_hits(&centers, &subsumed);
@@ -128,18 +126,10 @@ fn lfd_multiplier<T: DistanceValue, A>(
     num_confirmed: usize,
 ) -> f64 {
     let radial_distances = centers.iter().map(|&(_, d)| d).collect::<Vec<_>>();
-    let radius = radial_distances
-        .iter()
-        .max_by_key(|&&d| MaxItem((), d))
-        .map_or_else(T::zero, |&d| d);
+    let radius = radial_distances.iter().max_by_key(|&&d| MaxItem((), d)).map_or_else(T::zero, |&d| d);
     let lfd_recip_sum_init = lfd_estimate(&radial_distances, radius).recip();
 
-    let lfd_recip_sum = lfd_recip_sum_init
-        + subsumed
-            .iter()
-            .chain(straddlers.iter())
-            .map(|b| b.lfd().recip())
-            .sum::<f64>();
+    let lfd_recip_sum = lfd_recip_sum_init + subsumed.iter().chain(straddlers.iter()).map(|b| b.lfd().recip()).sum::<f64>();
 
     let n_lfd_samples = subsumed.len() + straddlers.len() + 1; // +1 for the `centers` list
     let lfd_harmonic_mean_inv = lfd_recip_sum / n_lfd_samples as f64;
