@@ -8,7 +8,7 @@ use crate::{commands::musals::ShellCostMatrix, data::ShellData, metrics::Metric,
 pub fn build_msa<P: AsRef<Path>>(
     inp_data: ShellData,
     metric: &Metric,
-    iterative_partition: bool,
+    max_recursion_depth: Option<usize>,
     cost_matrix: &ShellCostMatrix,
     out_dir: P,
     save_fasta: bool,
@@ -22,16 +22,17 @@ pub fn build_msa<P: AsRef<Path>>(
         std::fs::create_dir_all(out_dir).map_err(|e| format!("Failed to create output directory '{out_dir:?}': {e}"))?;
     }
 
-    let suffix = format!("msa-{cost_matrix}");
-    let cost_matrix = cost_matrix.get();
+    let tree = ShellTree::new(inp_data, metric, max_recursion_depth)?;
+    ftlog::info!("Writing unaligned tree to '{out_dir:?}'...");
+    tree.write_to(out_dir, Some("unaligned"))?;
 
-    let tree = ShellTree::new(inp_data, metric, iterative_partition)?;
     let msa_tree = match tree {
-        ShellTree::Levenshtein(tree) => ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix)),
+        ShellTree::Levenshtein(tree) => ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix.get())),
         _ => return Err("MSA tree can only be built for string data.".to_string()),
     };
-    println!("Writing MSA tree to '{out_dir:?}' with suffix '{suffix}'...");
 
+    let suffix = format!("msa-{cost_matrix}");
+    ftlog::info!("Writing MSA tree to '{out_dir:?}' with suffix '{suffix}'...");
     msa_tree.write_to(out_dir, Some(&suffix))?;
 
     if save_fasta {
@@ -42,7 +43,7 @@ pub fn build_msa<P: AsRef<Path>>(
         let data = ShellData::String(items);
 
         let fasta_path = out_dir.join(format!("{suffix}.fasta"));
-        println!("Saving MSA sequences to '{fasta_path:?}'...");
+        ftlog::info!("Saving MSA sequences to '{fasta_path:?}'...");
 
         data.write(fasta_path)?;
     }

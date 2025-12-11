@@ -52,7 +52,7 @@ pub fn search_tree<P: AsRef<Path> + core::fmt::Debug>(tree_dir: P, queries: Shel
     }
 
     let (tree, tree_path) = ShellTree::read_from(tree_dir)?;
-    println!("Read tree from {tree_path:?}.");
+    ftlog::info!("Read tree from {tree_path:?}.");
 
     tree.search(queries, algorithms, out_path)
 }

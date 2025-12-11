@@ -74,12 +74,12 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
         _ => {} // Other combinations are valid
     }
 
-    println!("=== Generating Dataset ===");
-    println!("Generating {num_vectors} {dimensions}-dimensional vectors of type {data_type:?}");
-    println!("Output filename: {out_path:?}");
-    println!("Partitions: {partitions:?}");
-    println!("Value range: [{min_val}, {max_val}]");
-    println!();
+    ftlog::info!("=== Generating Dataset ===");
+    ftlog::info!("Generating {num_vectors} {dimensions}-dimensional vectors of type {data_type:?}");
+    ftlog::info!("Output filename: {out_path:?}");
+    ftlog::info!("Partitions: {partitions:?}");
+    ftlog::info!("Value range: [{min_val}, {max_val}]");
+    ftlog::info!("");
 
     // Generate the data based on type
     let shell_data = match data_type {
@@ -131,11 +131,11 @@ pub fn generate_dataset<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
         write_partitions(&shell_data, out_path, num_vectors, &parts)?;
     } else {
         shell_data.write(&out_path)?;
-        println!("✓ Successfully wrote {out_path:?}");
+        ftlog::info!("✓ Successfully wrote {out_path:?}");
     }
 
-    println!();
-    println!("✓ Dataset generation complete!");
+    ftlog::info!("");
+    ftlog::info!("✓ Dataset generation complete!");
 
     Ok(())
 }
@@ -190,9 +190,9 @@ fn write_partitions<P: AsRef<Path> + core::fmt::Debug>(data: &ShellData, out_pat
 
         // Write the partition to a file
         let partition_path = out_dir.join(format!("{filename}-{percentage}.{ext}"));
-        println!("Writing {count} vectors to: {partition_path:?}");
+        ftlog::info!("Writing {count} vectors to: {partition_path:?}");
         partition.write(&partition_path)?;
-        println!("✓ Successfully wrote {partition_path:?}");
+        ftlog::info!("✓ Successfully wrote {partition_path:?}");
 
         start_idx = end_idx;
     }

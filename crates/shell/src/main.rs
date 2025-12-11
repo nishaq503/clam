@@ -35,10 +35,9 @@ struct Args {
     #[arg(short('s'), long)]
     seed: Option<u64>,
 
-    /// Whether to use the iterative version of the partition algorithm in order to avoid stack overflows from deep recursion. If true, the maximum recursion
-    /// depth is limited to 128.
-    #[arg(long, default_value_t = false)]
-    iterative_partition: bool,
+    /// If provided, the CAKES tree will be built iteratively with the given max recursion depth.
+    #[arg(short('d'), long)]
+    max_recursion_depth: Option<usize>,
 
     /// Optional size of the subsample of the input data to use for building the tree.
     #[arg(short('n'), long)]
@@ -59,7 +58,7 @@ fn main() -> Result<(), String> {
     let out_path = &args.out_path;
 
     let (_guard, log_path) = utils::configure_logger(&args.log_name)?;
-    println!("Log file: {log_path:?}");
+    ftlog::info!("Log file: {log_path:?}");
 
     let inp_path = args
         .inp_path
@@ -82,7 +81,7 @@ fn main() -> Result<(), String> {
         Commands::Cakes { action } => match action {
             commands::cakes::CakesAction::Build => {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::cakes::build_new_tree(inp_data, &metric, args.iterative_partition, out_path)
+                commands::cakes::build_new_tree(inp_data, &metric, args.max_recursion_depth, out_path)
             }
             commands::cakes::CakesAction::Search {
                 queries_path,
@@ -95,7 +94,7 @@ fn main() -> Result<(), String> {
         Commands::Musals { action, cost_matrix } => match action {
             commands::musals::MusalsAction::Build { save_fasta } => {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::musals::build_msa(inp_data, &metric, args.iterative_partition, &cost_matrix, out_path, save_fasta)
+                commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta)
             }
             commands::musals::MusalsAction::Evaluate { quality_metrics } => commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path),
         },

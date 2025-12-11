@@ -19,15 +19,17 @@ pub fn configure_logger(file_name: &str) -> Result<(LoggerGuard, PathBuf), Strin
     if !logs_dir.exists() {
         std::fs::create_dir(&logs_dir).map_err(|e| e.to_string())?;
     }
-    let log_path = logs_dir.join(format!("{file_name}.log"));
+    let log_path = logs_dir.join(file_name);
 
     let writer = FileAppender::builder().path(&log_path).rotate(Period::Day).build();
 
-    let err_path = log_path.with_extension("err.log");
+    let err_stem = log_path.file_stem().unwrap().to_str().unwrap();
+    let err_stem = format!("{err_stem}-err");
+    let err_path = log_path.with_file_name(err_stem);
 
     let guard = ftlog::Builder::new()
         // global max log level
-        .max_log_level(LevelFilter::Trace)
+        .max_log_level(LevelFilter::Info)
         // define root appender, pass None would write to stderr
         .root(writer)
         // write `Warn` and `Error` logs in ftlog::appender to `err_path` instead of `log_path`

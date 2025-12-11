@@ -39,12 +39,12 @@ pub enum ShellTree {
 }
 
 macro_rules! st_new_vector_arm {
-    ($items:ident, $metric:ident, $ty:ty, $st_var:ident, $vt_var:ident, $iterative_partition:ident) => {{
+    ($items:ident, $metric:ident, $ty:ty, $st_var:ident, $vt_var:ident, $max_recursion_depth:ident) => {{
         let strategy = PartitionStrategy::default();
         let items = $items.into_iter().enumerate().collect::<Vec<_>>();
         let metric: fn(&_, &_) -> $ty = $metric::<_, _, _>;
-        let tree = if $iterative_partition {
-            Tree::par_new_iterative(items, metric, &strategy, &|_| None, 128)
+        let tree = if let Some(max_recursion_depth) = $max_recursion_depth {
+            Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
         } else {
             Tree::par_new(items, metric, &strategy, &|_| None)
         }?;
@@ -59,7 +59,7 @@ impl ShellTree {
     ///
     /// - `inp_data`: The input data to build the tree from.
     /// - `metric`: The distance metric to use for the tree.
-    /// - `iterative_partition`: Whether to use the iterative version of the partition algorithm to avoid stack overflows from deep recursion.
+    /// - `max_recursion_depth`: The maximum recursion depth to use when building the tree.
     ///
     /// # Returns
     ///
@@ -71,7 +71,7 @@ impl ShellTree {
     ///   are:
     ///   - String data with Levenshtein metric.
     ///   - Float or Integer data with Euclidean or Cosine metrics.
-    pub fn new(inp_data: ShellData, metric: &Metric, iterative_partition: bool) -> Result<ShellTree, String> {
+    pub fn new(inp_data: ShellData, metric: &Metric, max_recursion_depth: Option<usize>) -> Result<ShellTree, String> {
         match metric {
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {
@@ -84,8 +84,8 @@ impl ShellTree {
                     let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
                     let strategy = PartitionStrategy::default();
-                    let tree = if iterative_partition {
-                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, 128)
+                    let tree = if let Some(max_recursion_depth) = max_recursion_depth {
+                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
                     } else {
                         Tree::par_new(items, metric, &strategy, &|_| None)
                     }?;
@@ -95,29 +95,29 @@ impl ShellTree {
             },
             Metric::Euclidean => match inp_data {
                 ShellData::String(_) => Err("Euclidean metric cannot be used for string data".to_string()),
-                ShellData::F32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, F32, iterative_partition),
-                ShellData::F64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, F64, iterative_partition),
-                ShellData::I8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I8, iterative_partition),
-                ShellData::I16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I16, iterative_partition),
-                ShellData::I32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I32, iterative_partition),
-                ShellData::I64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, I64, iterative_partition),
-                ShellData::U8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U8, iterative_partition),
-                ShellData::U16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U16, iterative_partition),
-                ShellData::U32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U32, iterative_partition),
-                ShellData::U64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, U64, iterative_partition),
+                ShellData::F32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, F32, max_recursion_depth),
+                ShellData::F64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, F64, max_recursion_depth),
+                ShellData::I8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I8, max_recursion_depth),
+                ShellData::I16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I16, max_recursion_depth),
+                ShellData::I32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, I32, max_recursion_depth),
+                ShellData::I64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, I64, max_recursion_depth),
+                ShellData::U8(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U8, max_recursion_depth),
+                ShellData::U16(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U16, max_recursion_depth),
+                ShellData::U32(items) => st_new_vector_arm!(items, euclidean, f32, Euclidean, U32, max_recursion_depth),
+                ShellData::U64(items) => st_new_vector_arm!(items, euclidean, f64, Euclidean, U64, max_recursion_depth),
             },
             Metric::Cosine => match inp_data {
                 ShellData::String(_) => Err("Cosine distance cannot be used for string data".to_string()),
-                ShellData::F32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, F32, iterative_partition),
-                ShellData::F64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, F64, iterative_partition),
-                ShellData::I8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I8, iterative_partition),
-                ShellData::I16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I16, iterative_partition),
-                ShellData::I32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I32, iterative_partition),
-                ShellData::I64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, I64, iterative_partition),
-                ShellData::U8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U8, iterative_partition),
-                ShellData::U16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U16, iterative_partition),
-                ShellData::U32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U32, iterative_partition),
-                ShellData::U64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, U64, iterative_partition),
+                ShellData::F32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, F32, max_recursion_depth),
+                ShellData::F64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, F64, max_recursion_depth),
+                ShellData::I8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I8, max_recursion_depth),
+                ShellData::I16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I16, max_recursion_depth),
+                ShellData::I32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, I32, max_recursion_depth),
+                ShellData::I64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, I64, max_recursion_depth),
+                ShellData::U8(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U8, max_recursion_depth),
+                ShellData::U16(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U16, max_recursion_depth),
+                ShellData::U32(items) => st_new_vector_arm!(items, cosine, f32, Cosine, U32, max_recursion_depth),
+                ShellData::U64(items) => st_new_vector_arm!(items, cosine, f64, Cosine, U64, max_recursion_depth),
             },
         }
     }
@@ -339,7 +339,7 @@ where
     let mut all_results = SearchResults { results: Vec::new() };
 
     for (i, query) in queries.iter().enumerate() {
-        println!("Processing query {i}");
+        ftlog::info!("Processing query {i}");
 
         let mut query_result = QueryResult {
             query_index: i,
@@ -349,7 +349,7 @@ where
         for alg in algs {
             let alg = alg.get()?;
             let result = alg.search(tree, query);
-            println!("Result {}: {result:?}", alg.name());
+            ftlog::info!("Result {}: {result:?}", alg.name());
 
             // Convert result to f64 for serialization consistency
             let neighbors: Vec<(usize, f64)> = result.into_iter().map(|(idx, dist)| (idx, dist.to_f64().unwrap())).collect();

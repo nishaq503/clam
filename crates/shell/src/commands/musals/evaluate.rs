@@ -13,7 +13,7 @@ pub fn evaluate_msa<P: AsRef<Path>>(
 ) -> Result<(), String> {
     let out_path = out_path.as_ref();
 
-    println!("Output path: {out_path:?}");
+    ftlog::info!("Output path: {out_path:?}");
     let out_dir = out_path.parent().ok_or_else(|| "Output path must have a parent directory.".to_string())?;
     if !out_dir.exists() {
         std::fs::create_dir_all(out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
@@ -30,7 +30,7 @@ pub fn evaluate_msa<P: AsRef<Path>>(
         .ok_or_else(|| "Output path must have a file extension.".to_string())?;
 
     let (tree, tree_path) = ShellTree::read_from(tree_dir)?;
-    println!("Read tree from {tree_path:?}.");
+    ftlog::info!("Read tree from {tree_path:?}.");
 
     let tree = match tree {
         ShellTree::Levenshtein(tree) => tree,

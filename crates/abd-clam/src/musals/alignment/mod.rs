@@ -68,7 +68,7 @@ impl<S: Sequence> Msa<S> {
         T: DistanceValue,
     {
         if let Some((children, _)) = &cluster.children {
-            ftlog::debug!("Aligning parent cluster with {} sequences", cluster.cardinality());
+            ftlog::info!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
 
             let mut children = children.iter().map(|child| Self::from_cluster(child, tree, cost_matrix)).collect::<Vec<_>>();
 
@@ -77,9 +77,18 @@ impl<S: Sequence> Msa<S> {
                 bottom = bottom.merge(prev, cost_matrix);
             }
 
-            bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix)
+            let bottom = bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix);
+
+            ftlog::info!(
+                "Finished aligning parent cluster at depth {} with {} sequences to {} width",
+                cluster.depth,
+                cluster.cardinality(),
+                bottom.len()
+            );
+
+            bottom
         } else {
-            ftlog::debug!("Aligning leaf cluster with {} sequences", cluster.cardinality());
+            ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
 
             let mut items = tree.items[cluster.all_items_indices()]
                 .iter()
@@ -90,6 +99,13 @@ impl<S: Sequence> Msa<S> {
             while let Some(prev) = items.pop() {
                 bottom = bottom.merge(prev, cost_matrix);
             }
+
+            ftlog::info!(
+                "Finished aligning leaf cluster at depth {} with {} sequences to {} width",
+                cluster.depth,
+                cluster.cardinality(),
+                bottom.len()
+            );
 
             bottom
         }
@@ -125,7 +141,11 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         M: Send + Sync,
     {
         if let Some((children, _)) = &cluster.children {
-            ftlog::debug!("Aligning parent cluster with {} sequences in parallel", cluster.cardinality());
+            ftlog::info!(
+                "Aligning parent cluster at depth {} with {} sequences in parallel",
+                cluster.depth,
+                cluster.cardinality()
+            );
 
             let mut children = children
                 .par_iter()
@@ -137,9 +157,22 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                 bottom = bottom.par_merge(prev, cost_matrix);
             }
 
-            bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix)
+            let bottom = bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix);
+
+            ftlog::info!(
+                "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
+                cluster.depth,
+                cluster.cardinality(),
+                bottom.len()
+            );
+
+            bottom
         } else {
-            ftlog::debug!("Aligning leaf cluster with {} sequences in parallel", cluster.cardinality());
+            ftlog::info!(
+                "Aligning leaf cluster at depth {} with {} sequences in parallel",
+                cluster.depth,
+                cluster.cardinality()
+            );
 
             let mut items = tree.items[cluster.all_items_indices()]
                 .par_iter()
@@ -150,6 +183,13 @@ impl<S: Sequence + Send + Sync> Msa<S> {
             while let Some(prev) = items.pop() {
                 bottom = bottom.par_merge(prev, cost_matrix);
             }
+
+            ftlog::info!(
+                "Finished aligning leaf cluster at depth {} with {} sequences to {} width in parallel",
+                cluster.depth,
+                cluster.cardinality(),
+                bottom.len()
+            );
 
             bottom
         }
