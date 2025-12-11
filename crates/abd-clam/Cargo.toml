@@ -32,9 +32,9 @@ workspace = true
 num-traits = { workspace = true, features = ["libm"] }
 rayon = { workspace = true }
 rand = { workspace = true }
+ftlog = { workspace = true }
 profi = { workspace = true, default-features = false, features = ["rayon"] }
 serde = { workspace = true, features = ["derive"], optional = true }
-# bitcode = { workspace = true, features = ["derive"], optional = true }
 databuf = { workspace = true, optional = true }
 csv = { workspace = true, optional = true }
 num = { workspace = true, optional = true }
@@ -65,8 +65,6 @@ serde = ["dep:serde", "dep:databuf", "dep:csv"]
 musals = ["dep:num", "dep:bytecount"]
 all = ["serde", "musals"]
 profile = ["profi/enable"]
-# musals = ["dep:stringzilla"]
-# disk-io = ["dep:flate2"]
 # chaoda = ["dep:smartcore"]
 # mbed = ["chaoda", "dep:slotmap"]
 

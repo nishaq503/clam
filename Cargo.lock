@@ -11,6 +11,7 @@ dependencies = [
  "csv",
  "databuf",
  "distances",
+ "ftlog",
  "ndarray",
  "ndarray-npy",
  "num",

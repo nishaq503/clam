@@ -51,8 +51,15 @@ impl<S: Sequence> Msa<S> {
     where
         T: DistanceValue,
     {
+        ftlog::info!("Creating MSA from tree with {} sequences", tree.cardinality());
+
         let columnar = Self::from_cluster(&tree.root, tree, cost_matrix);
-        Self(columnar.into_rows(true))
+        ftlog::info!("Finished creating Columnar MSA with {} columns", columnar.len());
+
+        let msa = columnar.into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
+
+        Self(msa)
     }
 
     /// Recursively creates an MSA from a Cluster.
@@ -65,6 +72,8 @@ impl<S: Sequence> Msa<S> {
         T: DistanceValue,
     {
         if let Some((children, _)) = &cluster.children {
+            ftlog::debug!("Aligning parent cluster with {} sequences", cluster.cardinality());
+
             let mut children = children
                 .iter()
                 .map(|child| Self::from_cluster(child, tree, cost_matrix))
@@ -79,6 +88,8 @@ impl<S: Sequence> Msa<S> {
 
             bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix)
         } else {
+            ftlog::debug!("Aligning leaf cluster with {} sequences", cluster.cardinality());
+
             let mut items = tree.items[cluster.all_items_indices()]
                 .iter()
                 .map(|(_, seq)| Columnar::from_row(seq))
@@ -105,8 +116,21 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         A: Send + Sync,
         M: Send + Sync,
     {
+        ftlog::info!(
+            "Creating MSA from tree with {} sequences in parallel",
+            tree.cardinality()
+        );
+
         let columnar = Self::par_from_cluster(&tree.root, tree, cost_matrix);
-        Self(columnar.par_into_rows(true))
+        ftlog::info!(
+            "Finished creating Columnar MSA with {} columns in parallel",
+            columnar.len()
+        );
+
+        let msa = columnar.par_into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
+
+        Self(msa)
     }
 
     /// Parallel version of [`Self::from_cluster`].
@@ -122,6 +146,11 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         M: Send + Sync,
     {
         if let Some((children, _)) = &cluster.children {
+            ftlog::debug!(
+                "Aligning parent cluster with {} sequences in parallel",
+                cluster.cardinality()
+            );
+
             let mut children = children
                 .par_iter()
                 .map(|child| Self::par_from_cluster(child, tree, cost_matrix))
@@ -136,6 +165,11 @@ impl<S: Sequence + Send + Sync> Msa<S> {
 
             bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix)
         } else {
+            ftlog::debug!(
+                "Aligning leaf cluster with {} sequences in parallel",
+                cluster.cardinality()
+            );
+
             let mut items = tree.items[cluster.all_items_indices()]
                 .par_iter()
                 .map(|(_, seq)| Columnar::from_row(seq))

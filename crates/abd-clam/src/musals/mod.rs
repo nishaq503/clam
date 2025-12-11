@@ -1,5 +1,9 @@
 //! Multiple Sequence Alignment At Scale (`MuSAlS`) with CLAM.
 
+use rayon::prelude::*;
+
+use crate::{DistanceValue, Tree};
+
 mod alignment;
 mod quality_metrics;
 
@@ -12,10 +16,6 @@ pub use quality_metrics::{
 use alignment::Msa;
 use quality_metrics::MsaQuality;
 
-use rayon::prelude::*;
-
-use crate::{DistanceValue, Tree};
-
 impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
 where
     S: Sequence,
@@ -23,6 +23,8 @@ where
 {
     /// Returns a new tree containing the multiple sequence alignment of the sequences in the original tree.
     pub fn into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
+
         let msa = Msa::from_tree(&self, cost_matrix);
 
         self.items = self

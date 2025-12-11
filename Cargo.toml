@@ -48,7 +48,6 @@ rayon = "1.11"
 rand = "0.9"
 profi = { version = "0.1.2", default-features = false }
 serde = "1.0"
-# bitcode = "0.5"
 databuf = "0.5"
 libm = "0.2.14"
 num-integer = "0.1"

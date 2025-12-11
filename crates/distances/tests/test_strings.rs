@@ -1,12 +1,14 @@
 #![allow(missing_docs)]
 
+use rand::prelude::*;
 use stringzilla::szs::{DeviceScope, LevenshteinDistances};
 
 #[test]
 fn test_levenshtein() -> Result<(), String> {
     for d in 2..=4 {
         let len = 10_usize.pow(d);
-        let vecs = symagen::random_data::random_string(2, len, len, "ATCGN", 42);
+        let mut rng = StdRng::seed_from_u64(42);
+        let vecs = symagen::random_data::random_string(2, len, len, "ATCGN", &mut rng);
         let (x, y) = (&vecs[0], &vecs[1]);
 
         let dist = distances::strings::levenshtein::<usize>(x, y);

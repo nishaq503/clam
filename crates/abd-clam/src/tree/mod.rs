@@ -237,8 +237,14 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
+        ftlog::info!("Creating tree with {} items using recursive partitioning", items.len());
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator);
+
+        ftlog::info!(
+            "Finished creating tree with {} items with recursive partitioning",
+            items.len()
+        );
 
         Ok(Self { items, root, metric })
     }
@@ -270,8 +276,14 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
+        ftlog::info!("Creating tree with {} items using iterative partitioning", items.len());
 
         let root = Cluster::new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
+
+        ftlog::info!(
+            "Finished creating tree with {} items using iterative partitioning",
+            items.len()
+        );
 
         Ok(Self { items, root, metric })
     }
@@ -327,8 +339,17 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
+        ftlog::info!(
+            "Creating tree with {} items using parallel recursive partitioning",
+            items.len()
+        );
 
         let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator);
+
+        ftlog::info!(
+            "Finished creating tree with {} items using parallel recursive partitioning",
+            items.len()
+        );
 
         Ok(Self { items, root, metric })
     }
@@ -352,8 +373,17 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
+        ftlog::info!(
+            "Creating tree with {} items using parallel iterative partitioning",
+            items.len()
+        );
 
         let root = Cluster::par_new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
+
+        ftlog::info!(
+            "Finished creating tree with {} items using parallel iterative partitioning",
+            items.len()
+        );
 
         Ok(Self { items, root, metric })
     }
