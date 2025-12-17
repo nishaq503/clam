@@ -1,4 +1,4 @@
-//! Strategy for partitioning a `Cluster` into child clusters.
+//! How a `Cluster` is partitioned into child clusters.
 
 #![allow(clippy::derivable_impls)]
 
@@ -6,15 +6,23 @@ use crate::{DistanceValue, utils::MinItem};
 
 use super::Cluster;
 
-/// Strategy for partitioning a `Cluster` into child clusters.
+/// How a `Cluster` is partitioned into child clusters.
 ///
-/// Our implementation of the hierarchical clustering algorithm may evolve over time. For now the strategy is used as follows:
-///   - The `partition` method (and its variants) will first check the `predicate` to see if the cluster should be partitioned. If the `predicate` is satisfied,
-///     we proceed to partition the cluster; otherwise, we leave the cluster as a leaf.
-///   - If the `branching_factor` is not `Unbounded`, we use the approach described in the [`BranchingFactor`] enum to determine how many children to create.
-///   - If the `branching_factor` is `Unbounded`, we use the approach described in the [`SpanReductionFactor`] enum to determine how many children to create.
+/// The default `PartitionStrategy` will partition any cluster with more than one non-center item to make a binary tree whose leaves are all clusters with too
+/// few items to be partitioned any further.
 ///
-/// The default `PartitionStrategy` will partition any cluster with more than one non-center item, and make a binary tree.
+/// The strategy is controlled by the `predicate`, `branching_factor`, and `span_reduction` fields. It proceeds as follows:
+///   - Given some items, we first create a Cluster as a leaf.
+///   - We then evaluate the `predicate` to determine whether the cluster should be partitioned. If the `predicate` is satisfied, we proceed to partition the
+///     cluster; otherwise, we leave the cluster as a leaf.
+///   - Next, if the `branching_factor` is not `Unbounded`, we use the the [`BranchingFactor`] enum to determine how many children to create.
+///   - Otherwise, if the `branching_factor` is `Unbounded`, we use the [`SpanReductionFactor`] enum to determine how many children to create.
+///
+/// Note that our implementation of `PartitionStrategy` may change in the future to improve performance or to add new features.
+///
+/// # Type Parameters
+///
+/// - `P`: A function: `&Cluster<T, A> -> bool` that determines whether a cluster should be partitioned into child clusters.
 #[must_use]
 #[derive(Debug, Clone, Copy)]
 pub struct PartitionStrategy<P> {
@@ -135,19 +143,20 @@ impl<T, A> From<String> for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     }
 }
 
-/// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the `SpanReductionFactor`).
+/// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the [`SpanReductionFactor`]).
 #[must_use]
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub enum BranchingFactor {
     /// Each cluster can have zero or `n` children. If `n < 2`, it is treated as 2.
     Fixed(usize),
-    /// A cluster with `n` non-center items can have between 2 and `ceil(log n)` children.
+    /// A cluster with `n` non-center items will have `ceil(log n)` children.
     Logarithmic,
-    /// The branching factor is adaptively chosen (with a minimum of 2 and a maximum of the given value) to minimize the expected ratio of the size of the
-    /// subtree to the cardinality of the cluster.
+    /// We use some heuristics from our analysis of the expected ratio of the size of the subtree to the cardinality of the cluster, to select a branching
+    /// factor that minimizes the expected size of the subtree. This branching factor is recomputed for each cluster based on the number of non-center items in
+    /// that cluster.
     Adaptive(usize),
-    /// The branching factor is effectively unbounded; the actual branching factor will be controlled by the `SpanReductionFactor` (SRF).
+    /// The branching factor is effectively unbounded and will be controlled by the [`SpanReductionFactor`] (SRF).
     Unbounded,
 }
 

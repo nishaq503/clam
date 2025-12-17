@@ -12,7 +12,7 @@ use super::{
     pairwise_scores::{apply_pairwise, par_apply_pairwise},
 };
 
-/// The scores of pairwise alignments in the MSA.
+/// The scores of pairwise alignments in the MSA, assuming affine gap penalties.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct WeightedPairwiseScores {
     /// Mean

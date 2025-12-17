@@ -9,10 +9,11 @@ mod columnar;
 mod cost_matrix;
 mod sequence;
 
+pub use alignment_ops::Direction;
 pub use cost_matrix::CostMatrix;
 pub use sequence::Sequence;
 
-use alignment_ops::{Direction, Edit, Edits};
+use alignment_ops::{Edit, Edits};
 use columnar::Columnar;
 
 /// A multiple sequence alignment (MSA) of sequences of type `S`.

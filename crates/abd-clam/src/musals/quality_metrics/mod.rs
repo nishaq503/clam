@@ -18,7 +18,10 @@ pub use mismatch_fraction::MismatchFraction;
 pub use pairwise_scores::PairwiseScores;
 pub use weighted_pairwise_scores::WeightedPairwiseScores;
 
-/// An enumeration of the quality metrics that can be computed for an MSA.
+/// Quality metrics that may be computed for an MSA.
+///
+/// Once computed, these will return a [`QualityMetricResult`].
+#[non_exhaustive]
 pub enum QualityMetric {
     /// The mean fraction of gaps in the sequences of the MSA.
     GapFraction,
@@ -32,7 +35,10 @@ pub enum QualityMetric {
     DistanceDistortion,
 }
 
-/// An enumeration of the quality metrics that have been computed for an MSA.
+/// Quality metrics that have been computed for an MSA.
+///
+/// Each variant has a name and description, and provides methods to access the mean, standard deviation, minimum, and maximum values of the evaluated metric.
+#[non_exhaustive]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum QualityMetricResult {
     /// The mean fraction of gaps in the sequences of the MSA.

@@ -1,5 +1,16 @@
-//! Redesign of CLAM
-// #![doc = include_str!("../README.md")]
+//! Clustering, Learning, and Approximation with Manifolds.
+//!
+//! We provide functionality for clustering, search, multiple sequence alignment, anomaly detection, compression, compressive search, dimension reduction, and
+//! more. All algorithms are designed to work efficiently with large high-dimensional datasets under arbitrary distance functions.
+//!
+//! # Modules and Features
+//!
+//! - [`Tree`]: Hierarchical clustering algorithms and data structures.
+//! - [`cakes`]: Search (k-NN, range search) algorithms.
+//! - [`musals`]: Multiple sequence alignment of genomic and protein sequences. Use the `musals` feature to enable this module.
+//! - `chaoda`: Anomaly detection algorithms using clustering trees and graphs. Use the `chaoda` feature to enable this module. WIP.
+//! - `codec`: Compression and compressive search algorithms. Use the `codec` feature to enable this module. WIP.
+//! - `mbed`: Dimension reduction algorithms. Use the `mbed` feature to enable this module. WIP.
 
 use core::{
     fmt::{Debug, Display},
@@ -16,6 +27,8 @@ pub use tree::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor,
 pub mod musals;
 
 /// A trait for types that can be used as distance values in clustering algorithms.
+///
+/// We provide a blanket implementation for all types that satisfy the trait bounds. This includes all primitive numeric types.
 #[must_use]
 pub trait DistanceValue:
     PartialEq
@@ -64,30 +77,8 @@ impl<T> DistanceValue for T where
 }
 
 /// A trait for types that can be used as floating-point distance values in clustering algorithms.
+///
+/// We provide a blanket implementation for all types that satisfy the trait bounds. This includes all primitive float types.
 pub trait FloatDistanceValue: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
 
 impl<T> FloatDistanceValue for T where T: DistanceValue + num_traits::Float + num_traits::FloatConst + num_traits::Pow<Self, Output = Self> {}
-
-// /// A trait for types that can be used as floating-point distance values in
-// /// clustering algorithms.
-// pub trait FloatDistanceValue: DistanceValue + num::Float + num::traits::FloatConst {
-//     /// The gauss error function.
-//     ///
-//     /// The `libm` crate is used to provide the implementations for `f32` and `f64`.
-//     #[must_use]
-//     fn erf(self) -> Self;
-// }
-
-// /// Implementation of `FloatDistanceValue` for `f32`
-// impl FloatDistanceValue for f32 {
-//     fn erf(self) -> Self {
-//         libm::erff(self)
-//     }
-// }
-
-// /// Implementation of `FloatDistanceValue` for `f64`
-// impl FloatDistanceValue for f64 {
-//     fn erf(self) -> Self {
-//         libm::erf(self)
-//     }
-// }

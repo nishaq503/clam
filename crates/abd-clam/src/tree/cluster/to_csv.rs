@@ -9,6 +9,7 @@ use super::Cluster;
 /// The number of features to include in the CSV export.
 const NUM_CLUSTER_FEATURES: usize = 7;
 
+/// These methods, gated behind the `serde` feature, allow exporting the `Cluster` and its subtree to a CSV file.
 impl<T, A> Cluster<T, A>
 where
     T: DistanceValue,

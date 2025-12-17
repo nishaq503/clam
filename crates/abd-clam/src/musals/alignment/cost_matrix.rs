@@ -12,18 +12,12 @@ const NUM_CHARS: usize = 256;
 
 /// A substitution matrix for the Needleman-Wunsch aligner.
 ///
-/// This matrix defines the costs of substituting one character for another,
-/// as well as the costs of opening and extending gaps.
+/// This matrix defines the costs of substituting one character for another, as well as the costs of opening and extending gaps.
 ///
-/// The default matrix sets all costs to 1 and can be used with genomic or
-/// proteomic sequences. It is possible to fully customiuze the matrix using the
-/// provided methods. We already provide a small number of  specialized
-/// matrices. These include:
-///   - Extended IUPAC: From the [`CostMatrix::extended_iupac`](CostMatrix::extended_iupac)
-///     method, a matrix that uses the extended IUPAC nucleotide code.
-///   - BLOSUM62: From the [`CostMatrix::blosum62`](CostMatrix::blosum62)
-///     method, a matrix that uses the BLOSUM62 substitution scores for amino-
-///     acid sequences.
+/// The default matrix sets all costs to 1 and can be used with genomic or protein sequences. It is possible to fully customize the matrix using the provided
+/// methods. We already provide a small number of  specialized matrices. These include:
+///   - Extended IUPAC: From the [`CostMatrix::extended_iupac`](CostMatrix::extended_iupac) method, a matrix that uses the extended IUPAC nucleotide code.
+///   - BLOSUM62: From the [`CostMatrix::blosum62`](CostMatrix::blosum62) method, a matrix that uses the BLOSUM62 substitution scores for amino-acid sequences.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(databuf::Encode, databuf::Decode))]
 #[must_use]
@@ -77,8 +71,7 @@ impl<T: DistanceValue> CostMatrix<T> {
     ///
     /// # Arguments
     ///
-    /// * `gap_open`: The factor by which it is more expensive to open a gap
-    ///   than to extend an existing gap. This defaults to 10.
+    /// * `gap_open`: The factor by which it is more expensive to open a gap than to extend an existing gap. This defaults to 10.
     pub fn default_affine(gap_open: Option<T>) -> Self {
         let gap_open = gap_open.unwrap_or_else(|| T::from_i8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types")));
         Self::new(T::one(), gap_open, T::one())
@@ -158,8 +151,7 @@ impl<T: DistanceValue> CostMatrix<T> {
         self.gap_ext
     }
 
-    /// Linearly increase all costs in the matrix so that the minimum cost is
-    /// zero and all non-zero costs are positive.
+    /// Shift all costs up or down so that the minimum cost is zero.
     pub fn normalize(self) -> Self {
         let shift = self.sub_matrix.iter().flatten().fold(T::max_value(), |a, &b| if a < b { a } else { b });
 
@@ -177,22 +169,18 @@ impl<T: DistanceValue> CostMatrix<T> {
 }
 
 impl<T: DistanceValue> CostMatrix<T> {
-    /// A substitution matrix for the Needleman-Wunsch aligner using the
-    /// extendedIUPAC alphabet for nucleotides.
+    /// A substitution matrix for the Needleman-Wunsch aligner using the extended IUPAC alphabet for nucleotides.
     ///
-    /// See [here](https://www.bioinformatics.org/sms/iupac.html) for an
-    /// explanation of the IUPAC codes.
+    /// See [here](https://www.bioinformatics.org/sms/iupac.html) for a non-explanation of the IUPAC codes.
     ///
     /// # Arguments
     ///
-    /// * `gap_open`: The factor by which it is more expensive to open a gap
-    ///   than to extend an existing gap. This defaults to 10.
+    /// * `gap_open`: The factor by which it is more expensive to open a gap than to extend an existing gap. This defaults to 10.
     pub fn extended_iupac(gap_open: Option<T>) -> Self {
         let gap_open = gap_open.unwrap_or_else(|| T::from_u8(10).unwrap_or_else(|| unreachable!("T::from_i8(10) should be valid for all DistanceValue types")));
 
-        // For each pair of IUPAC characters, the cost is 1 - n / m, where m is
-        // the number possible pairs of nucleotides that can be represented by
-        // the IUPAC characters, and n is the number of matching pairs.
+        // For each pair of IUPAC characters, the cost is 1 - n / m, where m is the number possible pairs of nucleotides that can be represented by the IUPAC
+        // characters, and n is the number of matching pairs.
         #[rustfmt::skip]
         let costs = vec![
             ('A', 'R', 1_u8, 2_u8), ('C', 'Y', 1, 2), ('G', 'R', 1, 2), ('T', 'Y', 1, 2),
@@ -233,8 +221,7 @@ impl<T: DistanceValue> CostMatrix<T> {
                                                                                          ('N', 'N', 1, 4),
         ];
 
-        // Calculate the least common multiple of the denominators so we can
-        // scale the costs to integers.
+        // Calculate the least common multiple of the denominators so we can scale the costs to integers.
         let lcm = costs
             .iter()
             .map(|&(_, _, _, m)| m)
@@ -250,8 +237,7 @@ impl<T: DistanceValue> CostMatrix<T> {
             .chain(costs.iter().filter(|&&(_, b, _, _)| b == 'T').map(|&(a, _, n, m)| (a, 'U', n, m)))
             .collect::<Vec<_>>();
 
-        // The initial matrix with the default costs, except for gaps which are
-        // interchangeable.
+        // The initial matrix with the default costs, except for gaps which are interchangeable.
         let matrix = Self::default()
             .with_sub_cost(b'-', b'.', T::zero())
             .with_sub_cost(b'.', b'-', T::zero())
@@ -272,8 +258,7 @@ impl<T: DistanceValue> CostMatrix<T> {
                 )
             })
             .flat_map(|(a, b, cost)| {
-                // Add the costs for the upper and lower case versions of the
-                // characters.
+                // Add the costs for the upper and lower case versions of the characters.
                 [
                     (a, b, cost),
                     (a.to_ascii_lowercase(), b, cost),
@@ -292,12 +277,11 @@ impl<T: DistanceValue> CostMatrix<T> {
 
     /// The BLOSUM62 substitution matrix for proteins.
     ///
-    /// See [here](https://en.wikipedia.org/wiki/BLOSUM) for more information.
+    /// See [here](https://en.wikipedia.org/wiki/BLOSUM) if you trust Wikipedia.
     ///
     /// # Arguments
     ///
-    /// * `gap_open`: The factor by which it is more expensive to open a gap
-    ///   than to extend an existing gap. This defaults to 10.
+    /// * `gap_open`: The factor by which it is more expensive to open a gap than to extend an existing gap. This defaults to 10.
     pub fn blosum62(gap_open: Option<T>) -> Self {
         let gap_open = gap_open.unwrap_or_else(|| T::from_u8(10).unwrap_or_else(|| unreachable!("Every distance type should be large enough to hold i8")));
 

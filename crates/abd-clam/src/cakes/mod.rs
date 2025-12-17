@@ -84,7 +84,7 @@ where
         queries.par_iter().map(|query| self.search(tree, query)).collect()
     }
 
-    /// Parallel batched version of [`Search::par_search`].
+    /// Parallel batched version of [`Search::batch_search`].
     fn par_batch_par_search(&self, tree: &Tree<Id, I, T, A, M>, queries: &[I]) -> Vec<Vec<(usize, T)>> {
         queries.par_iter().map(|query| self.par_search(tree, query)).collect()
     }

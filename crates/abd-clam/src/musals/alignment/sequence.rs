@@ -7,7 +7,48 @@ use super::{CostMatrix, Direction, Edit, Edits};
 /// A table of edit distances between prefixes of two `Sequence`s.
 type DpTable<T> = Vec<Vec<(T, Direction)>>;
 
-/// A trait for sequence types used in `MuSAlS`.
+/// Types that implement `Sequence` can be used in the `MuSAlS` algorithm.
+///
+/// Given some simple methods for creating and modifying sequences, the `Sequence` trait provides methods for using the Needleman-Wunsch algorithm to align
+/// sequences and to compute the edit distances between them. It also provides methods for inserting gaps into sequences and for applying a series of edits to a
+/// sequence to facilitate the alignment process.
+///
+/// # Examples
+///
+/// The `Sequence` trait can easily be implemented for types like `String` and `Vec<u8>`. We use the following implementation in our paper for `MuSAlS`:
+///
+/// ```rust
+/// use abd_clam::musals::Sequence;
+///
+/// impl Sequence for String {
+///    const GAP: u8 = b'-';
+///
+///    fn from_vec(v: Vec<u8>) -> Self {
+///        Self::from_utf8(v).expect("Invalid UTF-8 sequence")
+///    }
+///
+///    fn from_string(s: String) -> Self {
+///        s
+///    }
+///
+///    fn append(self, other: Self) -> Self {
+///        let mut s = String::with_capacity(self.len() + other.len());
+///        s.push_str(&self);
+///        s.push_str(&other);
+///        s
+///    }
+///
+///    fn pre_pend(mut self, byte: u8) -> Self {
+///        self.insert(0, byte as char);
+///        self
+///    }
+///
+///    fn post_pend(mut self, byte: u8) -> Self {
+///        self.push(byte as char);
+///        self
+///    }
+/// }
+/// ```
 #[must_use]
 pub trait Sequence: AsRef<[u8]> + Sized + Clone {
     /// The gap character for the sequence type.

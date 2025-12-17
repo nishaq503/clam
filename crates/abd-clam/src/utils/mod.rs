@@ -1,4 +1,4 @@
-//! Utility functions for the crate.
+//! Utility functions for the crate. Intended for private use, but made public for testing.
 
 use rayon::prelude::*;
 
@@ -18,32 +18,9 @@ pub const PHI_F64: f64 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f64;
 #[allow(clippy::excessive_precision)]
 pub const PHI_F32: f32 = 1.618_033_988_749_894_848_204_586_834_365_638_118_f32;
 
-// /// Estimates the Local Fractal Dimension (LFD) using the distances of items from a center, and the maximum value among those distances.
-// ///
-// /// This uses the formula `log2(N / n)`, where `N` is `distances.len() + 1` (the total number of items including the center), and `n` is the number of distances
-// /// that are less than or equal to `radius / 2` plus one (to account for the center).
-// ///
-// /// If the radius is zero or if there are no items within half the radius, the LFD is, by definition, `1.0`.
-// #[expect(clippy::cast_precision_loss)]
-// pub fn lfd_estimate<T: DistanceValue>(distances: &[T], radius: T) -> f64 {
-//     let half_radius = radius.half();
-//     if distances.len() < 2 || half_radius.is_zero() {
-//         // In all three of the following cases, we define LFD to be 1.0:
-//         //   - No non-center items (singleton cluster)
-//         //   - One non-center item (cluster with two items)
-//         //   - Radius is zero or too small to be represented as a non-zero value
-//         1.0
-//     } else {
-//         // The cluster has at least 2 non-center items, so LFD computation is meaningful.
-//         let half_count = distances.iter().filter(|&&d| d <= half_radius).count();
-//         ((distances.len() + 1) as f64 / ((half_count + 1) as f64)).log2()
-//     }
-// }
-
 /// Returns the index of the geometric median of the given items.
 ///
-/// The geometric median is the item that minimizes the sum of distances to
-/// all other items in the slice.
+/// The geometric median is the item that minimizes the sum of distances to all other items in the slice.
 ///
 /// The user must ensure that the items slice is not empty.
 pub fn geometric_median<I, Id, T: DistanceValue, M: Fn(&I, &I) -> T>(items: &[(Id, I)], metric: &M) -> usize {

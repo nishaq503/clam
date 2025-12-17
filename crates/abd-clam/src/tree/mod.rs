@@ -10,7 +10,17 @@ mod cluster;
 
 pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, lfd_estimate};
 
-/// A tree structure used in CLAM for organizing items based on a given metric.
+/// The `Tree` struct is the main data structure used in CLAM.
+///
+/// If contains the root `Cluster`, the items stored in it, and the metric used to compute distances between items.
+///
+/// # Type Parameters
+///
+/// - `Id`: The type of the identifier for each item in the tree.
+/// - `I`: The type of the items stored in the tree.
+/// - `T`: The type of the distance values used in the tree.
+/// - `A`: The type of any annotations that can be added to clusters.
+/// - `M`: The type of the metric function used to compute distances between items.
 #[must_use]
 #[derive(Clone, Debug)]
 pub struct Tree<Id, I, T, A, M> {
@@ -22,18 +32,17 @@ pub struct Tree<Id, I, T, A, M> {
     pub(crate) metric: M,
 }
 
-/// Minimal constructor implementations for `Tree` with `usize` identifiers and no annotations.
+/// Minimal constructors for `Tree`.
+///
+/// - The identifier type is set to `usize` and will be the index of the item in the original vector.
+/// - The annotation type is set to `()`, meaning that no annotations are stored in the tree.
+/// - The default [`PartitionStrategy`](PartitionStrategy) is used to build a binary tree.
 impl<I, T, M> Tree<usize, I, T, (), M>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
     /// Creates a new `Tree` from the given items and metric.
-    ///
-    /// # Explanation
-    ///
-    /// This is a minimal constructor that assigns sequential integer IDs (starting from 0) to the items. It will also use the default
-    /// [`PartitionStrategy`](PartitionStrategy).
     ///
     /// # Errors
     ///
@@ -166,31 +175,31 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Returns a vector of references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn select_clusters<P>(&self, predicate: P) -> Vec<&Cluster<T, A>>
+    pub fn filter_clusters<P>(&self, predicate: P) -> Vec<&Cluster<T, A>>
     where
         P: Fn(&Cluster<T, A>) -> bool,
     {
-        self.root.select_clusters(&predicate)
+        self.root.filter_clusters(&predicate)
     }
 
     /// Returns a vector of mutable references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn select_clusters_mut<P>(&mut self, predicate: P) -> Vec<&mut Cluster<T, A>>
+    pub fn filter_clusters_mut<P>(&mut self, predicate: P) -> Vec<&mut Cluster<T, A>>
     where
         P: Fn(&Cluster<T, A>) -> bool,
     {
-        self.root.select_clusters_mut(&predicate)
+        self.root.filter_clusters_mut(&predicate)
     }
 
     /// Returns a vector of references to all leaf clusters in the tree.
     pub fn leaf_clusters(&self) -> Vec<&Cluster<T, A>> {
-        self.select_clusters(Cluster::is_leaf)
+        self.filter_clusters(Cluster::is_leaf)
     }
 
     /// Returns a vector of mutable references to all leaf clusters in the tree.
     pub fn leaf_clusters_mut(&mut self) -> Vec<&mut Cluster<T, A>> {
-        self.select_clusters_mut(Cluster::is_leaf)
+        self.filter_clusters_mut(Cluster::is_leaf)
     }
 }
 
@@ -206,7 +215,7 @@ where
     ///
     /// * `items` - A vector of tuples, each containing an identifier and an item.
     /// * `metric` - A function that computes the distance between two items.
-    /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
+    /// * `strategy` - A [`PartitionStrategy`] that defines how to partition clusters.
     /// * `annotator` - A function that annotates clusters as they are created.
     ///
     /// # Errors
@@ -369,6 +378,10 @@ where
     }
 }
 
+/// Serialization and deserialization methods for `Tree`, gated by the `serde` feature.
+///
+/// The metric, `M`, is not serialized or deserialized, as it is typically a closure or function pointer. After deserialization, the metric must be provided
+/// again using the [`Tree::with_metric`] method.
 #[cfg(feature = "serde")]
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where

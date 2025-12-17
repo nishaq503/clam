@@ -49,7 +49,7 @@ impl<T, A> Cluster<T, A> {
 
         // Find unfinished leaves that still satisfy the original predicate
         let unfinished_selector = |c: &Self| c.is_leaf() && predicate(c);
-        let mut unfinished_leaves = root.select_clusters_mut(&unfinished_selector);
+        let mut unfinished_leaves = root.filter_clusters_mut(&unfinished_selector);
 
         // Iteratively increase recursion depth and partition unfinished leaves
         let mut step = 1;
@@ -71,7 +71,7 @@ impl<T, A> Cluster<T, A> {
                     // Re-partition the leaf and replace it in the tree
                     *leaf = Self::new(leaf.depth, leaf.center_index, leaf_items, metric, &iterative_strategy, annotator);
                     // Return any new unfinished leaves
-                    leaf.select_clusters_mut(&unfinished_selector)
+                    leaf.filter_clusters_mut(&unfinished_selector)
                 })
                 .collect();
 

@@ -7,12 +7,15 @@ use crate::{DistanceValue, Tree};
 mod alignment;
 mod quality_metrics;
 
-pub use alignment::{CostMatrix, Sequence};
+pub use alignment::{CostMatrix, Direction, Sequence};
 pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, PairwiseScores, QualityMetric, QualityMetricResult, WeightedPairwiseScores};
 
 use alignment::Msa;
 use quality_metrics::MsaQuality;
 
+/// Extension of [`Tree`], gated behind the `musals` feature, providing methods for computing multiple sequence alignments and computing MSA quality metrics.
+///
+/// Note the use of `S` for `Sequence` instead of `I`. See the [`Sequence`] trait documentation for more information.
 impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
 where
     S: Sequence,
@@ -25,6 +28,7 @@ where
         self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
     }
+
     /// Computes all quality metrics for the MSA represented by this tree.
     pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
@@ -40,6 +44,7 @@ where
     }
 }
 
+/// Parallel versions of the MSA methods for the `musals` feature.
 impl<Id, S, T, A, M> Tree<Id, S, T, A, M>
 where
     Id: Send + Sync,

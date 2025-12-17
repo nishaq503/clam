@@ -9,7 +9,25 @@ mod to_csv;
 pub use partition::{lfd_estimate, reorder_items_in_place};
 pub use partition_strategy::{BranchingFactor, PartitionStrategy, SpanReductionFactor};
 
-/// A cluster in the `Tree`.
+use crate::DistanceValue;
+
+/// A `Cluster` is a node in the `Tree` that represents a subset of the items in the `Tree`.
+///
+/// It contains information about the subset including:
+///
+/// - `depth`: The depth of the cluster in the tree, with the root at depth 0.
+/// - `center_index`: The index of the center item in the `items` array of the `Tree`.
+/// - `cardinality`: The number of items in the subtree rooted at this cluster, including the center item.
+/// - `radius`: The distance from the center item to the furthest item in the `Cluster`.
+/// - `lfd`: The Local Fractal Dimension of the `Cluster`.
+/// - `children`: The children of this cluster, if it was partitioned.
+/// - `span`: The distance between the two poles used to partition the cluster, if it was partitioned.
+/// - `annotation`: Optional arbitrary data associated with this cluster.
+///
+/// # Generics
+///
+/// - `T`: The type of the distance values between items.
+/// - `A`: The type of the annotation data associated with this cluster.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", expect(clippy::unsafe_derive_deserialize))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, databuf::Encode, databuf::Decode))]
@@ -89,6 +107,21 @@ where
     }
 }
 
+impl<T, A> Cluster<T, A>
+where
+    T: DistanceValue,
+{
+    /// Returns the distance from the center item to the furthest item in the subtree.
+    pub const fn radius(&self) -> T {
+        self.radius
+    }
+
+    /// Returns true if this cluster is a singleton (i.e., contains exactly one item or has a radius of zero).
+    pub fn is_singleton(&self) -> bool {
+        self.cardinality == 1 || self.radius.is_zero()
+    }
+}
+
 impl<T, A> Cluster<T, A> {
     /// Returns the depth of this cluster in the tree.
     pub const fn depth(&self) -> usize {
@@ -116,25 +149,9 @@ impl<T, A> Cluster<T, A> {
         (self.center_index + 1)..(self.center_index + self.cardinality)
     }
 
-    /// Returns the distance from the center item to the furthest item in the subtree.
-    pub const fn radius(&self) -> T
-    where
-        T: Copy,
-    {
-        self.radius
-    }
-
     /// Returns the Local Fractal Dimension (LFD) of this cluster.
     pub const fn lfd(&self) -> f64 {
         self.lfd
-    }
-
-    /// Returns true if this cluster is a singleton (i.e., contains exactly one item or has a radius of zero).
-    pub fn is_singleton(&self) -> bool
-    where
-        T: num_traits::Zero,
-    {
-        self.cardinality == 1 || self.radius.is_zero()
     }
 
     /// Returns true if this cluster is a leaf (i.e., has no children).
@@ -336,14 +353,14 @@ impl<T, A> Cluster<T, A> {
     /// Returns references to the clusters in the subtree rooted here that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn select_clusters<P>(&self, predicate: &P) -> Vec<&Self>
+    pub fn filter_clusters<P>(&self, predicate: &P) -> Vec<&Self>
     where
         P: Fn(&Self) -> bool,
     {
         if predicate(self) {
             vec![self]
         } else if let Some((children, _)) = &self.children {
-            children.iter().flat_map(|child| child.select_clusters(predicate)).collect()
+            children.iter().flat_map(|child| child.filter_clusters(predicate)).collect()
         } else {
             vec![]
         }
@@ -352,14 +369,14 @@ impl<T, A> Cluster<T, A> {
     /// Returns mutable references to the clusters in the subtree rooted here that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn select_clusters_mut<P>(&mut self, predicate: &P) -> Vec<&mut Self>
+    pub fn filter_clusters_mut<P>(&mut self, predicate: &P) -> Vec<&mut Self>
     where
         P: Fn(&Self) -> bool,
     {
         if predicate(self) {
             vec![self]
         } else if let Some((children, _)) = &mut self.children {
-            children.iter_mut().flat_map(|child| child.select_clusters_mut(predicate)).collect()
+            children.iter_mut().flat_map(|child| child.filter_clusters_mut(predicate)).collect()
         } else {
             vec![]
         }
