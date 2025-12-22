@@ -63,6 +63,22 @@ impl<S: Sequence> Msa<S> {
         Self(msa)
     }
 
+    /// Same as [`Self::from_tree`], avoids stack overflows from deep recursion.
+    pub fn from_tree_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
+    where
+        T: DistanceValue,
+    {
+        ftlog::info!("Creating MSA iteratively from tree with {} sequences", tree.cardinality());
+
+        let columnar = Self::from_cluster_iterative(tree, cost_matrix);
+        ftlog::info!("Finished creating Columnar MSA iteratively with {} columns", columnar.len());
+
+        let msa = columnar.into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
+
+        Self(msa)
+    }
+
     /// Recursively creates an MSA from a Cluster.
     fn from_cluster<Id, T, A, M>(cluster: &Cluster<T, A>, tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
@@ -111,8 +127,77 @@ impl<S: Sequence> Msa<S> {
             bottom
         }
     }
+
+    /// Iteratively creates an MSA from a Cluster.
+    fn from_cluster_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    where
+        T: DistanceValue,
+    {
+        // Post-order traversal stack
+        let mut stack = {
+            let mut stack_1 = vec![&tree.root];
+            let mut stack_2 = Vec::new();
+
+            while let Some(c) = stack_1.pop() {
+                if let Some((children, _)) = &c.children {
+                    stack_1.extend(children.iter());
+                }
+                stack_2.push(c);
+            }
+            stack_2
+        };
+
+        let mut child_alignments = Vec::new();
+        while let Some(c) = stack.pop() {
+            if let Some((children, _)) = &c.children {
+                ftlog::info!("Aligning parent cluster at depth {} with {} sequences", c.depth, c.cardinality());
+
+                let mut n_children = children.len() - 1;
+                let mut bottom: Columnar<S> = child_alignments.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
+                while n_children > 0 {
+                    let prev = child_alignments.pop().unwrap_or_else(|| unreachable!("Not enough child alignments collected"));
+                    bottom = bottom.merge(prev, cost_matrix);
+                    n_children -= 1;
+                }
+
+                bottom = bottom.post_pend_row(&tree.items[c.center_index].1, cost_matrix);
+                ftlog::info!(
+                    "Finished aligning parent cluster at depth {} with {} sequences to {} width",
+                    c.depth,
+                    c.cardinality(),
+                    bottom.len()
+                );
+
+                child_alignments.push(bottom);
+            } else {
+                ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", c.depth, c.cardinality());
+
+                let mut items = tree.items[c.all_items_indices()]
+                    .iter()
+                    .map(|(_, seq)| Columnar::from_row(seq))
+                    .collect::<Vec<_>>();
+
+                let mut bottom = items.pop().unwrap_or_else(|| unreachable!("Leaf cluster is never empty"));
+                while let Some(prev) = items.pop() {
+                    bottom = bottom.merge(prev, cost_matrix);
+                }
+
+                ftlog::info!(
+                    "Finished aligning leaf cluster at depth {} with {} sequences to {} width",
+                    c.depth,
+                    c.cardinality(),
+                    bottom.len()
+                );
+
+                child_alignments.push(bottom);
+            }
+        }
+
+        child_alignments.pop().unwrap_or_else(|| unreachable!("There should be one final alignment"))
+    }
 }
 
+/// Parallel implementations of MSA methods.
 impl<S: Sequence + Send + Sync> Msa<S> {
     /// Parallel version of [`Self::from_tree`].
     pub fn par_from_tree<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
@@ -126,6 +211,25 @@ impl<S: Sequence + Send + Sync> Msa<S> {
 
         let columnar = Self::par_from_cluster(&tree.root, tree, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA with {} columns in parallel", columnar.len());
+
+        let msa = columnar.par_into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
+
+        Self(msa)
+    }
+
+    /// Parallel version of [`Self::from_tree_iterative`].
+    pub fn par_from_tree_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
+    where
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
+        ftlog::info!("Creating MSA iteratively from tree with {} sequences in parallel", tree.cardinality());
+
+        let columnar = Self::par_from_cluster_iterative(tree, cost_matrix);
+        ftlog::info!("Finished creating Columnar MSA iteratively with {} columns in parallel", columnar.len());
 
         let msa = columnar.par_into_rows(true);
         ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
@@ -194,5 +298,78 @@ impl<S: Sequence + Send + Sync> Msa<S> {
 
             bottom
         }
+    }
+
+    /// Iteratively creates an MSA from a Cluster.
+    fn par_from_cluster_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    where
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
+        // Post-order traversal stack
+        let mut stack = {
+            let mut stack_1 = vec![&tree.root];
+            let mut stack_2 = Vec::new();
+
+            while let Some(c) = stack_1.pop() {
+                if let Some((children, _)) = &c.children {
+                    stack_1.extend(children.iter());
+                }
+                stack_2.push(c);
+            }
+            stack_2
+        };
+
+        let mut child_alignments = Vec::new();
+        while let Some(c) = stack.pop() {
+            let partial_alignment = if let Some((children, _)) = &c.children {
+                ftlog::info!("Aligning parent cluster at depth {} with {} sequences in parallel", c.depth, c.cardinality());
+
+                let mut n_children = children.len() - 1;
+                let mut bottom: Columnar<S> = child_alignments.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
+                while n_children > 0 {
+                    let prev = child_alignments.pop().unwrap_or_else(|| unreachable!("Not enough child alignments collected"));
+                    bottom = bottom.par_merge(prev, cost_matrix);
+                    n_children -= 1;
+                }
+
+                bottom = bottom.post_pend_row(&tree.items[c.center_index].1, cost_matrix);
+                ftlog::info!(
+                    "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
+                    c.depth,
+                    c.cardinality(),
+                    bottom.len()
+                );
+
+                bottom
+            } else {
+                ftlog::info!("Aligning leaf cluster at depth {} with {} sequences in parallel", c.depth, c.cardinality());
+
+                let mut items = tree.items[c.all_items_indices()]
+                    .par_iter()
+                    .map(|(_, seq)| Columnar::from_row(seq))
+                    .collect::<Vec<_>>();
+
+                let mut bottom = items.pop().unwrap_or_else(|| unreachable!("Leaf cluster is never empty"));
+                while let Some(prev) = items.pop() {
+                    bottom = bottom.par_merge(prev, cost_matrix);
+                }
+
+                ftlog::info!(
+                    "Finished aligning leaf cluster at depth {} with {} sequences to {} width in parallel",
+                    c.depth,
+                    c.cardinality(),
+                    bottom.len()
+                );
+
+                bottom
+            };
+
+            child_alignments.push(partial_alignment);
+        }
+
+        child_alignments.pop().unwrap_or_else(|| unreachable!("There should be one final alignment"))
     }
 }

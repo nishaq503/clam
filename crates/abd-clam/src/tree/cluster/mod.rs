@@ -173,6 +173,16 @@ impl<T, A> Cluster<T, A> {
         self.children.as_ref().map(|(_, span)| span)
     }
 
+    /// Returns a mutable reference to the children of this cluster, if any.
+    pub fn children_mut(&mut self) -> Option<&mut [Self]> {
+        self.children.as_mut().map(|(children, _)| children.as_mut())
+    }
+
+    /// Returns a mutable reference to the span of this cluster, if it has children.
+    pub fn span_mut(&mut self) -> Option<&mut T> {
+        self.children.as_mut().map(|(_, span)| span)
+    }
+
     /// Returns all clusters in the subtree rooted at this cluster, including this cluster, in pre-order.
     pub fn subtree_preorder(&self) -> Vec<&Self> {
         if let Some((children, _)) = &self.children {

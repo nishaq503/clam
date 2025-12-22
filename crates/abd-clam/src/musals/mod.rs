@@ -29,6 +29,14 @@ where
         self
     }
 
+    /// Same as [`Self::into_msa`], but uses an iterative approach to reduce stack usage.
+    pub fn into_msa_iterative(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
+        let msa = Msa::from_tree_iterative(&self, cost_matrix);
+        self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
+        self
+    }
+
     /// Computes all quality metrics for the MSA represented by this tree.
     pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
@@ -61,6 +69,14 @@ where
         self
     }
 
+    /// Parallel version of [`Self::into_msa_iterative`].
+    pub fn par_into_msa_iterative(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
+        let msa = Msa::par_from_tree_iterative(&self, cost_matrix);
+        self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
+        self
+    }
+
     /// Parallel version of [`Self::compute_quality_metric`].
     pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
@@ -86,28 +102,46 @@ mod tests {
 
     use super::{CostMatrix, Sequence};
 
-    fn check_sequences_equal<Id, S, T, A, M>(original: Tree<Id, S, T, A, M>, aligned: Tree<Id, S, T, A, M>)
+    fn check_sequences_equal<Id, S, T, A, M>(original: &Tree<Id, S, T, A, M>, aligned: &Tree<Id, S, T, A, M>, mode: &str)
     where
         Id: Eq + core::fmt::Debug,
         S: Sequence + Eq + core::fmt::Debug,
     {
-        assert_eq!(original.cardinality(), aligned.cardinality(), "Number of sequences should match.");
+        assert_eq!(
+            original.cardinality(),
+            aligned.cardinality(),
+            "Number of sequences should match in {} mode.",
+            mode
+        );
 
         let max_len = original.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         let aligned_max_len = aligned.items.iter().map(|(_, seq)| seq.as_ref().len()).max().unwrap_or(0);
         assert!(
             aligned_max_len >= max_len,
-            "Aligned sequences should be at least as long as the longest original sequence."
+            "Aligned sequences should be at least as long as the longest original sequence in {} mode.",
+            mode
         );
         assert!(
             aligned_max_len <= max_len * 2,
-            "Aligned sequences should be at most twice as long as the longest original sequence."
+            "Aligned sequences should be at most twice as long as the longest original sequence in {} mode.",
+            mode
         );
 
-        for (i, ((o_id, o_seq), (a_id, a_seq))) in original.items.into_iter().zip(aligned.items).enumerate() {
-            assert_eq!(o_id, a_id, "Sequence IDs at index {} do not match after alignment.", i);
+        let o_sequences = original.items.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
+        let a_sequences = aligned.items.iter().map(|(_, seq)| seq.without_gaps()).collect::<Vec<_>>();
 
-            assert_eq!(o_seq, a_seq.without_gaps(), "Sequence at index {} does not match after removing gaps.", i);
+        assert_eq!(o_sequences.len(), a_sequences.len(), "Number of sequences should match in {} mode.", mode);
+        assert_eq!(o_sequences, a_sequences, "Sequences should match after alignment in {} mode.", mode);
+
+        for (i, ((o_id, o_seq), (a_id, a_seq))) in original.items.iter().zip(aligned.items.iter()).enumerate() {
+            assert_eq!(o_id, a_id, "Sequence IDs at index {} do not match after alignment in {} mode.", i, mode);
+            assert_eq!(
+                o_seq,
+                &a_seq.without_gaps(),
+                "Sequence at index {} does not match after removing gaps in {} mode.",
+                i,
+                mode
+            );
         }
     }
 
@@ -125,11 +159,17 @@ mod tests {
 
         let tree = Tree::new_minimal(sequences.clone(), &metric)?;
         let msa_tree = tree.clone().into_msa(&cost_matrix);
-        check_sequences_equal(tree, msa_tree);
+        check_sequences_equal(&tree, &msa_tree, "recursive");
+
+        let msa_tree_iterative = tree.clone().into_msa_iterative(&cost_matrix);
+        check_sequences_equal(&tree, &msa_tree_iterative, "iterative");
 
         let par_tree = Tree::par_new_minimal(sequences, metric)?;
         let par_msa_tree = par_tree.clone().par_into_msa(&cost_matrix);
-        check_sequences_equal(par_tree, par_msa_tree);
+        check_sequences_equal(&par_tree, &par_msa_tree, "parallel recursive");
+
+        let par_msa_tree_iterative = par_tree.clone().par_into_msa_iterative(&cost_matrix);
+        check_sequences_equal(&par_tree, &par_msa_tree_iterative, "parallel iterative");
 
         Ok(())
     }
@@ -153,11 +193,17 @@ mod tests {
 
         let tree = Tree::new_minimal(sequences.clone(), &metric)?;
         let msa_tree = tree.clone().into_msa(&cost_matrix);
-        check_sequences_equal(tree, msa_tree);
+        check_sequences_equal(&tree, &msa_tree, "recursive");
+
+        let msa_tree_iterative = tree.clone().into_msa_iterative(&cost_matrix);
+        check_sequences_equal(&tree, &msa_tree_iterative, "iterative");
 
         let par_tree = Tree::par_new_minimal(sequences, metric)?;
         let par_msa_tree = par_tree.clone().par_into_msa(&cost_matrix);
-        check_sequences_equal(par_tree, par_msa_tree);
+        check_sequences_equal(&par_tree, &par_msa_tree, "parallel recursive");
+
+        let par_msa_tree_iterative = par_tree.clone().par_into_msa_iterative(&cost_matrix);
+        check_sequences_equal(&par_tree, &par_msa_tree_iterative, "parallel iterative");
 
         Ok(())
     }

@@ -51,7 +51,7 @@ impl<S: Sequence + Send + Sync> IntoParallelIterator for Columnar<S> {
 /// A trait for types that can be represented in a columnar format.
 impl<S: Sequence> Columnar<S> {
     /// The number of sequences.
-    fn n_seq(&self) -> usize {
+    pub fn n_seq(&self) -> usize {
         self[0].as_ref().len()
     }
 

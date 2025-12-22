@@ -20,31 +20,41 @@ type DpTable<T> = Vec<Vec<(T, Direction)>>;
 /// ```rust
 /// use abd_clam::musals::Sequence;
 ///
-/// impl Sequence for String {
+/// /// This is a simple wrapper around `String` so we can avoid the orphan rule.
+/// #[derive(Clone)]
+/// struct MyString(String);
+///
+/// impl AsRef<[u8]> for MyString {
+///     fn as_ref(&self) -> &[u8] {
+///         self.0.as_bytes()
+///     }
+/// }
+///
+/// impl Sequence for MyString {
 ///    const GAP: u8 = b'-';
 ///
 ///    fn from_vec(v: Vec<u8>) -> Self {
-///        Self::from_utf8(v).expect("Invalid UTF-8 sequence")
+///        Self(String::from_utf8(v).expect("Invalid UTF-8 sequence"))
 ///    }
 ///
 ///    fn from_string(s: String) -> Self {
-///        s
+///        Self(s)
 ///    }
 ///
 ///    fn append(self, other: Self) -> Self {
-///        let mut s = String::with_capacity(self.len() + other.len());
-///        s.push_str(&self);
-///        s.push_str(&other);
-///        s
+///        let mut s = String::with_capacity(self.0.len() + other.0.len());
+///        s.push_str(&self.0);
+///        s.push_str(&other.0);
+///        Self(s)
 ///    }
 ///
 ///    fn pre_pend(mut self, byte: u8) -> Self {
-///        self.insert(0, byte as char);
+///        self.0.insert(0, byte as char);
 ///        self
 ///    }
 ///
 ///    fn post_pend(mut self, byte: u8) -> Self {
-///        self.push(byte as char);
+///        self.0.push(byte as char);
 ///        self
 ///    }
 /// }
