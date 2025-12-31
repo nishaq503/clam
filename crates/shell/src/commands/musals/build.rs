@@ -24,7 +24,8 @@ pub fn build_msa<P: AsRef<Path>>(
 
     let tree = ShellTree::new(inp_data, metric, max_recursion_depth)?;
     ftlog::info!("Writing unaligned tree to '{out_dir:?}'...");
-    tree.write_to(out_dir, Some("unaligned"))?;
+    let tree_path = tree.tree_file_path(out_dir, Some("unaligned"));
+    tree.write_to(&tree_path)?;
 
     let msa_tree = match tree {
         ShellTree::Levenshtein(tree) => {
@@ -40,7 +41,8 @@ pub fn build_msa<P: AsRef<Path>>(
 
     let suffix = format!("msa-{cost_matrix}");
     ftlog::info!("Writing MSA tree to '{out_dir:?}' with suffix '{suffix}'...");
-    msa_tree.write_to(out_dir, Some(&suffix))?;
+    let msa_tree_path = msa_tree.tree_file_path(out_dir, Some(&suffix));
+    msa_tree.write_to(&msa_tree_path)?;
 
     if save_fasta {
         let items = match msa_tree {

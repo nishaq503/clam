@@ -143,25 +143,25 @@ impl ShellTree {
         }
     }
 
+    /// Creates a path for the tree file based on the metric and optional suffix.
+    pub fn tree_file_path<P: AsRef<Path>>(&self, out_dir: P, suffix: Option<&str>) -> PathBuf {
+        let suffix = match self {
+            Self::Levenshtein(_) => suffix.map_or_else(|| "lev".to_string(), |s| format!("{s}-lev")),
+            Self::Euclidean(_) => suffix.map_or_else(|| "euc".to_string(), |s| format!("{s}-euc")),
+            Self::Cosine(_) => suffix.map_or_else(|| "cos".to_string(), |s| format!("{s}-cos")),
+        };
+        out_dir.as_ref().join(format!("tree-{suffix}.bin"))
+    }
+
     /// Saves the tree to the specified path using bincode.
-    pub fn write_to<P: AsRef<Path>>(&self, out_dir: P, suffix: Option<&str>) -> Result<(), String> {
+    pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         match self {
             Self::Levenshtein(tree) => {
-                let suffix = suffix.map_or_else(|| "lev".to_string(), |s| format!("{s}-lev"));
-                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
                 let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
                 tree.encode::<DATABUF_DEFAULT>(&mut file).map_err(|e| e.to_string())
             }
-            Self::Euclidean(tree) => {
-                let suffix = suffix.map_or_else(|| "euc".to_string(), |s| format!("{s}-euc"));
-                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
-                tree.write_to(path)
-            }
-            Self::Cosine(tree) => {
-                let suffix = suffix.map_or_else(|| "cos".to_string(), |s| format!("{s}-cos"));
-                let path = out_dir.as_ref().join(format!("tree-{suffix}.bin"));
-                tree.write_to(path)
-            }
+            Self::Euclidean(tree) => tree.write_to(path),
+            Self::Cosine(tree) => tree.write_to(path),
         }
     }
 

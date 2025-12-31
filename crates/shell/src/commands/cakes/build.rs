@@ -25,5 +25,6 @@ use crate::{data::ShellData, metrics::Metric, trees::ShellTree};
 ///   [`ShellTree::new`](crate::trees::ShellTree::new) for more details.
 pub fn build_new_tree<P: AsRef<Path>>(inp_data: ShellData, metric: &Metric, max_recursion_depth: Option<usize>, out_dir: P) -> Result<(), String> {
     let tree = ShellTree::new(inp_data, metric, max_recursion_depth)?;
-    tree.write_to(out_dir, None)
+    let tree_path = tree.tree_file_path(&out_dir, None);
+    tree.write_to(&tree_path)
 }

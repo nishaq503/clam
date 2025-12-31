@@ -1,4 +1,8 @@
 //! Multiple Sequence Alignment At Scale (`MuSAlS`) with CLAM.
+//!
+//! This module provides functionality to compute multiple sequence alignments (MSA) of genomic and protein sequences using the [`Tree::into_msa`] and
+//! [`Tree::into_msa_iterative`] methods, and their parallel counterparts. It also provides the ability to compute various quality metrics for an MSA using the
+//! [`Tree::compute_quality_metric`] method and its parallel counterpart.
 
 use rayon::prelude::*;
 

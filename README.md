@@ -24,8 +24,7 @@ This repository contains CLI tools to reproduce results from some of our papers.
 
 ### CAKES
 
-This paper is currently under review at SIMODS.
-See [here](benches/cakes/README.md) for running Rust code to reproduce the results for the CAKES algorithms, and [here](benches/py-cakes/README.md) for running some Python code to generate plots from the results of running the Rust code.
+TODO ...
 
 ### CHAODA
 
@@ -33,13 +32,12 @@ TODO ...
 
 ### PANCAKES
 
-This paper was published at IEEE BigData 2024.
-See [here](benches/pancakes/README.md) for running Rust code to reproduce the results for the PANCAKES algorithms.
+TODO ...
 
 ### MUSALS
 
 This paper is a work in progress.
-See [here](benches/musals/README.md) for running Rust code to reproduce the results for the MUSALS algorithms.
+See [here](crates/shell/README.md) for the CLI that can be used to run the current implementation of MUSALS.
 
 ## Publications
 

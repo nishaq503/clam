@@ -114,3 +114,17 @@ cargo run -rp shell -- \
     -q weighted-pairwise-scores \
     -q distance-distortion
 ```
+
+We could also subsample the input sequences before building the MSA tree to experiment with different cost matrices. The `-f` flag for `build` will write the
+aligned sequences to a FASTA file, in addition to the binary tree files.
+
+```bash
+# Build the MSA with 1000 random sequences from the input FASTA file.
+cargo run -rp shell -- \
+    -i target/experiments/sequences.fasta \
+    -o target/experiments/msa-results-1k \
+    -m levenshtein \
+    -n 1000 \
+    musals -c blosum62 \
+    build -f
+```
