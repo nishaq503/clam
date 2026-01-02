@@ -29,7 +29,23 @@ pub fn evaluate_msa<P: AsRef<Path>>(
         .and_then(|s| s.to_str())
         .ok_or_else(|| "Output path must have a file extension.".to_string())?;
 
-    let (tree, tree_path) = ShellTree::read_from(tree_dir)?;
+    // Find a ".bin" file whose name starts with "tree-".
+    let tree_dir = tree_dir.as_ref();
+    let tree_path = std::fs::read_dir(tree_dir)
+        .map_err(|e| format!("Failed to read input directory {}: {}", tree_dir.display(), e))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("tree-") && name.ends_with(".bin"))
+        })
+        .ok_or_else(|| format!("No tree file found in directory {}", tree_dir.display()))?;
+
+    let metric = crate::metrics::Metric::Levenshtein; // Currently only Levenshtein is supported
+    let tree = ShellTree::read_from(tree_dir, &metric)?;
     ftlog::info!("Read tree from {tree_path:?}.");
 
     let tree = match tree {

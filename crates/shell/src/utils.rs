@@ -7,6 +7,27 @@ use ftlog::{
     appender::{FileAppender, Period},
 };
 
+use crate::{data::ShellData, metrics::Metric};
+
+/// Creates a path for the tree file based on the data type, metric type, and optional prefix and suffix.
+pub fn tree_file_path<P: AsRef<std::path::Path>>(out_dir: P, data: &ShellData, metric: &Metric, prefix: Option<&str>, suffix: Option<&str>) -> PathBuf {
+    let data_part = match data {
+        ShellData::String(_) => "str",
+        _ => "vec",
+    };
+    let metric_part = match metric {
+        Metric::Levenshtein => "lev",
+        Metric::Euclidean => "euc",
+        Metric::Cosine => "cos",
+    };
+
+    let prefix = prefix.map_or("".to_string(), |f| format!("{f}-"));
+    let middle = format!("tree-{data_part}-{metric_part}");
+    let suffix = suffix.map_or("".to_string(), |s| format!("-{s}"));
+
+    out_dir.as_ref().join(format!("{prefix}{middle}{suffix}.bin"))
+}
+
 /// Configures the logger.
 ///
 /// # Errors

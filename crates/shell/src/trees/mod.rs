@@ -166,31 +166,23 @@ impl ShellTree {
     }
 
     /// Reads a tree from the specified input directory using bincode.
-    pub fn read_from<P: AsRef<Path>>(inp_dir: P) -> Result<(Self, PathBuf), String> {
-        let inp_dir = inp_dir.as_ref();
-        // Find a ".bin" file whose name starts with "tree-".
-        let tree_path = std::fs::read_dir(inp_dir)
-            .map_err(|e| format!("Failed to read input directory {}: {}", inp_dir.display(), e))?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .find(|path| {
-                path.is_file()
-                    && path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| name.starts_with("tree-") && name.ends_with(".bin"))
-            })
-            .ok_or_else(|| format!("No tree file found in directory {}", inp_dir.display()))?;
+    pub fn read_from<P: AsRef<Path>>(tree_path: P, metric: &Metric) -> Result<Self, String> {
+        let tree_path = tree_path.as_ref();
 
-        // The metric name is the last three characters before the ".bin" extension.
-        let metric_name = tree_path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .and_then(|stem| stem.split('-').next_back())
-            .ok_or_else(|| "Failed to determine metric from tree file name".to_string())?;
+        if !tree_path.exists() {
+            return Err(format!("Tree file '{tree_path:?}' does not exist"));
+        }
 
-        let tree = match metric_name {
-            "lev" => {
+        if !tree_path.is_file() {
+            return Err(format!("Tree path '{tree_path:?}' is not a file"));
+        }
+
+        if tree_path.extension().is_some_and(|ext| ext != "bin") {
+            return Err(format!("Tree file '{tree_path:?}' does not have a .bin extension"));
+        }
+
+        match metric {
+            Metric::Levenshtein => {
                 let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
                 let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
                 let metric = move |a: &MusalsSequence, b: &MusalsSequence| -> u32 {
@@ -199,16 +191,13 @@ impl ShellTree {
                 };
                 let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
-                let bytes = std::fs::read(&tree_path).map_err(|e| e.to_string())?;
+                let bytes = std::fs::read(tree_path).map_err(|e| e.to_string())?;
                 let tree = Tree::from_bytes::<DATABUF_DEFAULT>(&bytes).map_err(|e| e.to_string())?;
                 Ok(ShellTree::Levenshtein(tree.with_metric(metric)))
             }
-            "euc" => Ok(ShellTree::Euclidean(VectorTree::read_from(&tree_path)?)),
-            "cos" => Ok(ShellTree::Cosine(VectorTree::read_from(&tree_path)?)),
-            _ => Err("Unsupported metric in tree file".to_string()),
-        };
-
-        tree.map(|t| (t, tree_path))
+            Metric::Euclidean => Ok(ShellTree::Euclidean(VectorTree::read_from(tree_path)?)),
+            Metric::Cosine => Ok(ShellTree::Cosine(VectorTree::read_from(tree_path)?)),
+        }
     }
 }
 

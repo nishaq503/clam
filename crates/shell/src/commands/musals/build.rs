@@ -22,10 +22,21 @@ pub fn build_msa<P: AsRef<Path>>(
         std::fs::create_dir_all(out_dir).map_err(|e| format!("Failed to create output directory '{out_dir:?}': {e}"))?;
     }
 
-    let tree = ShellTree::new(inp_data, metric, max_recursion_depth)?;
-    ftlog::info!("Writing unaligned tree to '{out_dir:?}'...");
-    let tree_path = tree.tree_file_path(out_dir, Some("unaligned"));
-    tree.write_to(&tree_path)?;
+    let tree_path = crate::utils::tree_file_path(out_dir, &inp_data, metric, None, Some("unaligned"));
+    let msa_tree_path = crate::utils::tree_file_path(out_dir, &inp_data, metric, Some(&format!("msa-{cost_matrix}")), None);
+
+    let tree = if tree_path.exists() {
+        ftlog::info!("Loading existing unaligned tree from '{tree_path:?}'...");
+        ShellTree::read_from(&tree_path, metric)?
+    } else {
+        ftlog::info!("Building unaligned tree...");
+        let tree = ShellTree::new(inp_data, metric, max_recursion_depth)?;
+
+        ftlog::info!("Writing unaligned tree to '{tree_path:?}'...");
+        tree.write_to(&tree_path)?;
+
+        tree
+    };
 
     let msa_tree = match tree {
         ShellTree::Levenshtein(tree) => {
@@ -39,9 +50,7 @@ pub fn build_msa<P: AsRef<Path>>(
         _ => return Err("MSA tree can only be built for string data.".to_string()),
     };
 
-    let suffix = format!("msa-{cost_matrix}");
-    ftlog::info!("Writing MSA tree to '{out_dir:?}' with suffix '{suffix}'...");
-    let msa_tree_path = msa_tree.tree_file_path(out_dir, Some(&suffix));
+    ftlog::info!("Writing MSA tree to '{msa_tree_path:?}'...");
     msa_tree.write_to(&msa_tree_path)?;
 
     if save_fasta {
@@ -51,7 +60,7 @@ pub fn build_msa<P: AsRef<Path>>(
         };
         let data = ShellData::String(items);
 
-        let fasta_path = out_dir.join(format!("{suffix}.fasta"));
+        let fasta_path = out_dir.join(format!("msa-{cost_matrix}.fasta"));
         ftlog::info!("Saving MSA sequences to '{fasta_path:?}'...");
 
         data.write(fasta_path)?;

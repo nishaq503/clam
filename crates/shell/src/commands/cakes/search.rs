@@ -51,7 +51,32 @@ pub fn search_tree<P: AsRef<Path> + core::fmt::Debug>(tree_dir: P, queries: Shel
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
 
-    let (tree, tree_path) = ShellTree::read_from(tree_dir)?;
+    let tree_dir = tree_dir.as_ref();
+    let tree_path = std::fs::read_dir(tree_dir)
+        .map_err(|e| format!("Failed to read input directory {}: {}", tree_dir.display(), e))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("tree-") && name.ends_with(".bin"))
+        })
+        .ok_or_else(|| format!("No tree file found in directory {}", tree_dir.display()))?;
+
+    let metric = match tree_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(|stem| stem.split('-').next_back())
+    {
+        Some("lev") => crate::metrics::Metric::Levenshtein,
+        Some("euc") => crate::metrics::Metric::Euclidean,
+        Some("cos") => crate::metrics::Metric::Cosine,
+        _ => return Err(format!("Unsupported metric in tree file {tree_path:?}")),
+    };
+
+    let tree = ShellTree::read_from(tree_dir, &metric)?;
     ftlog::info!("Read tree from {tree_path:?}.");
 
     tree.search(queries, algorithms, out_path)
