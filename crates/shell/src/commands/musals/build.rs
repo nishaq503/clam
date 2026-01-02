@@ -42,7 +42,7 @@ pub fn build_msa<P: AsRef<Path>>(
         ShellTree::Levenshtein(tree) => {
             let cost_matrix = cost_matrix.get();
             if max_recursion_depth.is_some() {
-                ShellTree::Levenshtein(tree.par_into_msa_iterative(&cost_matrix))
+                ShellTree::Levenshtein(tree.par_into_msa_collapsing(&cost_matrix))
             } else {
                 ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix))
             }

@@ -41,6 +41,14 @@ where
         self
     }
 
+    /// Same as [`Self::into_msa`], but uses a tree-collapsing approach to reduce stack usage.
+    pub fn into_msa_collapsing(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
+        let msa = Msa::from_tree_collapse(&self, cost_matrix);
+        self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
+        self
+    }
+
     /// Computes all quality metrics for the MSA represented by this tree.
     pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
@@ -77,6 +85,14 @@ where
     pub fn par_into_msa_iterative(mut self, cost_matrix: &CostMatrix<T>) -> Self {
         ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
         let msa = Msa::par_from_tree_iterative(&self, cost_matrix);
+        self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
+        self
+    }
+
+    /// Parallel version of [`Self::into_msa_collapsing`].
+    pub fn par_into_msa_collapsing(mut self, cost_matrix: &CostMatrix<T>) -> Self {
+        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
+        let msa = Msa::par_from_tree_collapse(&self, cost_matrix);
         self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
     }

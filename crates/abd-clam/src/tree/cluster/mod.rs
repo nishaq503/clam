@@ -122,6 +122,58 @@ where
     }
 }
 
+impl<T, A> Cluster<T, A>
+where
+    T: Clone,
+{
+    /// Returns a cloned cluster without any annotations.
+    pub fn clone_without_annotations<B>(&self) -> Cluster<T, B> {
+        // Post-order traversal stack
+        let mut stack = {
+            let mut stack_1 = vec![self];
+            let mut stack_2 = Vec::new();
+
+            while let Some(c) = stack_1.pop() {
+                if let Some((children, _)) = &c.children {
+                    stack_1.extend(children.iter());
+                }
+                stack_2.push(c);
+            }
+            stack_2
+        };
+
+        let mut cloned_children: Vec<Cluster<T, B>> = Vec::new();
+        while let Some(c) = stack.pop() {
+            let children = if let Some((children, span)) = &c.children {
+                // The cloned children of `c` are the last `n_children` clusters in `cloned_children`.
+                let n_children = children.len();
+                let start_index = cloned_children.len() - n_children;
+                let cloned_children_slice = cloned_children.split_off(start_index);
+                Some((cloned_children_slice.into_boxed_slice(), span.clone()))
+            } else {
+                // Leaf cluster
+                None
+            };
+
+            // Create the cloned cluster without annotation.
+            let cloned_cluster = Cluster {
+                depth: c.depth,
+                center_index: c.center_index,
+                cardinality: c.cardinality,
+                radius: c.radius.clone(),
+                lfd: c.lfd,
+                children,
+                annotation: None,
+            };
+
+            // Push the cloned cluster onto the stack.
+            cloned_children.push(cloned_cluster);
+        }
+
+        cloned_children.pop().unwrap_or_else(|| unreachable!("The root cluster is always present"))
+    }
+}
+
 impl<T, A> Cluster<T, A> {
     /// Returns the depth of this cluster in the tree.
     pub const fn depth(&self) -> usize {

@@ -54,7 +54,7 @@ impl<S: Sequence> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences", tree.cardinality());
 
-        let columnar = Self::from_cluster(&tree.root, tree, cost_matrix);
+        let columnar = Self::from_cluster(&tree.root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA with {} columns", columnar.len());
 
         let msa = columnar.into_rows(true);
@@ -70,7 +70,7 @@ impl<S: Sequence> Msa<S> {
     {
         ftlog::info!("Creating MSA iteratively from tree with {} sequences", tree.cardinality());
 
-        let columnar = Self::from_cluster_iterative(tree, cost_matrix);
+        let columnar = Self::from_cluster_iterative(&tree.root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA iteratively with {} columns", columnar.len());
 
         let msa = columnar.into_rows(true);
@@ -79,22 +79,61 @@ impl<S: Sequence> Msa<S> {
         Self(msa)
     }
 
+    /// Collapses the root Cluster from the Tree into an MSA.
+    pub fn from_tree_collapse<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
+    where
+        T: DistanceValue,
+    {
+        ftlog::info!("Creating MSA from collapsed tree with {} sequences", tree.cardinality());
+
+        let mut root = tree.root.clone_without_annotations();
+        let columnar = Self::from_cluster_collapse(&mut root, &tree.items, cost_matrix);
+        ftlog::info!("Finished creating Columnar MSA from collapsed tree with {} columns", columnar.len());
+
+        let msa = columnar.into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
+
+        Self(msa)
+    }
+
+    /// Collapses a Cluster into an MSA.
+    fn from_cluster_collapse<Id, T>(cluster: &mut Cluster<T, Columnar<S>>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    where
+        T: DistanceValue,
+    {
+        let stride = 128; // Arbitrary stride over depth to avoid deep recursion
+
+        let target_depth = cluster.depth + stride;
+        let selector = |c: &Cluster<_, _>| c.depth == target_depth;
+        let targets = cluster.filter_clusters_mut(&selector);
+        for c in targets {
+            let msa = Self::from_cluster_collapse(c, all_items, cost_matrix);
+            c.children = None;
+            c.annotation = Some(msa);
+        }
+
+        Self::from_cluster(cluster, all_items, cost_matrix)
+    }
+
     /// Recursively creates an MSA from a Cluster.
-    fn from_cluster<Id, T, A, M>(cluster: &Cluster<T, A>, tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    fn from_cluster<Id, T, A>(cluster: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
         T: DistanceValue,
     {
         if let Some((children, _)) = &cluster.children {
             ftlog::info!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
 
-            let mut children = children.iter().map(|child| Self::from_cluster(child, tree, cost_matrix)).collect::<Vec<_>>();
+            let mut children = children
+                .iter()
+                .map(|child| Self::from_cluster(child, all_items, cost_matrix))
+                .collect::<Vec<_>>();
 
             let mut bottom = children.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
             while let Some(prev) = children.pop() {
                 bottom = bottom.merge(prev, cost_matrix);
             }
 
-            let bottom = bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix);
+            let bottom = bottom.post_pend_row(&all_items[cluster.center_index].1, cost_matrix);
 
             ftlog::info!(
                 "Finished aligning parent cluster at depth {} with {} sequences to {} width",
@@ -107,7 +146,7 @@ impl<S: Sequence> Msa<S> {
         } else {
             ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
 
-            let mut items = tree.items[cluster.all_items_indices()]
+            let mut items = all_items[cluster.all_items_indices()]
                 .iter()
                 .map(|(_, seq)| Columnar::from_row(seq))
                 .collect::<Vec<_>>();
@@ -129,13 +168,13 @@ impl<S: Sequence> Msa<S> {
     }
 
     /// Iteratively creates an MSA from a Cluster.
-    fn from_cluster_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    fn from_cluster_iterative<Id, T, A>(root: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
         T: DistanceValue,
     {
         // Post-order traversal stack
         let mut stack = {
-            let mut stack_1 = vec![&tree.root];
+            let mut stack_1 = vec![root];
             let mut stack_2 = Vec::new();
 
             while let Some(c) = stack_1.pop() {
@@ -160,7 +199,7 @@ impl<S: Sequence> Msa<S> {
                     n_children -= 1;
                 }
 
-                bottom = bottom.post_pend_row(&tree.items[c.center_index].1, cost_matrix);
+                bottom = bottom.post_pend_row(&all_items[c.center_index].1, cost_matrix);
                 ftlog::info!(
                     "Finished aligning parent cluster at depth {} with {} sequences to {} width",
                     c.depth,
@@ -172,7 +211,7 @@ impl<S: Sequence> Msa<S> {
             } else {
                 ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", c.depth, c.cardinality());
 
-                let mut items = tree.items[c.all_items_indices()]
+                let mut items = all_items[c.all_items_indices()]
                     .iter()
                     .map(|(_, seq)| Columnar::from_row(seq))
                     .collect::<Vec<_>>();
@@ -209,7 +248,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences in parallel", tree.cardinality());
 
-        let columnar = Self::par_from_cluster(&tree.root, tree, cost_matrix);
+        let columnar = Self::par_from_cluster(&tree.root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA with {} columns in parallel", columnar.len());
 
         let msa = columnar.par_into_rows(true);
@@ -228,7 +267,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     {
         ftlog::info!("Creating MSA iteratively from tree with {} sequences in parallel", tree.cardinality());
 
-        let columnar = Self::par_from_cluster_iterative(tree, cost_matrix);
+        let columnar = Self::par_from_cluster_iterative(&tree.root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA iteratively with {} columns in parallel", columnar.len());
 
         let msa = columnar.par_into_rows(true);
@@ -237,13 +276,52 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         Self(msa)
     }
 
-    /// Parallel version of [`Self::from_cluster`].
-    fn par_from_cluster<Id, T, A, M>(cluster: &Cluster<T, A>, tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    /// Parallel version of [`Self::from_tree_collapse`].
+    pub fn par_from_tree_collapse<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
     where
         Id: Send + Sync,
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
         M: Send + Sync,
+    {
+        ftlog::info!("Creating MSA from collapsed tree with {} sequences", tree.cardinality());
+
+        let mut root = tree.root.clone_without_annotations();
+        let columnar = Self::par_from_cluster_collapse(&mut root, &tree.items, cost_matrix);
+        ftlog::info!("Finished creating Columnar MSA from collapsed tree with {} columns", columnar.len());
+
+        let msa = columnar.into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
+
+        Self(msa)
+    }
+
+    /// Parallel version of [`Self::from_cluster_collapse`].
+    fn par_from_cluster_collapse<Id, T>(cluster: &mut Cluster<T, Columnar<S>>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    where
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+    {
+        let stride = 128; // Arbitrary stride over depth to avoid deep recursion
+
+        let target_depth = cluster.depth + stride;
+        let selector = |c: &Cluster<_, _>| c.depth == target_depth;
+        let targets = cluster.filter_clusters_mut(&selector);
+        targets.into_par_iter().for_each(|c| {
+            let msa = Self::par_from_cluster_collapse(c, all_items, cost_matrix);
+            c.children = None;
+            c.annotation = Some(msa);
+        });
+
+        Self::par_from_cluster(cluster, all_items, cost_matrix)
+    }
+
+    /// Parallel version of [`Self::from_cluster`].
+    fn par_from_cluster<Id, T, A>(cluster: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    where
+        Id: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
     {
         if let Some((children, _)) = &cluster.children {
             ftlog::info!(
@@ -254,7 +332,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
 
             let mut children = children
                 .par_iter()
-                .map(|child| Self::par_from_cluster(child, tree, cost_matrix))
+                .map(|child| Self::par_from_cluster(child, all_items, cost_matrix))
                 .collect::<Vec<_>>();
 
             let mut bottom = children.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
@@ -262,7 +340,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                 bottom = bottom.par_merge(prev, cost_matrix);
             }
 
-            let bottom = bottom.post_pend_row(&tree.items[cluster.center_index].1, cost_matrix);
+            let bottom = bottom.post_pend_row(&all_items[cluster.center_index].1, cost_matrix);
 
             ftlog::info!(
                 "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
@@ -279,7 +357,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                 cluster.cardinality()
             );
 
-            let mut items = tree.items[cluster.all_items_indices()]
+            let mut items = all_items[cluster.all_items_indices()]
                 .par_iter()
                 .map(|(_, seq)| Columnar::from_row(seq))
                 .collect::<Vec<_>>();
@@ -301,16 +379,15 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     }
 
     /// Iteratively creates an MSA from a Cluster.
-    fn par_from_cluster_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    fn par_from_cluster_iterative<Id, T, A>(root: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
         Id: Send + Sync,
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        M: Send + Sync,
     {
         // Post-order traversal stack
         let mut stack = {
-            let mut stack_1 = vec![&tree.root];
+            let mut stack_1 = vec![root];
             let mut stack_2 = Vec::new();
 
             while let Some(c) = stack_1.pop() {
@@ -335,7 +412,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                     n_children -= 1;
                 }
 
-                bottom = bottom.post_pend_row(&tree.items[c.center_index].1, cost_matrix);
+                bottom = bottom.post_pend_row(&all_items[c.center_index].1, cost_matrix);
                 ftlog::info!(
                     "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
                     c.depth,
@@ -347,7 +424,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
             } else {
                 ftlog::info!("Aligning leaf cluster at depth {} with {} sequences in parallel", c.depth, c.cardinality());
 
-                let mut items = tree.items[c.all_items_indices()]
+                let mut items = all_items[c.all_items_indices()]
                     .par_iter()
                     .map(|(_, seq)| Columnar::from_row(seq))
                     .collect::<Vec<_>>();
