@@ -54,41 +54,9 @@ impl<S: Sequence> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences", tree.cardinality());
 
-        let columnar = Self::from_cluster(&tree.root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA with {} columns", columnar.len());
-
-        let msa = columnar.into_rows(true);
-        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
-
-        Self(msa)
-    }
-
-    /// Same as [`Self::from_tree`], avoids stack overflows from deep recursion.
-    pub fn from_tree_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
-    where
-        T: DistanceValue,
-    {
-        ftlog::info!("Creating MSA iteratively from tree with {} sequences", tree.cardinality());
-
-        let columnar = Self::from_cluster_iterative(&tree.root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA iteratively with {} columns", columnar.len());
-
-        let msa = columnar.into_rows(true);
-        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
-
-        Self(msa)
-    }
-
-    /// Collapses the root Cluster from the Tree into an MSA.
-    pub fn from_tree_collapse<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
-    where
-        T: DistanceValue,
-    {
-        ftlog::info!("Creating MSA from collapsed tree with {} sequences", tree.cardinality());
-
         let mut root = tree.root.clone_without_annotations();
         let columnar = Self::from_cluster_collapse(&mut root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA from collapsed tree with {} columns", columnar.len());
+        ftlog::info!("Finished creating Columnar MSA from tree with {} columns", columnar.len());
 
         let msa = columnar.into_rows(true);
         ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
@@ -108,6 +76,13 @@ impl<S: Sequence> Msa<S> {
         let targets = cluster.filter_clusters_mut(&selector);
         for c in targets {
             let msa = Self::from_cluster_collapse(c, all_items, cost_matrix);
+            ftlog::info!(
+                "Collapsing cluster at depth {} with {} sequences to MSA with {} columns and {} rows",
+                c.depth,
+                c.cardinality,
+                msa.len(),
+                msa.n_seq()
+            );
             c.children = None;
             c.annotation = Some(msa);
         }
@@ -116,15 +91,15 @@ impl<S: Sequence> Msa<S> {
     }
 
     /// Recursively creates an MSA from a Cluster.
-    fn from_cluster<Id, T, A>(cluster: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    fn from_cluster<Id, T>(cluster: &mut Cluster<T, Columnar<S>>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
         T: DistanceValue,
     {
-        if let Some((children, _)) = &cluster.children {
-            ftlog::info!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
+        if let Some((children, _)) = &mut cluster.children {
+            ftlog::debug!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality);
 
             let mut children = children
-                .iter()
+                .iter_mut()
                 .map(|child| Self::from_cluster(child, all_items, cost_matrix))
                 .collect::<Vec<_>>();
 
@@ -135,16 +110,24 @@ impl<S: Sequence> Msa<S> {
 
             let bottom = bottom.post_pend_row(&all_items[cluster.center_index].1, cost_matrix);
 
-            ftlog::info!(
+            ftlog::debug!(
                 "Finished aligning parent cluster at depth {} with {} sequences to {} width",
                 cluster.depth,
-                cluster.cardinality(),
+                cluster.cardinality,
                 bottom.len()
             );
 
             bottom
+        } else if let Some(child_msa) = cluster.take_annotation() {
+            // Cluster was previously collapsed and then turned back into a leaf.
+            ftlog::debug!(
+                "Aligning leaf collapsed cluster at depth {} with {} sequences",
+                cluster.depth,
+                cluster.cardinality
+            );
+            child_msa.post_pend_row(&all_items[cluster.center_index].1, cost_matrix)
         } else {
-            ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality());
+            ftlog::debug!("Aligning leaf cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality);
 
             let mut items = all_items[cluster.all_items_indices()]
                 .iter()
@@ -156,83 +139,15 @@ impl<S: Sequence> Msa<S> {
                 bottom = bottom.merge(prev, cost_matrix);
             }
 
-            ftlog::info!(
+            ftlog::debug!(
                 "Finished aligning leaf cluster at depth {} with {} sequences to {} width",
                 cluster.depth,
-                cluster.cardinality(),
+                cluster.cardinality,
                 bottom.len()
             );
 
             bottom
         }
-    }
-
-    /// Iteratively creates an MSA from a Cluster.
-    fn from_cluster_iterative<Id, T, A>(root: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
-    where
-        T: DistanceValue,
-    {
-        // Post-order traversal stack
-        let mut stack = {
-            let mut stack_1 = vec![root];
-            let mut stack_2 = Vec::new();
-
-            while let Some(c) = stack_1.pop() {
-                if let Some((children, _)) = &c.children {
-                    stack_1.extend(children.iter());
-                }
-                stack_2.push(c);
-            }
-            stack_2
-        };
-
-        let mut child_alignments = Vec::new();
-        while let Some(c) = stack.pop() {
-            if let Some((children, _)) = &c.children {
-                ftlog::info!("Aligning parent cluster at depth {} with {} sequences", c.depth, c.cardinality());
-
-                let mut n_children = children.len() - 1;
-                let mut bottom: Columnar<S> = child_alignments.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
-                while n_children > 0 {
-                    let prev = child_alignments.pop().unwrap_or_else(|| unreachable!("Not enough child alignments collected"));
-                    bottom = bottom.merge(prev, cost_matrix);
-                    n_children -= 1;
-                }
-
-                bottom = bottom.post_pend_row(&all_items[c.center_index].1, cost_matrix);
-                ftlog::info!(
-                    "Finished aligning parent cluster at depth {} with {} sequences to {} width",
-                    c.depth,
-                    c.cardinality(),
-                    bottom.len()
-                );
-
-                child_alignments.push(bottom);
-            } else {
-                ftlog::info!("Aligning leaf cluster at depth {} with {} sequences", c.depth, c.cardinality());
-
-                let mut items = all_items[c.all_items_indices()]
-                    .iter()
-                    .map(|(_, seq)| Columnar::from_row(seq))
-                    .collect::<Vec<_>>();
-
-                let mut bottom = items.pop().unwrap_or_else(|| unreachable!("Leaf cluster is never empty"));
-                while let Some(prev) = items.pop() {
-                    bottom = bottom.merge(prev, cost_matrix);
-                }
-
-                ftlog::info!(
-                    "Finished aligning leaf cluster at depth {} with {} sequences to {} width",
-                    c.depth,
-                    c.cardinality(),
-                    bottom.len()
-                );
-
-                child_alignments.push(bottom);
-            }
-        }
-
-        child_alignments.pop().unwrap_or_else(|| unreachable!("There should be one final alignment"))
     }
 }
 
@@ -248,50 +163,12 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences in parallel", tree.cardinality());
 
-        let columnar = Self::par_from_cluster(&tree.root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA with {} columns in parallel", columnar.len());
-
-        let msa = columnar.par_into_rows(true);
-        ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
-
-        Self(msa)
-    }
-
-    /// Parallel version of [`Self::from_tree_iterative`].
-    pub fn par_from_tree_iterative<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
-    where
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
-        ftlog::info!("Creating MSA iteratively from tree with {} sequences in parallel", tree.cardinality());
-
-        let columnar = Self::par_from_cluster_iterative(&tree.root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA iteratively with {} columns in parallel", columnar.len());
-
-        let msa = columnar.par_into_rows(true);
-        ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
-
-        Self(msa)
-    }
-
-    /// Parallel version of [`Self::from_tree_collapse`].
-    pub fn par_from_tree_collapse<Id, T, A, M>(tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
-    where
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-        M: Send + Sync,
-    {
-        ftlog::info!("Creating MSA from collapsed tree with {} sequences", tree.cardinality());
-
         let mut root = tree.root.clone_without_annotations();
         let columnar = Self::par_from_cluster_collapse(&mut root, &tree.items, cost_matrix);
-        ftlog::info!("Finished creating Columnar MSA from collapsed tree with {} columns", columnar.len());
+        ftlog::info!("Finished creating Columnar MSA from tree with {} columns in parallel", columnar.len());
 
-        let msa = columnar.into_rows(true);
-        ftlog::info!("Converted Columnar MSA to {} sequences", msa.len());
+        let msa = columnar.par_into_rows(true);
+        ftlog::info!("Converted Columnar MSA to {} sequences in parallel", msa.len());
 
         Self(msa)
     }
@@ -309,6 +186,13 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         let targets = cluster.filter_clusters_mut(&selector);
         targets.into_par_iter().for_each(|c| {
             let msa = Self::par_from_cluster_collapse(c, all_items, cost_matrix);
+            ftlog::info!(
+                "Collapsing cluster at depth {} with {} sequences to MSA with {} columns and {} rows in parallel",
+                c.depth,
+                c.cardinality,
+                msa.len(),
+                msa.n_seq()
+            );
             c.children = None;
             c.annotation = Some(msa);
         });
@@ -317,21 +201,20 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     }
 
     /// Parallel version of [`Self::from_cluster`].
-    fn par_from_cluster<Id, T, A>(cluster: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
+    fn par_from_cluster<Id, T>(cluster: &mut Cluster<T, Columnar<S>>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
     where
         Id: Send + Sync,
         T: DistanceValue + Send + Sync,
-        A: Send + Sync,
     {
-        if let Some((children, _)) = &cluster.children {
-            ftlog::info!(
+        if let Some((children, _)) = &mut cluster.children {
+            ftlog::debug!(
                 "Aligning parent cluster at depth {} with {} sequences in parallel",
                 cluster.depth,
-                cluster.cardinality()
+                cluster.cardinality
             );
 
             let mut children = children
-                .par_iter()
+                .par_iter_mut()
                 .map(|child| Self::par_from_cluster(child, all_items, cost_matrix))
                 .collect::<Vec<_>>();
 
@@ -342,19 +225,27 @@ impl<S: Sequence + Send + Sync> Msa<S> {
 
             let bottom = bottom.post_pend_row(&all_items[cluster.center_index].1, cost_matrix);
 
-            ftlog::info!(
+            ftlog::debug!(
                 "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
                 cluster.depth,
-                cluster.cardinality(),
+                cluster.cardinality,
                 bottom.len()
             );
 
             bottom
+        } else if let Some(child_msa) = cluster.take_annotation() {
+            // Cluster was previously collapsed and then turned back into a leaf.
+            ftlog::debug!(
+                "Aligning leaf collapsed cluster at depth {} with {} sequences",
+                cluster.depth,
+                cluster.cardinality
+            );
+            child_msa.post_pend_row(&all_items[cluster.center_index].1, cost_matrix)
         } else {
-            ftlog::info!(
+            ftlog::debug!(
                 "Aligning leaf cluster at depth {} with {} sequences in parallel",
                 cluster.depth,
-                cluster.cardinality()
+                cluster.cardinality
             );
 
             let mut items = all_items[cluster.all_items_indices()]
@@ -367,86 +258,14 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                 bottom = bottom.par_merge(prev, cost_matrix);
             }
 
-            ftlog::info!(
+            ftlog::debug!(
                 "Finished aligning leaf cluster at depth {} with {} sequences to {} width in parallel",
                 cluster.depth,
-                cluster.cardinality(),
+                cluster.cardinality,
                 bottom.len()
             );
 
             bottom
         }
-    }
-
-    /// Iteratively creates an MSA from a Cluster.
-    fn par_from_cluster_iterative<Id, T, A>(root: &Cluster<T, A>, all_items: &[(Id, S)], cost_matrix: &CostMatrix<T>) -> Columnar<S>
-    where
-        Id: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-    {
-        // Post-order traversal stack
-        let mut stack = {
-            let mut stack_1 = vec![root];
-            let mut stack_2 = Vec::new();
-
-            while let Some(c) = stack_1.pop() {
-                if let Some((children, _)) = &c.children {
-                    stack_1.extend(children.iter());
-                }
-                stack_2.push(c);
-            }
-            stack_2
-        };
-
-        let mut child_alignments = Vec::new();
-        while let Some(c) = stack.pop() {
-            let partial_alignment = if let Some((children, _)) = &c.children {
-                ftlog::info!("Aligning parent cluster at depth {} with {} sequences in parallel", c.depth, c.cardinality());
-
-                let mut n_children = children.len() - 1;
-                let mut bottom: Columnar<S> = child_alignments.pop().unwrap_or_else(|| unreachable!("Parent cluster always has children"));
-                while n_children > 0 {
-                    let prev = child_alignments.pop().unwrap_or_else(|| unreachable!("Not enough child alignments collected"));
-                    bottom = bottom.par_merge(prev, cost_matrix);
-                    n_children -= 1;
-                }
-
-                bottom = bottom.post_pend_row(&all_items[c.center_index].1, cost_matrix);
-                ftlog::info!(
-                    "Finished aligning parent cluster at depth {} with {} sequences to {} width in parallel",
-                    c.depth,
-                    c.cardinality(),
-                    bottom.len()
-                );
-
-                bottom
-            } else {
-                ftlog::info!("Aligning leaf cluster at depth {} with {} sequences in parallel", c.depth, c.cardinality());
-
-                let mut items = all_items[c.all_items_indices()]
-                    .par_iter()
-                    .map(|(_, seq)| Columnar::from_row(seq))
-                    .collect::<Vec<_>>();
-
-                let mut bottom = items.pop().unwrap_or_else(|| unreachable!("Leaf cluster is never empty"));
-                while let Some(prev) = items.pop() {
-                    bottom = bottom.par_merge(prev, cost_matrix);
-                }
-
-                ftlog::info!(
-                    "Finished aligning leaf cluster at depth {} with {} sequences to {} width in parallel",
-                    c.depth,
-                    c.cardinality(),
-                    bottom.len()
-                );
-
-                bottom
-            };
-
-            child_alignments.push(partial_alignment);
-        }
-
-        child_alignments.pop().unwrap_or_else(|| unreachable!("There should be one final alignment"))
     }
 }

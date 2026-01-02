@@ -33,22 +33,6 @@ where
         self
     }
 
-    /// Same as [`Self::into_msa`], but uses an iterative approach to reduce stack usage.
-    pub fn into_msa_iterative(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
-        let msa = Msa::from_tree_iterative(&self, cost_matrix);
-        self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
-        self
-    }
-
-    /// Same as [`Self::into_msa`], but uses a tree-collapsing approach to reduce stack usage.
-    pub fn into_msa_collapsing(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
-        let msa = Msa::from_tree_collapse(&self, cost_matrix);
-        self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
-        self
-    }
-
     /// Computes all quality metrics for the MSA represented by this tree.
     pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>) -> QualityMetricResult
     where
@@ -77,22 +61,6 @@ where
     pub fn par_into_msa(mut self, cost_matrix: &CostMatrix<T>) -> Self {
         ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
         let msa = Msa::par_from_tree(&self, cost_matrix);
-        self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
-        self
-    }
-
-    /// Parallel version of [`Self::into_msa_iterative`].
-    pub fn par_into_msa_iterative(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences in parallel.", self.cardinality());
-        let msa = Msa::par_from_tree_iterative(&self, cost_matrix);
-        self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
-        self
-    }
-
-    /// Parallel version of [`Self::into_msa_collapsing`].
-    pub fn par_into_msa_collapsing(mut self, cost_matrix: &CostMatrix<T>) -> Self {
-        ftlog::info!("Computing MSA for tree with {} sequences.", self.cardinality());
-        let msa = Msa::par_from_tree_collapse(&self, cost_matrix);
         self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
     }
@@ -181,15 +149,9 @@ mod tests {
         let msa_tree = tree.clone().into_msa(&cost_matrix);
         check_sequences_equal(&tree, &msa_tree, "recursive");
 
-        let msa_tree_iterative = tree.clone().into_msa_iterative(&cost_matrix);
-        check_sequences_equal(&tree, &msa_tree_iterative, "iterative");
-
         let par_tree = Tree::par_new_minimal(sequences, metric)?;
         let par_msa_tree = par_tree.clone().par_into_msa(&cost_matrix);
         check_sequences_equal(&par_tree, &par_msa_tree, "parallel recursive");
-
-        let par_msa_tree_iterative = par_tree.clone().par_into_msa_iterative(&cost_matrix);
-        check_sequences_equal(&par_tree, &par_msa_tree_iterative, "parallel iterative");
 
         Ok(())
     }
@@ -215,15 +177,9 @@ mod tests {
         let msa_tree = tree.clone().into_msa(&cost_matrix);
         check_sequences_equal(&tree, &msa_tree, "recursive");
 
-        let msa_tree_iterative = tree.clone().into_msa_iterative(&cost_matrix);
-        check_sequences_equal(&tree, &msa_tree_iterative, "iterative");
-
         let par_tree = Tree::par_new_minimal(sequences, metric)?;
         let par_msa_tree = par_tree.clone().par_into_msa(&cost_matrix);
         check_sequences_equal(&par_tree, &par_msa_tree, "parallel recursive");
-
-        let par_msa_tree_iterative = par_tree.clone().par_into_msa_iterative(&cost_matrix);
-        check_sequences_equal(&par_tree, &par_msa_tree_iterative, "parallel iterative");
 
         Ok(())
     }

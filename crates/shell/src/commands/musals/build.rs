@@ -39,14 +39,7 @@ pub fn build_msa<P: AsRef<Path>>(
     };
 
     let msa_tree = match tree {
-        ShellTree::Levenshtein(tree) => {
-            let cost_matrix = cost_matrix.get();
-            if max_recursion_depth.is_some() {
-                ShellTree::Levenshtein(tree.par_into_msa_collapsing(&cost_matrix))
-            } else {
-                ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix))
-            }
-        }
+        ShellTree::Levenshtein(tree) => ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix.get())),
         _ => return Err("MSA tree can only be built for string data.".to_string()),
     };
 
