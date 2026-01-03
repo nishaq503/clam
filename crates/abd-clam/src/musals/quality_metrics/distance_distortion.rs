@@ -10,6 +10,7 @@ use crate::{
 use super::{
     MsaQuality, mu_sigma_min_max,
     pairwise_scores::{apply_pairwise, par_apply_pairwise},
+    random_sample_indices,
 };
 
 /// The scores of pairwise alignments in the MSA.
@@ -54,7 +55,7 @@ impl MsaQuality for DistanceDistortion {
         self.max
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
+    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
@@ -62,13 +63,13 @@ impl MsaQuality for DistanceDistortion {
         Self: Sized,
     {
         let scorer = |(_, s1): &(Id, S), (_, s2): &(Id, S)| dd_inner(s1, s2, &msa_tree.metric);
-        let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
+        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
         let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
         Self { mean, std_dev, min, max }
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
+    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
@@ -78,7 +79,7 @@ impl MsaQuality for DistanceDistortion {
         Self: Sized + Send + Sync,
     {
         let scorer = |(_, s1): &(Id, S), (_, s2): &(Id, S)| dd_inner(s1, s2, &msa_tree.metric);
-        let indices = (0..msa_tree.cardinality()).collect::<Vec<_>>();
+        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
         let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
         Self { mean, std_dev, min, max }

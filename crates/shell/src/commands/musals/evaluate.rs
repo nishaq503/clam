@@ -9,6 +9,7 @@ pub fn evaluate_msa<P: AsRef<Path>>(
     tree_dir: P,
     quality_metrics: &[super::ShellQualityMetric],
     cost_matrix: &super::ShellCostMatrix,
+    sample_size: Option<usize>,
     out_path: P,
 ) -> Result<(), String> {
     let out_path = out_path.as_ref();
@@ -40,12 +41,13 @@ pub fn evaluate_msa<P: AsRef<Path>>(
                 && path
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with("tree-") && name.ends_with(".bin"))
+                    .is_some_and(|name| name.starts_with("msa-") && name.ends_with(".bin"))
         })
         .ok_or_else(|| format!("No tree file found in directory {}", tree_dir.display()))?;
 
+    ftlog::info!("Reading tree from {tree_path:?}...");
     let metric = crate::metrics::Metric::Levenshtein; // Currently only Levenshtein is supported
-    let tree = ShellTree::read_from(tree_dir, &metric)?;
+    let tree = ShellTree::read_from(&tree_path, &metric)?;
     ftlog::info!("Read tree from {tree_path:?}.");
 
     let tree = match tree {
@@ -54,15 +56,20 @@ pub fn evaluate_msa<P: AsRef<Path>>(
     };
     let cost_matrix = cost_matrix.get();
 
-    let results = quality_metrics
-        .iter()
-        .map(|m| m.get())
-        .map(|m| tree.par_compute_quality_metric(&m, &cost_matrix));
-
-    for m in results {
-        let file_name = format!("{}-{suffix}.{ext}", m.name());
+    for m in quality_metrics {
+        ftlog::info!("Computing quality metric: {}", m.name());
+        let result = tree.par_compute_quality_metric(&m.get(), &cost_matrix, sample_size);
+        ftlog::info!(
+            "Computed quality metric: {}, mean: {}, std_dev: {}, min: {}, max: {}",
+            result.name(),
+            result.mean(),
+            result.std_dev(),
+            result.min(),
+            result.max()
+        );
+        let file_name = format!("{}-{suffix}.{ext}", result.name());
         let out_path = out_dir.join(file_name);
-        OutputFormat::write(&out_path, &m)?;
+        OutputFormat::write(&out_path, &result)?;
     }
 
     Ok(())

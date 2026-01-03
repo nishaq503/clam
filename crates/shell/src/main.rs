@@ -96,7 +96,9 @@ fn main() -> Result<(), String> {
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
                 commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta)
             }
-            commands::musals::MusalsAction::Evaluate { quality_metrics } => commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, out_path),
+            commands::musals::MusalsAction::Evaluate { quality_metrics, sample_size } => {
+                commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, sample_size, out_path)
+            }
         },
         // Commands::Mbed { action, .. } => { todo!() }
     }

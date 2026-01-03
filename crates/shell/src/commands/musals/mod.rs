@@ -26,6 +26,9 @@ pub enum MusalsAction {
         /// The quality metrics to compute.
         #[arg(short('q'), long, value_parser = clap::value_parser!(ShellQualityMetric))]
         quality_metrics: Vec<ShellQualityMetric>,
+        /// Optional size of the subsample of the input data to use for evaluation. If not provided, the full MSA is used.
+        #[arg(short('n'), long)]
+        sample_size: Option<usize>,
     },
 }
 
@@ -99,6 +102,17 @@ impl ShellQualityMetric {
             Self::PairwiseScores => QualityMetric::PairwiseScores,
             Self::WeightedPairwiseScores => QualityMetric::WeightedPairwiseScores,
             Self::DistanceDistortion => QualityMetric::DistanceDistortion,
+        }
+    }
+
+    /// Get the name of the quality metric.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::GapFraction => "gap-fraction",
+            Self::MismatchFraction => "mismatch-fraction",
+            Self::PairwiseScores => "pairwise-scores",
+            Self::WeightedPairwiseScores => "weighted-pairwise-scores",
+            Self::DistanceDistortion => "distance-distortion",
         }
     }
 }

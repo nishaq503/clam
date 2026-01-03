@@ -2,6 +2,8 @@
 
 #![expect(clippy::cast_precision_loss)]
 
+use rand::prelude::*;
+
 use crate::{DistanceValue, Tree};
 
 use super::{CostMatrix, Sequence};
@@ -163,7 +165,7 @@ pub trait MsaQuality: serde::Serialize + for<'de> serde::Deserialize<'de> {
     fn max(&self) -> f64;
 
     /// Computes the quality metric from the given MSA tree.
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
+    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
@@ -171,7 +173,7 @@ pub trait MsaQuality: serde::Serialize + for<'de> serde::Deserialize<'de> {
         Self: Sized;
 
     /// Parallel version of [`compute`].
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>) -> Self
+    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
@@ -194,4 +196,17 @@ fn mu_sigma_min_max<I: AsRef<[f64]>>(values: I) -> (f64, f64, f64, f64) {
     let std_dev = (values.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / num_pairs).sqrt();
 
     (mean, std_dev, min, max)
+}
+
+/// Returns a random sample of indices from 0 to `max_index - 1`.
+fn random_sample_indices(max_index: usize, sample_size: Option<usize>) -> Vec<usize> {
+    let mut indices = (0..max_index).collect::<Vec<_>>();
+
+    if let Some(size) = sample_size {
+        let mut rng = rand::rng();
+        indices.shuffle(&mut rng);
+        indices.truncate(size);
+    }
+
+    indices
 }

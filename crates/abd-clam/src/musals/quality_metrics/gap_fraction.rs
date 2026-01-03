@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    musals::{CostMatrix, Sequence},
+    musals::{CostMatrix, Sequence, quality_metrics::random_sample_indices},
 };
 
 use super::{MsaQuality, mu_sigma_min_max};
@@ -51,24 +51,27 @@ impl MsaQuality for GapFraction {
         self.max
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
+    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
         M: Fn(&S, &S) -> T,
         Self: Sized,
     {
-        let msa_width = msa_tree.items[0].1.as_ref().len();
-        let gap_fractions = msa_tree
-            .items
+        let msa_width = msa_tree.items[0].1.as_ref().len() as f64;
+
+        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
+        let gap_fractions = indices
             .iter()
-            .map(|(_, seq)| seq.gap_count() as f64 / msa_width as f64)
+            .map(|&i| &msa_tree.items[i])
+            .map(|(_, seq)| seq.gap_count() as f64 / msa_width)
             .collect::<Vec<_>>();
+
         let (mean, std_dev, min, max) = mu_sigma_min_max(gap_fractions);
         Self { mean, std_dev, min, max }
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>) -> Self
+    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
@@ -77,12 +80,15 @@ impl MsaQuality for GapFraction {
         M: Fn(&S, &S) -> T + Send + Sync,
         Self: Sized + Send + Sync,
     {
-        let msa_width = msa_tree.items[0].1.as_ref().len();
-        let gap_fractions = msa_tree
-            .items
+        let msa_width = msa_tree.items[0].1.as_ref().len() as f64;
+
+        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
+        let gap_fractions = indices
             .par_iter()
-            .map(|(_, seq)| seq.gap_count() as f64 / msa_width as f64)
+            .map(|&i| &msa_tree.items[i])
+            .map(|(_, seq)| seq.gap_count() as f64 / msa_width)
             .collect::<Vec<_>>();
+
         let (mean, std_dev, min, max) = mu_sigma_min_max(gap_fractions);
         Self { mean, std_dev, min, max }
     }
