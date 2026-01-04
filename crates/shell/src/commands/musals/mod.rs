@@ -91,6 +91,8 @@ pub enum ShellQualityMetric {
     WeightedPairwiseScores,
     /// The mean distortion of alignment distances between pairs of sequences in the MSA.
     DistanceDistortion,
+    /// The Sum of Pairs (SP) score of the MSA.
+    SumOfPairs,
 }
 
 impl ShellQualityMetric {
@@ -102,6 +104,7 @@ impl ShellQualityMetric {
             Self::PairwiseScores => QualityMetric::PairwiseScores,
             Self::WeightedPairwiseScores => QualityMetric::WeightedPairwiseScores,
             Self::DistanceDistortion => QualityMetric::DistanceDistortion,
+            Self::SumOfPairs => QualityMetric::SumOfPairs,
         }
     }
 
@@ -113,6 +116,7 @@ impl ShellQualityMetric {
             Self::PairwiseScores => "pairwise-scores",
             Self::WeightedPairwiseScores => "weighted-pairwise-scores",
             Self::DistanceDistortion => "distance-distortion",
+            Self::SumOfPairs => "sum-of-pairs",
         }
     }
 }

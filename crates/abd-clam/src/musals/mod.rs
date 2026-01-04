@@ -6,7 +6,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree};
+use crate::{DistanceValue, Tree, musals::quality_metrics::SumOfPairs};
 
 mod alignment;
 mod quality_metrics;
@@ -46,6 +46,7 @@ where
                 QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::compute(self, cost_matrix, sample_size))
             }
             QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(self, cost_matrix, sample_size)),
+            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::compute(self, cost_matrix, sample_size)),
         }
     }
 }
@@ -80,6 +81,7 @@ where
                 QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::par_compute(self, cost_matrix, sample_size))
             }
             QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(self, cost_matrix, sample_size)),
+            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::par_compute(self, cost_matrix, sample_size)),
         }
     }
 }

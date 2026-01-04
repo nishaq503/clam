@@ -12,12 +12,14 @@ mod distance_distortion;
 mod gap_fraction;
 mod mismatch_fraction;
 mod pairwise_scores;
+mod sum_of_pairs;
 mod weighted_pairwise_scores;
 
 pub use distance_distortion::DistanceDistortion;
 pub use gap_fraction::GapFraction;
 pub use mismatch_fraction::MismatchFraction;
 pub use pairwise_scores::PairwiseScores;
+pub use sum_of_pairs::SumOfPairs;
 pub use weighted_pairwise_scores::WeightedPairwiseScores;
 
 /// Quality metrics that may be computed for an MSA.
@@ -35,6 +37,8 @@ pub enum QualityMetric {
     WeightedPairwiseScores,
     /// The mean distortion of alignment distances between pairs of sequences in the MSA.
     DistanceDistortion,
+    /// The Sum of Pairs (SP) score of the MSA.
+    SumOfPairs,
 }
 
 /// Quality metrics that have been computed for an MSA.
@@ -53,6 +57,8 @@ pub enum QualityMetricResult {
     WeightedPairwiseScores(WeightedPairwiseScores),
     /// The mean distortion of alignment distances between pairs of sequences in the MSA.
     DistanceDistortion(DistanceDistortion),
+    /// The Sum of Pairs (SP) score of the MSA.
+    SumOfPairs(SumOfPairs),
 }
 
 impl QualityMetricResult {
@@ -65,6 +71,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.name(),
             Self::WeightedPairwiseScores(metric) => metric.name(),
             Self::DistanceDistortion(metric) => metric.name(),
+            Self::SumOfPairs(metric) => metric.name(),
         }
     }
 
@@ -77,6 +84,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.short_name(),
             Self::WeightedPairwiseScores(metric) => metric.short_name(),
             Self::DistanceDistortion(metric) => metric.short_name(),
+            Self::SumOfPairs(metric) => metric.short_name(),
         }
     }
 
@@ -89,6 +97,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.description(),
             Self::WeightedPairwiseScores(metric) => metric.description(),
             Self::DistanceDistortion(metric) => metric.description(),
+            Self::SumOfPairs(metric) => metric.description(),
         }
     }
 
@@ -101,6 +110,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.mean(),
             Self::WeightedPairwiseScores(metric) => metric.mean(),
             Self::DistanceDistortion(metric) => metric.mean(),
+            Self::SumOfPairs(metric) => metric.mean(),
         }
     }
 
@@ -113,6 +123,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.std_dev(),
             Self::WeightedPairwiseScores(metric) => metric.std_dev(),
             Self::DistanceDistortion(metric) => metric.std_dev(),
+            Self::SumOfPairs(metric) => metric.std_dev(),
         }
     }
 
@@ -125,6 +136,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.min(),
             Self::WeightedPairwiseScores(metric) => metric.min(),
             Self::DistanceDistortion(metric) => metric.min(),
+            Self::SumOfPairs(metric) => metric.min(),
         }
     }
 
@@ -137,6 +149,7 @@ impl QualityMetricResult {
             Self::PairwiseScores(metric) => metric.max(),
             Self::WeightedPairwiseScores(metric) => metric.max(),
             Self::DistanceDistortion(metric) => metric.max(),
+            Self::SumOfPairs(metric) => metric.max(),
         }
     }
 }

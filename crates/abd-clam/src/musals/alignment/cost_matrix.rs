@@ -166,6 +166,16 @@ impl<T: DistanceValue> CostMatrix<T> {
 
         self.normalize()
     }
+
+    /// Returns the minimum substitution cost in the matrix.
+    pub fn min_sub_cost(&self) -> T {
+        self.sub_matrix.iter().flatten().fold(T::max_value(), |a, &b| if a < b { a } else { b })
+    }
+
+    /// Returns the maximum substitution cost in the matrix.
+    pub fn max_sub_cost(&self) -> T {
+        self.sub_matrix.iter().flatten().fold(T::min_value(), |a, &b| if a > b { a } else { b })
+    }
 }
 
 impl<T: DistanceValue> CostMatrix<T> {
