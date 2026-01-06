@@ -2,11 +2,17 @@
 
 use std::path::Path;
 
-use crate::{data::OutputFormat, trees::ShellTree};
+use abd_clam::{
+    DistanceValue, Tree,
+    musals::{CostMatrix, Sequence},
+};
+
+use crate::{data::OutputFormat, metrics::Metric, trees::ShellTree};
 
 /// Evaluate MSA quality metrics.
 pub fn evaluate_msa<P: AsRef<Path>>(
     tree_dir: P,
+    metric: &Metric,
     quality_metrics: &[super::ShellQualityMetric],
     cost_matrix: &super::ShellCostMatrix,
     sample_size: Option<usize>,
@@ -46,19 +52,41 @@ pub fn evaluate_msa<P: AsRef<Path>>(
         .ok_or_else(|| format!("No tree file found in directory {}", tree_dir.display()))?;
 
     ftlog::info!("Reading tree from {tree_path:?}...");
-    let metric = crate::metrics::Metric::Levenshtein; // Currently only Levenshtein is supported
-    let tree = ShellTree::read_from(&tree_path, &metric)?;
+    let tree = ShellTree::read_from(&tree_path, metric)?;
     ftlog::info!("Read tree from {tree_path:?}.");
 
-    let tree = match tree {
-        ShellTree::Levenshtein(tree) => tree,
-        _ => return Err("MUSALS evaluation currently only supports Levenshtein trees.".to_string()),
+    match tree {
+        ShellTree::Lcs(tree) => {
+            eval_msa(&tree, &cost_matrix.get(), quality_metrics, sample_size, out_dir, suffix, ext)?;
+        }
+        ShellTree::Levenshtein(tree) => {
+            eval_msa(&tree, &cost_matrix.get(), quality_metrics, sample_size, out_dir, suffix, ext)?;
+        }
+        _ => return Err("MUSALS evaluation currently only supports Levenshtein and Lcs metrics.".to_string()),
     };
-    let cost_matrix = cost_matrix.get();
 
+    Ok(())
+}
+
+fn eval_msa<Id, S, T, A, M>(
+    tree: &Tree<Id, S, T, A, M>,
+    cost_matrix: &CostMatrix<T>,
+    quality_metrics: &[super::ShellQualityMetric],
+    sample_size: Option<usize>,
+    out_dir: &Path,
+    suffix: &str,
+    ext: &str,
+) -> Result<(), String>
+where
+    Id: Send + Sync,
+    S: Sequence + Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Fn(&S, &S) -> T + Send + Sync,
+{
     for m in quality_metrics {
         ftlog::info!("Computing quality metric: {}", m.name());
-        let result = tree.par_compute_quality_metric(&m.get(), &cost_matrix, sample_size);
+        let result = tree.par_compute_quality_metric(&m.get(), cost_matrix, sample_size);
         ftlog::info!(
             "Computed quality metric: {}, mean: {}, std_dev: {}, min: {}, max: {}",
             result.name(),

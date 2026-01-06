@@ -39,6 +39,7 @@ pub fn build_msa<P: AsRef<Path>>(
     };
 
     let msa_tree = match tree {
+        ShellTree::Lcs(tree) => ShellTree::Lcs(tree.par_into_msa(&cost_matrix.get())),
         ShellTree::Levenshtein(tree) => ShellTree::Levenshtein(tree.par_into_msa(&cost_matrix.get())),
         _ => return Err("MSA tree can only be built for string data.".to_string()),
     };

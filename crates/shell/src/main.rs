@@ -60,9 +60,6 @@ fn main() -> Result<(), String> {
     let (_guard, log_path) = utils::configure_logger(&args.log_name)?;
     ftlog::info!("Log file: {log_path:?}");
 
-    let inp_path = args
-        .inp_path
-        .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
     let metric = args.metric;
     let sample_size = args.sample_size;
     let mut rng = args.seed.map_or_else(rand::rngs::StdRng::from_os_rng, rand::rngs::StdRng::seed_from_u64);
@@ -80,6 +77,9 @@ fn main() -> Result<(), String> {
         },
         Commands::Cakes { action } => match action {
             commands::cakes::CakesAction::Build => {
+                let inp_path = args
+                    .inp_path
+                    .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
                 commands::cakes::build_new_tree(inp_data, &metric, args.max_recursion_depth, out_path)
             }
@@ -87,17 +87,26 @@ fn main() -> Result<(), String> {
                 queries_path,
                 cakes_algorithms,
             } => {
+                let inp_path = args
+                    .inp_path
+                    .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
                 let queries = InputFormat::read(&queries_path, sample_size, &mut rng)?;
                 commands::cakes::search_tree(&inp_path, queries, &cakes_algorithms, out_path)
             }
         },
         Commands::Musals { action, cost_matrix } => match action {
             commands::musals::MusalsAction::Build { save_fasta } => {
+                let inp_path = args
+                    .inp_path
+                    .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
                 let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
                 commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta)
             }
             commands::musals::MusalsAction::Evaluate { quality_metrics, sample_size } => {
-                commands::musals::evaluate_msa(&inp_path, &quality_metrics, &cost_matrix, sample_size, out_path)
+                let inp_path = args
+                    .inp_path
+                    .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
+                commands::musals::evaluate_msa(&inp_path, &metric, &quality_metrics, &cost_matrix, sample_size, out_path)
             }
         },
         // Commands::Mbed { action, .. } => { todo!() }

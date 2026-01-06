@@ -16,6 +16,7 @@ pub fn tree_file_path<P: AsRef<std::path::Path>>(out_dir: P, data: &ShellData, m
         _ => "vec",
     };
     let metric_part = match metric {
+        Metric::Lcs => "lcs",
         Metric::Levenshtein => "lev",
         Metric::Euclidean => "euc",
         Metric::Cosine => "cos",

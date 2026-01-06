@@ -8,7 +8,7 @@ use databuf::{Decode, Encode, config::DEFAULT as DATABUF_DEFAULT};
 use crate::{
     commands::cakes::{AlgorithmResult, QueryResult, SearchResults},
     data::{MusalsSequence, OutputFormat, ShellData},
-    metrics::{Metric, cosine, euclidean},
+    metrics::{Metric, cosine, euclidean, lcs},
     search::ShellCakes,
 };
 
@@ -33,6 +33,7 @@ pub enum VectorTree {
 
 #[expect(clippy::type_complexity)]
 pub enum ShellTree {
+    Lcs(Tree<String, MusalsSequence, u32, (), fn(&MusalsSequence, &MusalsSequence) -> u32>),
     Levenshtein(Tree<String, MusalsSequence, u32, (), Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>>),
     Euclidean(VectorTree),
     Cosine(VectorTree),
@@ -73,6 +74,19 @@ impl ShellTree {
     ///   - Float or Integer data with Euclidean or Cosine metrics.
     pub fn new(inp_data: ShellData, metric: &Metric, max_recursion_depth: Option<usize>) -> Result<ShellTree, String> {
         match metric {
+            Metric::Lcs => match inp_data {
+                ShellData::String(items) => {
+                    let metric: fn(&MusalsSequence, &MusalsSequence) -> u32 = lcs;
+                    let strategy = PartitionStrategy::default();
+                    let tree = if let Some(max_recursion_depth) = max_recursion_depth {
+                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
+                    } else {
+                        Tree::par_new(items, metric, &strategy, &|_| None)
+                    }?;
+                    Ok(ShellTree::Lcs(tree))
+                }
+                _ => Err("LCS metric can only be used with string data".to_string()),
+            },
             Metric::Levenshtein => match inp_data {
                 ShellData::String(items) => {
                     let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
@@ -125,6 +139,13 @@ impl ShellTree {
     /// Search the tree with the given queries and algorithms.
     pub fn search<P: AsRef<Path> + core::fmt::Debug>(&self, queries: ShellData, algorithms: &[ShellCakes], out_path: P) -> Result<(), String> {
         match self {
+            Self::Lcs(tree) => match queries {
+                ShellData::String(queries) => {
+                    let queries = queries.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
+                    search(tree, &queries, algorithms, out_path)
+                }
+                _ => Err("LCS tree can only be searched with string queries".to_string()),
+            },
             Self::Levenshtein(tree) => match queries {
                 ShellData::String(queries) => {
                     let queries = queries.iter().map(|(_, seq)| seq.clone()).collect::<Vec<_>>();
@@ -146,6 +167,7 @@ impl ShellTree {
     /// Creates a path for the tree file based on the metric and optional suffix.
     pub fn tree_file_path<P: AsRef<Path>>(&self, out_dir: P, suffix: Option<&str>) -> PathBuf {
         let suffix = match self {
+            Self::Lcs(_) => suffix.map_or_else(|| "lcs".to_string(), |s| format!("{s}-lcs")),
             Self::Levenshtein(_) => suffix.map_or_else(|| "lev".to_string(), |s| format!("{s}-lev")),
             Self::Euclidean(_) => suffix.map_or_else(|| "euc".to_string(), |s| format!("{s}-euc")),
             Self::Cosine(_) => suffix.map_or_else(|| "cos".to_string(), |s| format!("{s}-cos")),
@@ -156,6 +178,10 @@ impl ShellTree {
     /// Saves the tree to the specified path using bincode.
     pub fn write_to<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
         match self {
+            Self::Lcs(tree) => {
+                let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+                tree.encode::<DATABUF_DEFAULT>(&mut file).map_err(|e| e.to_string())
+            }
             Self::Levenshtein(tree) => {
                 let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
                 tree.encode::<DATABUF_DEFAULT>(&mut file).map_err(|e| e.to_string())
@@ -182,6 +208,11 @@ impl ShellTree {
         }
 
         match metric {
+            Metric::Lcs => {
+                let bytes = std::fs::read(tree_path).map_err(|e| e.to_string())?;
+                let tree = Tree::from_bytes::<DATABUF_DEFAULT>(&bytes).map_err(|e| e.to_string())?;
+                Ok(ShellTree::Lcs(tree.with_metric(lcs)))
+            }
             Metric::Levenshtein => {
                 let sz_device = stringzilla::szs::DeviceScope::default().map_err(|e| e.to_string())?;
                 let sz_engine = stringzilla::szs::LevenshteinDistances::new(&sz_device, 0, 1, 1, 1).map_err(|e| e.to_string())?;
@@ -311,6 +342,7 @@ impl std::fmt::Display for VectorTree {
 impl std::fmt::Display for ShellTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ShellTree::Lcs(_) => write!(f, "LcsStringTree<U32>"),
             ShellTree::Levenshtein(_) => write!(f, "LevenshteinStringTree<U32>"),
             ShellTree::Euclidean(tree) => write!(f, "Euclidean{tree}"),
             ShellTree::Cosine(tree) => write!(f, "Cosine{tree}"),
