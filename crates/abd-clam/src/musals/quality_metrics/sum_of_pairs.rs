@@ -28,7 +28,7 @@ impl MsaQuality for SumOfPairs {
     }
 
     fn short_name<'a>(&self) -> &'a str {
-        "sop"
+        "sp"
     }
 
     fn description(&self) -> String {
@@ -108,7 +108,7 @@ where
 }
 
 /// Computes the Sum of Pairs score for a single column in the MSA, normalized by the number of pairs.
-fn column_score<S, T>(column: &S, cost_matrix: &CostMatrix<T>) -> f64
+fn column_score<S, T>(column: &S, _: &CostMatrix<T>) -> f64
 where
     S: Sequence,
     T: DistanceValue,
@@ -118,14 +118,8 @@ where
 
     let score = frequencies.iter().enumerate().filter(|&(_, &count)| count > 0).fold(0_f64, |acc, (k, &count)| {
         let (i, j) = flat_to_lt_index(k);
-        let pair_score = if i == S::GAP || j == S::GAP {
-            cost_matrix.gap_ext_cost()
-        } else {
-            cost_matrix.sub_cost(i, j)
-        }
-        .to_f64()
-        .unwrap_or_else(|| unreachable!("Failed to convert DistanceValue to f64"));
-        pair_score.mul_add(count as f64, acc)
+        let pair_score = if i == j { 0.0 } else { 1.0 };
+        (count as f64).mul_add(pair_score, acc)
     });
 
     score / (total_pairs as f64)
@@ -138,7 +132,7 @@ fn count_pairs(column: &[u8]) -> Vec<usize> {
     for (i, &a) in column.iter().enumerate() {
         for &b in &column[i + 1..] {
             let (i, j) = if a < b { (a, b) } else { (b, a) };
-            pair_counts[lt_to_flat_index(i, j)] += 1;
+            pair_counts[lt_to_flat_index(i as usize, j as usize)] += 1;
         }
     }
 
@@ -148,22 +142,20 @@ fn count_pairs(column: &[u8]) -> Vec<usize> {
 /// Converts a pair of indices for a lower-triangular matrix into a single index in a flat array.
 ///
 /// This assumes that `i >= j`.
-const fn lt_to_flat_index(i: u8, j: u8) -> usize {
-    let i = i as usize;
-    let j = j as usize;
+const fn lt_to_flat_index(i: usize, j: usize) -> usize {
     (i * (i + 1)) / 2 + j
 }
 
 /// Converts a flat array index into a pair of indices for a lower-triangular matrix.
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::many_single_char_names)]
-fn flat_to_lt_index(k: usize) -> (u8, u8) {
+fn flat_to_lt_index(k: usize) -> (usize, usize) {
     let p = ((1 + 8 * k) as f64).sqrt();
     let i = ((p - 1.0) / 2.0).floor() as usize;
 
     let t = i * (i + 1) / 2;
     let j = k - t;
 
-    (i as u8, j as u8)
+    (i, j)
 }
 
 #[cfg(test)]
@@ -172,19 +164,22 @@ mod tests {
 
     #[test]
     fn test_lt_to_flat_index() {
-        assert_eq!(lt_to_flat_index(0, 0), 0);
-        assert_eq!(lt_to_flat_index(1, 0), 1);
-        assert_eq!(lt_to_flat_index(1, 1), 2);
-        assert_eq!(lt_to_flat_index(2, 0), 3);
-        assert_eq!(lt_to_flat_index(2, 1), 4);
-        assert_eq!(lt_to_flat_index(2, 2), 5);
-
-        assert_eq!(flat_to_lt_index(0), (0, 0));
-        assert_eq!(flat_to_lt_index(1), (1, 0));
-        assert_eq!(flat_to_lt_index(2), (1, 1));
-        assert_eq!(flat_to_lt_index(3), (2, 0));
-        assert_eq!(flat_to_lt_index(4), (2, 1));
-        assert_eq!(flat_to_lt_index(5), (2, 2));
+        let expected_pairs = [
+            ((0, 0), 0), // (0,0) -> 0
+            ((1, 0), 1), // (1,0) -> 1
+            ((1, 1), 2), // (1,1) -> 2
+            ((2, 0), 3), // (2,0) -> 3
+            ((2, 1), 4), // (2,1) -> 4
+            ((2, 2), 5), // (2,2) -> 5
+            ((3, 0), 6), // (3,0) -> 6
+            ((3, 1), 7), // (3,1) -> 7
+            ((3, 2), 8), // (3,2) -> 8
+            ((3, 3), 9), // (3,3) -> 9
+        ];
+        for ((i, j), k) in expected_pairs {
+            assert_eq!(lt_to_flat_index(i, j), k);
+            assert_eq!((i, j), flat_to_lt_index(k));
+        }
 
         let mut k = 0;
         for i in 0..=255 {
