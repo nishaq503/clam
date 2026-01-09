@@ -19,7 +19,7 @@ use core::{
 
 pub mod cakes;
 mod tree;
-pub mod utils; // Intended for private use, but made public for testing
+pub mod utils;
 
 pub use tree::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
 
