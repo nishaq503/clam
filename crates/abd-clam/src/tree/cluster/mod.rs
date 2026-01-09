@@ -235,6 +235,16 @@ impl<T, A> Cluster<T, A> {
         self.children.as_mut().map(|(_, span)| span)
     }
 
+    /// Takes ownership of the children and span of this cluster, if any, leaving it a leaf cluster.
+    pub const fn take_children_and_span(&mut self) -> Option<(Box<[Self]>, T)> {
+        self.children.take()
+    }
+
+    /// Sets the children and span of this cluster, replacing any existing children.
+    pub fn set_children_and_span(&mut self, children: Box<[Self]>, span: T) {
+        self.children = Some((children, span));
+    }
+
     /// Returns all clusters in the subtree rooted at this cluster, including this cluster, in pre-order.
     pub fn subtree_preorder(&self) -> Vec<&Self> {
         if let Some((children, _)) = &self.children {
