@@ -245,6 +245,26 @@ impl<T, A> Cluster<T, A> {
         self.children = Some((children, span));
     }
 
+    /// Unstacks the tree and returns all clusters as leaves in post-order.
+    ///
+    /// The span of each cluster is placed alongside it in the returned vector.
+    pub fn unstacked_postorder_owned(self) -> Vec<(Self, Option<T>)> {
+        let mut stack_1 = vec![self];
+        let mut stack_2 = Vec::new();
+
+        while let Some(mut c) = stack_1.pop() {
+            let span = if let Some((children, span)) = c.take_children_and_span() {
+                stack_1.extend(children.into_vec());
+                Some(span)
+            } else {
+                None
+            };
+            stack_2.push((c, span));
+        }
+
+        stack_2
+    }
+
     /// Returns all clusters in the subtree rooted at this cluster, including this cluster, in pre-order.
     pub fn subtree_preorder(&self) -> Vec<&Self> {
         if let Some((children, _)) = &self.children {
