@@ -378,10 +378,11 @@ where
     }
 }
 
-/// Serialization and deserialization methods for `Tree`, gated by the `serde` feature.
+/// Serialization and deserialization methods for [`Tree`], gated by the `serde` feature.
 ///
-/// The metric, `M`, is not serialized or deserialized, as it is typically a closure or function pointer. After deserialization, the metric must be provided
-/// again using the [`Tree::with_metric`] method.
+/// These methods will only serialize and deserialize the items and the root cluster as a tuple. They will ignore the metric. This is because the metric is
+/// typically a closure or function pointer, which cannot be serialized or deserialized. After deserialization, the metric must be provided using the
+/// [`Tree::with_metric`] method.
 #[cfg(feature = "serde")]
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
@@ -396,21 +397,7 @@ where
     ///
     /// If serialization fails.
     pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        /// A helper struct for serialization.
-        #[derive(serde::Serialize)]
-        struct SerializableTree<'a, Id, I, T, A> {
-            /// The items stored in the tree, each paired with its identifier.
-            items: &'a Vec<(Id, I)>,
-            /// The root cluster of the tree.
-            root: &'a Cluster<T, A>,
-        }
-
-        let serializable_tree = SerializableTree {
-            items: &self.items,
-            root: &self.root,
-        };
-
-        serializable_tree.serialize(serializer)
+        (&self.items, &self.root).serialize(serializer)
     }
 
     /// Deserializes a `Tree` using Serde.
@@ -419,16 +406,7 @@ where
     ///
     /// If deserialization fails.
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
-        /// A helper struct for deserialization.
-        #[derive(serde::Deserialize)]
-        struct SerializableTree<Id, I, T, A> {
-            /// The items stored in the tree, each paired with its identifier.
-            items: Vec<(Id, I)>,
-            /// The root cluster of the tree.
-            root: Cluster<T, A>,
-        }
-
-        let SerializableTree { items, root } = SerializableTree::deserialize(deserializer)?;
+        let (items, root) = <(_, _)>::deserialize(deserializer)?;
         Ok(Self { items, root, metric })
     }
 }
