@@ -10,7 +10,6 @@ abd-clam = { workspace = true, features = ["all"] }
 distances = { workspace = true }
 symagen = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-# bitcode = { workspace = true, features = ["serde"] }
 databuf = { workspace = true }
 ndarray.workspace = true
 ndarray-npy.workspace = true

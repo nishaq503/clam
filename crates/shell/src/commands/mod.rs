@@ -1,6 +1,7 @@
 //! The commands under the `clam` CLI.
 
 pub mod cakes;
+pub mod explore;
 pub mod generate_data;
 // pub mod mbed;
 pub mod musals;
@@ -32,5 +33,10 @@ pub enum Commands {
     GenerateData {
         #[clap(subcommand)]
         action: generate_data::GenerateDataAction,
+    },
+    /// Explore various properties of datasets and algorithms
+    Explore {
+        #[clap(subcommand)]
+        action: explore::ExploreAction,
     },
 }

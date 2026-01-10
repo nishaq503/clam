@@ -113,6 +113,11 @@ where
 
 /// Various getter methods for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
+    /// Provides ownership of the members of the `Tree`.
+    pub fn deconstruct(self) -> (Vec<(Id, I)>, Cluster<T, A>, M) {
+        (self.items, self.root, self.metric)
+    }
+
     /// Returns a reference to the identifier of the center item of the given cluster.
     pub fn center_id_of_cluster(&self, cluster: &Cluster<T, A>) -> &Id {
         &self.items[cluster.center_index()].0

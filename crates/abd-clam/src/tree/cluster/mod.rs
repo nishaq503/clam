@@ -420,7 +420,7 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Clears the annotation of this cluster and all its descendants.
-    pub fn clear_annotations(self) -> Cluster<T, ()> {
+    pub fn clear_annotations<B>(self) -> Cluster<T, B> {
         let children = self.children.map(|(boxed_children, span)| {
             let new_children = boxed_children
                 .into_vec()
