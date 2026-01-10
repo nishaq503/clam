@@ -2,7 +2,8 @@
 
 use std::path::Path;
 
-use abd_clam::{Cluster, DistanceValue, Tree};
+use abd_clam::{DistanceValue, Tree};
+use rayon::prelude::*;
 
 use crate::trees::{ShellTree, VectorTree};
 
@@ -48,48 +49,65 @@ where
     P: AsRef<Path>,
 {
     let (items, root, metric) = tree.deconstruct();
-    let distance_matrix = abd_clam::utils::par_pairwise_distances(&items, &metric);
 
     for (mut cluster, span) in root.clear_annotations().unstacked_postorder_owned() {
         if let Some(s) = span {
             // We will only annotate parent clusters.
-            cluster.annotate((s, filter_polar_distances(&distance_matrix, &cluster)))
+            ftlog::info!(
+                "Processing cluster centered at index {} with cardinality {}",
+                cluster.center_index(),
+                cluster.cardinality()
+            );
+
+            // The left pole is the point farthest from the center.
+            let center_distances = get_distances_in_range(cluster.center_index(), cluster.subtree_indices(), &items, &metric);
+            let arg_left = {
+                let (arg_max, _) = center_distances
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .unwrap_or_else(|| unreachable!("Cluster has no items"));
+                arg_max + cluster.center_index()
+            };
+            ftlog::info!("  Left pole index: {arg_left}");
+
+            // The right pole is the point farthest from the left pole.
+            let left_distances = get_distances_in_range(arg_left, cluster.subtree_indices(), &items, &metric);
+            let arg_right = {
+                let (arg_max, _) = left_distances
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                    .unwrap_or_else(|| unreachable!("Cluster has no items"));
+                arg_max + cluster.center_index()
+            };
+            ftlog::info!("  Right pole index: {arg_right}");
+
+            // Annotate the cluster with distances from both poles.
+            let right_distances = get_distances_in_range(arg_right, cluster.subtree_indices(), &items, &metric);
+            let polar_distances = left_distances.into_iter().zip(right_distances).collect::<Vec<_>>();
+            cluster.annotate((s, polar_distances));
         };
+
         let out_path = out_dir.as_ref().join(format!("cluster_{}.json", cluster.center_index()));
-        let contents = serde_json::to_string_pretty(&cluster).map_err(|e| format!("Failed to serialize cluster: {e}"))?;
+        let contents = serde_json::to_string(&cluster).map_err(|e| format!("Failed to serialize cluster: {e}"))?;
         std::fs::write(&out_path, contents).map_err(|e| format!("Failed to write cluster to {out_path:?}: {e}"))?;
+        ftlog::info!("Wrote cluster to {:?}", out_path.file_name());
     }
+
+    ftlog::info!("All clusters processed.");
 
     Ok(())
 }
 
-/// Get distances from polar points to all other points in the `Cluster`.
-///
-/// The `polar points` are defined as follows:
-///   - The `left polar point` is the point in the cluster that is farthest from the cluster center.
-///   - The `right polar point` is the point in the cluster that is farthest from the left polar point.
-fn filter_polar_distances<T, A>(distance_matrix: &[Vec<T>], cluster: &Cluster<T, A>) -> Vec<(T, T)>
+/// Computes distances from the indexed point to other points within the given range.
+fn get_distances_in_range<Id, I, T, M>(i: usize, js: core::ops::Range<usize>, items: &[(Id, I)], metric: &M) -> Vec<T>
 where
+    Id: Send + Sync,
+    I: Send + Sync,
     T: DistanceValue + Send + Sync,
+    M: Fn(&I, &I) -> T + Send + Sync,
 {
-    let center_distances = &distance_matrix[cluster.center_index()][cluster.all_items_indices()];
-    let arg_left = {
-        let (arg_max, _) = center_distances
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .unwrap_or_else(|| unreachable!("Cluster has no items"));
-        arg_max + cluster.center_index()
-    };
-    let left_distances = &distance_matrix[arg_left][cluster.all_items_indices()];
-    let arg_right = {
-        let (arg_max, _) = center_distances
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .unwrap_or_else(|| unreachable!("Cluster has no items"));
-        arg_max + cluster.center_index()
-    };
-    let right_distances = &distance_matrix[arg_right][cluster.all_items_indices()];
-    left_distances.iter().copied().zip(right_distances.iter().copied()).collect()
+    let i = &items[i].1;
+    items[js].par_iter().map(|(_, j)| metric(i, j)).collect()
 }

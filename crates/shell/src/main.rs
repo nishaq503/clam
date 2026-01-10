@@ -113,7 +113,9 @@ fn main() -> Result<(), String> {
             let tree_path = args
                 .inp_path
                 .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
+            ftlog::info!("Reading tree from {tree_path:?}");
             let tree = ShellTree::read_from(tree_path, &metric)?;
+            ftlog::info!("Tree successfully read.");
             match action {
                 commands::explore::ExploreAction::PolarDistances => commands::explore::polar_distances(tree, out_path),
             }
