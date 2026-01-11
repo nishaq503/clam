@@ -3,6 +3,8 @@
 use std::path::Path;
 
 use abd_clam::{DistanceValue, Tree};
+use ndarray::prelude::*;
+use ndarray_npy::{NpzWriter, WritableElement};
 use rayon::prelude::*;
 
 use crate::trees::{ShellTree, VectorTree};
@@ -44,15 +46,24 @@ fn save_cluster_distances<Id, I, T, A, M, P>(tree: Tree<Id, I, T, A, M>, out_dir
 where
     Id: Send + Sync,
     I: Send + Sync,
-    T: DistanceValue + serde::Serialize + Send + Sync,
+    T: DistanceValue + serde::Serialize + WritableElement + Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
     P: AsRef<Path>,
 {
+    let mut writer = {
+        let out_path = out_dir.as_ref().join("polar_distances.npz");
+        let file = std::fs::File::create(&out_path).map_err(|e| format!("Failed to create output file {out_path:?}: {e}"))?;
+        NpzWriter::new_compressed(file)
+    };
+
     let (items, root, metric) = tree.deconstruct();
+    let mut clusters = Vec::with_capacity(items.len());
 
     for (mut cluster, span) in root.clear_annotations().unstacked_postorder_owned() {
         if let Some(s) = span {
             // We will only annotate parent clusters.
+            cluster.annotate(s);
+
             ftlog::info!(
                 "Processing cluster centered at index {} with cardinality {}",
                 cluster.center_index(),
@@ -67,7 +78,7 @@ where
                     .enumerate()
                     .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .unwrap_or_else(|| unreachable!("Cluster has no items"));
-                arg_max + cluster.center_index()
+                arg_max + cluster.center_index() + 1
             };
             ftlog::info!("  Left pole index: {arg_left}");
 
@@ -79,21 +90,26 @@ where
                     .enumerate()
                     .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .unwrap_or_else(|| unreachable!("Cluster has no items"));
-                arg_max + cluster.center_index()
+                arg_max + cluster.center_index() + 1
             };
             ftlog::info!("  Right pole index: {arg_right}");
 
-            // Annotate the cluster with distances from both poles.
-            let right_distances = get_distances_in_range(arg_right, cluster.subtree_indices(), &items, &metric);
-            let polar_distances = left_distances.into_iter().zip(right_distances).collect::<Vec<_>>();
-            cluster.annotate((s, polar_distances));
-        };
+            // Save distances from both poles to all points in the cluster.
+            let left_distances = Array1::from_vec(left_distances);
+            let right_distances = Array1::from_vec(get_distances_in_range(arg_right, cluster.subtree_indices(), &items, &metric));
+            writer
+                .add_array(format!("{}_l", cluster.center_index()), &left_distances)
+                .map_err(|e| format!("Failed to write left distances: {e}"))?;
+            writer
+                .add_array(format!("{}_r", cluster.center_index()), &right_distances)
+                .map_err(|e| format!("Failed to write right distances: {e}"))?;
 
-        let out_path = out_dir.as_ref().join(format!("cluster_{}.json", cluster.center_index()));
-        let contents = serde_json::to_string(&cluster).map_err(|e| format!("Failed to serialize cluster: {e}"))?;
-        std::fs::write(&out_path, contents).map_err(|e| format!("Failed to write cluster to {out_path:?}: {e}"))?;
-        ftlog::info!("Wrote cluster to {:?}", out_path.file_name());
+            clusters.push(cluster);
+        };
     }
+
+    let contents = serde_json::to_string(&clusters).map_err(|e| format!("Failed to serialize clusters: {e}"))?;
+    std::fs::write(out_dir.as_ref().join("clusters.json"), contents).map_err(|e| format!("Failed to write clusters file: {e}"))?;
 
     ftlog::info!("All clusters processed.");
 
