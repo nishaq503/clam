@@ -32,8 +32,8 @@ dev = [
 [tool.uv.workspace]
 members = [
     "pypi/distances",
-    "experiments/py-mbed",
     "papers/cakes/py",
+    "papers/musals/py",
 ]
 
 [tool.uv.sources]

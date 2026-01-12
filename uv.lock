@@ -11,7 +11,7 @@ members = [
     "abd-distances",
     "clam",
     "paper-cakes",
-    "py-mbed",
+    "paper-musals",
 ]
 
 [[package]]
@@ -1635,6 +1635,31 @@ requires-dist = [
 ]
 
 [[package]]
+name = "paper-musals"
+version = "0.1.0"
+source = { editable = "papers/musals/py" }
+dependencies = [
+    { name = "jupyterlab" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "plotly" },
+    { name = "plotly-stubs" },
+    { name = "tqdm" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jupyterlab", specifier = ">=4.4.9" },
+    { name = "numpy", specifier = ">=2.3.3" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "plotly", specifier = ">=6.3.0" },
+    { name = "plotly-stubs", specifier = ">=0.0.6" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "typer", specifier = ">=0.19.2" },
+]
+
+[[package]]
 name = "parso"
 version = "0.8.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1852,11 +1877,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/cd/05/0a34433a064256a57
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/37/efad0257dc6e593a18957422533ff0f87ede7c9c6ea010a2177d738fb82f/pure_eval-0.2.3-py3-none-any.whl", hash = "sha256:1db8e35b67b3d218d818ae653e27f06c3aa420901fa7b081ca98cbedc874e0d0", size = 11842, upload-time = "2024-07-21T12:58:20.04Z" },
 ]
-
-[[package]]
-name = "py-mbed"
-version = "0.1.0"
-source = { editable = "experiments/py-mbed" }
 
 [[package]]
 name = "pyarrow"

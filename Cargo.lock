@@ -1192,6 +1192,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "paper-musals"
+version = "0.1.0"
+dependencies = [
+ "abd-clam",
+ "clap",
+ "distances",
+ "ftlog",
+ "ndarray",
+ "ndarray-npy",
+ "rand 0.9.2",
+ "serde_json",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
