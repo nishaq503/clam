@@ -2,11 +2,9 @@
 
 import typer
 
-from . import cluster_properties
-from . import search_performance
+from . import polar_distances
 
 app = typer.Typer()
-app.command()(cluster_properties.plot_cluster_properties)
-app.command()(search_performance.plot_search_performance)
+app.command()(polar_distances.polar_distances)
 
-__all__ = ["app", "cluster_properties", "search_performance"]
+__all__ = ["app", "polar_distances"]
