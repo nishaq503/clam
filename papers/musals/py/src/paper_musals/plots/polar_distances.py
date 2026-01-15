@@ -7,6 +7,7 @@ import time
 
 import numpy
 import plotly.graph_objects as go
+import plotly.io as pio
 import pydantic
 import typer
 
@@ -101,22 +102,33 @@ def polar_distances(
     typer.echo(f"Read {len(clusters)} clusters from {explorations_dir} in {end:.2f} seconds")
 
     start = time.perf_counter()
-    clusters = sorted(clusters, key=lambda c: c.cardinality, reverse=True)
+    clusters = sorted(clusters, key=lambda c: c.center_index)
     end = time.perf_counter() - start
-    typer.echo(f"Sorted {len(clusters)} clusters by cardinality in {end:.2f} seconds")
 
     npz_path = explorations_dir / "polar_distances.npz"
+    start = time.perf_counter()
     with numpy.load(npz_path) as data:
         arrays: dict[str, numpy.ndarray] = dict(data)
-    typer.echo(f"Read polar distances from {npz_path}")
+    end = time.perf_counter() - start
+    typer.echo(f"Read polar distances from {npz_path} in {end:.2f} seconds")
+
+    fig = go.Figure()
+    min_car, max_car = 10_000, 200_000
+    clusters = [
+        c for c in clusters if all(
+            [
+                c.cardinality > min_car,
+                c.cardinality < max_car,
+                c.annotation is not None,
+            ],
+        )
+    ]
+    typer.echo(f"Filtered clusters to {len(clusters)} with cardinality in ({min_car}, {max_car})")
 
     missing = []
+    projections = []
     for cluster in clusters:
-        if cluster.annotation is None:
-            # This is a leaf cluster, skip
-            continue
-
-        base = numpy.float64(cluster.annotation)
+        base = numpy.float64(cluster.radius * 2)
         l_name = f"{cluster.center_index}_l"
         r_name = f"{cluster.center_index}_r"
 
@@ -128,24 +140,24 @@ def polar_distances(
             missing.append(cluster.center_index)
             continue
 
-        if cluster.cardinality < 100_000 and cluster.cardinality > 1_000:  # noqa: PLR2004
-            l_distances, r_distances = arrays[l_name], arrays[r_name]
-            projection = project_distances(l_distances, r_distances, base)
+        l_distances, r_distances = arrays[l_name], arrays[r_name]
+        projection = project_distances(l_distances, r_distances, base) / base
+        fig.add_trace(go.Histogram(x=projection, opacity=0.25, nbinsx=50))
+        projections.extend(projection.tolist())
+        typer.echo(f"Added projections for cluster {cluster.center_index} with cardinality {cluster.cardinality}")
 
-            # Plot both histograms on the same figure
-            title = f"Center: {cluster.center_index} | Cardinality: {cluster.cardinality} | Depth: {cluster.depth} | Radius: {cluster.radius}"
-            fig = go.Figure()
-            fig.add_trace(go.Histogram(x=l_distances, name="Left Pole", marker_color="blue"))
-            fig.add_trace(go.Histogram(x=r_distances, name="Right Pole", marker_color="red"))
-            fig.add_trace(go.Histogram(x=projection, name="Projection", marker_color="green"))
-            fig.update_traces(opacity=0.25)
-            fig.update_layout(barmode="overlay", title=title, xaxis_title="Polar Distance", yaxis_title="Count")
+    typer.echo(f"Computed {len(projections)} projections from polar distances")
 
-            plot_path = plots_dir / f"cluster_{cluster.center_index}_polar_distances.html"
-            fig.write_html(plot_path)
-            typer.echo(f"Saved polar distances plot for cluster {cluster.center_index} to {plot_path}")
-            break  # Only plot one for testing
-        continue
+    plot_path = plots_dir / "polar_distances.png"
+    typer.echo(f"Saving polar distances plot to {plot_path}")
+    pio.write_image(fig, plot_path, height=500, width=800, scale=4)
+    fig.write_html(plot_path.with_suffix(".html"))
+
+    fig.update_yaxes(type="log")
+    log_plot_path = plots_dir / "log_polar_distances.png"
+    typer.echo(f"Saving log polar distances plot to {log_plot_path}")
+    pio.write_image(fig, log_plot_path, height=500, width=800, scale=4)
+    fig.write_html(log_plot_path.with_suffix(".html"))
 
     if missing:
         typer.echo(f"Total missing clusters: {len(missing)} out of {len(clusters)}")
