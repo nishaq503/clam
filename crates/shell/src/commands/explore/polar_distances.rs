@@ -62,7 +62,6 @@ where
     for (mut cluster, span) in root.clear_annotations().unstacked_postorder_owned() {
         if let Some(s) = span {
             // We will only annotate parent clusters.
-            cluster.annotate(s);
 
             ftlog::info!(
                 "Processing cluster centered at index {} with cardinality {}",
@@ -84,15 +83,18 @@ where
 
             // The right pole is the point farthest from the left pole.
             let left_distances = get_distances_in_range(arg_left, cluster.subtree_indices(), &items, &metric);
-            let arg_right = {
-                let (arg_max, _) = left_distances
+            let (arg_right, polar_distance) = {
+                let (arg_max, &polar_distance) = left_distances
                     .iter()
                     .enumerate()
                     .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .unwrap_or_else(|| unreachable!("Cluster has no items"));
-                arg_max + cluster.center_index() + 1
+                (arg_max + cluster.center_index() + 1, polar_distance)
             };
             ftlog::info!("  Right pole index: {arg_right}");
+
+            // Annotate the cluster with the span and polar distance.
+            cluster.annotate((s, polar_distance));
 
             // Save distances from both poles to all points in the cluster.
             let left_distances = Array1::from_vec(left_distances);

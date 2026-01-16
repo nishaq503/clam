@@ -73,7 +73,7 @@ def project_triangle(left: numpy.float64, right: numpy.float64, base: float) -> 
     return numpy.sqrt(left**2 - h**2)
 
 
-def polar_distances(
+def polar_distances(  # noqa: PLR0915
     explorations_dir: pathlib.Path = typer.Option(  # noqa: B008
         ...,
         "-i",
@@ -97,7 +97,7 @@ def polar_distances(
 ) -> None:
     """Plot the polar distances."""
     start = time.perf_counter()
-    clusters: list[Cluster[int, int]] = read_clusters(explorations_dir)
+    clusters: list[Cluster[int, tuple[int, int]]] = read_clusters(explorations_dir)
     end = time.perf_counter() - start
     typer.echo(f"Read {len(clusters)} clusters from {explorations_dir} in {end:.2f} seconds")
 
@@ -128,7 +128,10 @@ def polar_distances(
     missing = []
     projections = []
     for cluster in clusters:
-        base = numpy.float64(cluster.radius * 2)
+        if cluster.annotation is None:
+            continue
+
+        base = numpy.float64(cluster.annotation[1])
         l_name = f"{cluster.center_index}_l"
         r_name = f"{cluster.center_index}_r"
 
