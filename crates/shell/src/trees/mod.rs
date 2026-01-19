@@ -77,7 +77,7 @@ impl ShellTree {
             Metric::Lcs => match inp_data {
                 ShellData::String(items) => {
                     let metric: fn(&MusalsSequence, &MusalsSequence) -> u32 = lcs;
-                    let strategy = PartitionStrategy::default();
+                    let strategy = PartitionStrategy::default().with_min_split(abd_clam::MinSplit::Tenth);
                     let tree = if let Some(max_recursion_depth) = max_recursion_depth {
                         Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
                     } else {
@@ -97,7 +97,7 @@ impl ShellTree {
                     };
                     let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
-                    let strategy = PartitionStrategy::default();
+                    let strategy = PartitionStrategy::default().with_min_split(abd_clam::MinSplit::Tenth);
                     let tree = if let Some(max_recursion_depth) = max_recursion_depth {
                         Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
                     } else {

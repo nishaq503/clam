@@ -106,7 +106,7 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool + Send + Sync,
         Ann: Fn(&Self) -> Option<A> + Send + Sync,
     {
-        ftlog::info!(
+        ftlog::debug!(
             "Creating a new cluster at depth {depth} with center {center_index} and cardinality {}",
             items.len()
         );
@@ -229,7 +229,14 @@ impl<T, A> Cluster<T, A> {
             child_items.take_items().map(|((c_items, _), (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         };
         child_items.sort_by_key(|&(c_index, _)| c_index);
-        ftlog::debug!("Created {} child clusters for a cluster at depth {}", child_items.len(), cluster.depth);
+
+        let child_cardinalities = child_items.iter().map(|(_, c_items)| c_items.len()).collect::<Vec<_>>();
+        ftlog::info!(
+            "At depth {}, created {} child clusters with {:?} cardinalities",
+            cluster.depth,
+            child_items.len(),
+            child_cardinalities
+        );
 
         let children = child_items
             .into_par_iter()
