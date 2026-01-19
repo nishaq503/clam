@@ -20,6 +20,12 @@ pub enum MusalsAction {
         /// Whether to also save the MSA as a FASTA file. By default, only the binary format is saved.
         #[arg(short('f'), long, default_value_t = false)]
         save_fasta: bool,
+        /// Whether to remove gaps from the input sequences before building the MSA.
+        #[arg(short('g'), long, default_value_t = false)]
+        remove_gaps: bool,
+        /// Whether to rebuild the MSA even if it already exists.
+        #[arg(short('r'), long, default_value_t = false)]
+        rebuild: bool,
     },
     /// Evaluate the quality of an MSA. `out_path` must be a file with '.json' or '.yaml' extension.
     Evaluate {

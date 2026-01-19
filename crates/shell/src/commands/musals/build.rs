@@ -12,6 +12,7 @@ pub fn build_msa<P: AsRef<Path>>(
     cost_matrix: &ShellCostMatrix,
     out_dir: P,
     save_fasta: bool,
+    rebuild: bool,
 ) -> Result<(), String> {
     let out_dir = out_dir.as_ref();
     let parent = out_dir.parent().ok_or_else(|| format!("Output path '{out_dir:?}' has no parent directory"))?;
@@ -25,7 +26,7 @@ pub fn build_msa<P: AsRef<Path>>(
     let tree_path = crate::utils::tree_file_path(out_dir, &inp_data, metric, None, Some("unaligned"));
     let msa_tree_path = crate::utils::tree_file_path(out_dir, &inp_data, metric, Some(&format!("msa-{cost_matrix}")), None);
 
-    let tree = if tree_path.exists() {
+    let tree = if tree_path.exists() && !rebuild {
         ftlog::info!("Loading existing unaligned tree from '{tree_path:?}'...");
         ShellTree::read_from(&tree_path, metric)?
     } else {

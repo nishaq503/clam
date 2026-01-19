@@ -96,6 +96,12 @@ pub trait Sequence: AsRef<[u8]> + Sized + Clone {
         Self::from_vec(self.as_ref().iter().filter(|&&b| b != Self::GAP).copied().collect())
     }
 
+    /// Removes all occurrences of the given bytes from the sequence.
+    #[must_use]
+    fn without_bytes(&self, bytes: &[u8]) -> Self {
+        Self::from_vec(self.as_ref().iter().filter(|&&b| !bytes.contains(&b)).copied().collect())
+    }
+
     /// Returns the number of gaps in the sequence.
     fn gap_count(&self) -> usize {
         bytecount::count(self.as_ref(), Self::GAP)

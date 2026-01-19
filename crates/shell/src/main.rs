@@ -80,7 +80,7 @@ fn main() -> Result<(), String> {
                 let inp_path = args
                     .inp_path
                     .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
-                let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
+                let inp_data = InputFormat::read(&inp_path, false, sample_size, &mut rng)?;
                 commands::cakes::build_new_tree(inp_data, &metric, args.max_recursion_depth, out_path)
             }
             commands::cakes::CakesAction::Search {
@@ -90,17 +90,21 @@ fn main() -> Result<(), String> {
                 let inp_path = args
                     .inp_path
                     .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
-                let queries = InputFormat::read(&queries_path, sample_size, &mut rng)?;
+                let queries = InputFormat::read(&queries_path, false, sample_size, &mut rng)?;
                 commands::cakes::search_tree(&inp_path, queries, &cakes_algorithms, out_path)
             }
         },
         Commands::Musals { action, cost_matrix } => match action {
-            commands::musals::MusalsAction::Build { save_fasta } => {
+            commands::musals::MusalsAction::Build {
+                save_fasta,
+                remove_gaps,
+                rebuild,
+            } => {
                 let inp_path = args
                     .inp_path
                     .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
-                let inp_data = InputFormat::read(&inp_path, sample_size, &mut rng)?;
-                commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta)
+                let inp_data = InputFormat::read(&inp_path, remove_gaps, sample_size, &mut rng)?;
+                commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta, rebuild)
             }
             commands::musals::MusalsAction::Evaluate { quality_metrics, sample_size } => {
                 let inp_path = args

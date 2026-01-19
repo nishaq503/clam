@@ -3,7 +3,9 @@
 use std::path::Path;
 use std::str::FromStr;
 
+use abd_clam::musals::Sequence;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 mod fasta;
 pub mod npy;
@@ -121,10 +123,22 @@ impl InputFormat {
     }
 
     /// Reads the input data from the given path based on the input format.
-    pub fn read<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(path: P, sample_size: Option<usize>, rng: &mut R) -> Result<ShellData, String> {
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the input data file.
+    /// * `remove_gaps` - Whether to remove gaps from sequence data (only applicable for FASTA format).
+    /// * `sample_size` - Optional size of the subsample of the input data to read.
+    /// * `rng` - A mutable reference to a random number generator for shuffling the data.
+    pub fn read<P: AsRef<Path> + core::fmt::Debug, R: rand::Rng>(
+        path: P,
+        remove_gaps: bool,
+        sample_size: Option<usize>,
+        rng: &mut R,
+    ) -> Result<ShellData, String> {
         let mut data = match Self::from_path(&path)? {
             Self::Npy => npy::NpyType::read(path),
-            Self::Fasta => fasta::read(path).map(ShellData::String),
+            Self::Fasta => fasta::read(path, remove_gaps).map(ShellData::String),
         }?;
         data.shuffle(rng);
         if let Some(size) = sample_size {
@@ -232,6 +246,19 @@ impl core::fmt::Display for ShellData {
 }
 
 impl ShellData {
+    /// Remove gaps from sequence data, and errors if not string data.
+    pub fn without_gaps(self, gaps: &[u8]) -> Result<Self, String> {
+        match self {
+            Self::String(mut data) => {
+                data.par_iter_mut().for_each(|(_, seq)| {
+                    *seq = seq.without_bytes(gaps);
+                });
+                Ok(Self::String(data))
+            }
+            _ => Err("Gap removal is only supported for string data.".to_string()),
+        }
+    }
+
     /// Create a slice of a ShellData from start to end indices.
     pub fn slice(&self, start: usize, end: usize) -> Self {
         match self {
