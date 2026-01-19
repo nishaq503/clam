@@ -105,7 +105,7 @@ impl<T, A> Cluster<T, A> {
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
-        let BipolarSplit { l_items, r_items, span } = BipolarSplit::new(&mut items[1..], metric, Some(radius_index));
+        let BipolarSplit { l_items, r_items, span } = BipolarSplit::new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
         // Adjust center indices for child clusters. We will have to keep track of these alongside the splits of the `items` slice as we order the splits using
         // the heap.
         let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
@@ -126,7 +126,7 @@ impl<T, A> Cluster<T, A> {
                     break;
                 }
                 // Partition it further
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -153,7 +153,7 @@ impl<T, A> Cluster<T, A> {
                 if items.len() < 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -181,7 +181,7 @@ impl<T, A> Cluster<T, A> {
                     break;
                 }
 
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let l_span = span_estimate(l_items, metric);
                 let r_span = span_estimate(r_items, metric);
@@ -357,6 +357,7 @@ where
 }
 
 /// A bipolar partition of items into two partitions.
+#[derive(Debug)]
 pub struct BipolarSplit<'a, Id, I, T> {
     /// The left partition of items.
     pub l_items: &'a mut [(Id, I)],
@@ -364,6 +365,15 @@ pub struct BipolarSplit<'a, Id, I, T> {
     pub r_items: &'a mut [(Id, I)],
     /// The span of the partition (distance between the two poles).
     pub span: T,
+}
+
+/// The information we have about an initial pole for bipolar partitioning.
+#[derive(Clone, Copy, Debug)]
+pub enum InitialPole {
+    /// We have no information about the initial pole.
+    None,
+    /// We have the index of the item farthest from the center to use as the left pole.
+    RadialIndex(usize),
 }
 
 impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
@@ -384,7 +394,7 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
     ///
     /// - An array containing the two partitions of items.
     /// - The span of the partition (distance between the two poles).
-    pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, left_pole_index: Option<usize>) -> Self
+    pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
@@ -398,15 +408,18 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         }
         ftlog::debug!("Splitting a cluster with {} items", items.len());
 
-        let left_pole_index = left_pole_index.unwrap_or_else(|| {
-            // Find the item farthest from the first item.
-            items
-                .iter()
-                .enumerate()
-                .skip(1)
-                .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
-                .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
-        });
+        let left_pole_index = match initial_pole {
+            InitialPole::None => {
+                // Find the item farthest from the first item.
+                items
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
+                    .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+            }
+            InitialPole::RadialIndex(i) => i,
+        };
 
         // Move the left pole to the 0th index in the slice
         items.swap(0, left_pole_index);

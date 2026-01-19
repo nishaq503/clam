@@ -2,7 +2,11 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, PartitionStrategy, tree::cluster::partition::BipolarSplit, utils::SizedHeap};
+use crate::{
+    DistanceValue, PartitionStrategy,
+    tree::cluster::partition::{BipolarSplit, InitialPole},
+    utils::SizedHeap,
+};
 
 use super::{Cluster, lfd_estimate, reorder_items_in_place};
 
@@ -113,7 +117,7 @@ impl<T, A> Cluster<T, A> {
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
-        let BipolarSplit { l_items, r_items, span } = BipolarSplit::par_new(&mut items[1..], metric, Some(radius_index));
+        let BipolarSplit { l_items, r_items, span } = BipolarSplit::par_new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
         // Adjust center indices for child clusters. We will have to keep track of these alongside the splits of the `items` slice as we order the splits using
         // the heap.
         let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
@@ -133,7 +137,7 @@ impl<T, A> Cluster<T, A> {
                     break;
                 }
                 // Partition it further
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -160,7 +164,7 @@ impl<T, A> Cluster<T, A> {
                 if items.len() <= 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -187,7 +191,7 @@ impl<T, A> Cluster<T, A> {
                 if items.len() <= 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, None);
+                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::par_new(items, metric, InitialPole::None);
 
                 let (l_span, r_span) = rayon::join(|| par_span_estimate(l_items, metric), || par_span_estimate(r_items, metric));
                 let lci = ci;
@@ -370,7 +374,7 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
     ///
     /// - An array containing the two partitions of items.
     /// - The span of the partition (distance between the two poles).
-    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, left_pole_index: Option<usize>) -> Self
+    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole) -> Self
     where
         Id: Send + Sync,
         I: Send + Sync,
@@ -386,15 +390,18 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         }
         ftlog::debug!("Splitting a cluster with {} items", items.len());
 
-        let left_pole_index = left_pole_index.unwrap_or_else(|| {
-            // Find the item farthest from the first item.
-            items
-                .par_iter()
-                .enumerate()
-                .skip(1)
-                .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
-                .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
-        });
+        let left_pole_index = match initial_pole {
+            InitialPole::None => {
+                // Find the item farthest from the first item.
+                items
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
+                    .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+            }
+            InitialPole::RadialIndex(i) => i,
+        };
 
         // Move the left pole to the 0th index in the slice
         items.swap(0, left_pole_index);
