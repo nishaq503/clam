@@ -1,5 +1,7 @@
 //! Methods for recursively partitioning a `Cluster` to build a `Tree`.
 
+#![expect(dead_code)]
+
 use crate::{DistanceValue, PartitionStrategy, utils::SizedHeap};
 
 use super::Cluster;
@@ -105,7 +107,7 @@ impl<T, A> Cluster<T, A> {
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
-        let BipolarSplit { l_items, r_items, span } = BipolarSplit::new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
+        let BipolarSplit { l_items, r_items, span, .. } = BipolarSplit::new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
         // Adjust center indices for child clusters. We will have to keep track of these alongside the splits of the `items` slice as we order the splits using
         // the heap.
         let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
@@ -126,7 +128,7 @@ impl<T, A> Cluster<T, A> {
                     break;
                 }
                 // Partition it further
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
+                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -153,7 +155,7 @@ impl<T, A> Cluster<T, A> {
                 if items.len() < 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
+                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -181,7 +183,7 @@ impl<T, A> Cluster<T, A> {
                     break;
                 }
 
-                let BipolarSplit { l_items, r_items, span: _ } = BipolarSplit::new(items, metric, InitialPole::None);
+                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::new(items, metric, InitialPole::None);
 
                 let l_span = span_estimate(l_items, metric);
                 let r_span = span_estimate(r_items, metric);
@@ -365,15 +367,23 @@ pub struct BipolarSplit<'a, Id, I, T> {
     pub r_items: &'a mut [(Id, I)],
     /// The span of the partition (distance between the two poles).
     pub span: T,
+    /// Distances from the left pole to the other items (excluding the left pole itself).
+    pub l_distances: Vec<T>,
+    /// Distances from the right pole to the other items (excluding the right pole itself).
+    pub r_distances: Vec<T>,
 }
 
 /// The information we have about an initial pole for bipolar partitioning.
 #[derive(Clone, Copy, Debug)]
-pub enum InitialPole {
+pub enum InitialPole<'a, T> {
     /// We have no information about the initial pole.
     None,
     /// We have the index of the item farthest from the center to use as the left pole.
     RadialIndex(usize),
+    /// We have distances from the left pole to the other items, and we assume that the left pole is the first item in the slice.
+    LeftDistances(&'a [T]),
+    /// We have distances from the right pole to the other items, and we assume that the right pole is the last item in the slice.
+    RightDistances(&'a [T]),
 }
 
 impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
@@ -394,7 +404,7 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
     ///
     /// - An array containing the two partitions of items.
     /// - The span of the partition (distance between the two poles).
-    pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole) -> Self
+    pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<'a, T>) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
@@ -404,7 +414,14 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
             // If there are only two items, just return them as the two partitions.
             let span = metric(&items[0].1, &items[1].1);
             let (l_items, r_items) = items.split_at_mut(1);
-            return Self { l_items, r_items, span };
+            let (l_distances, r_distances) = (vec![span], vec![span]);
+            return Self {
+                l_items,
+                r_items,
+                span,
+                l_distances,
+                r_distances,
+            };
         }
         ftlog::debug!("Splitting a cluster with {} items", items.len());
 
@@ -419,6 +436,7 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
                     .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
             }
             InitialPole::RadialIndex(i) => i,
+            _ => todo!(),
         };
 
         // Move the left pole to the 0th index in the slice
@@ -453,13 +471,19 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         // Reorder the items in place by their distances to the two poles
         let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
 
-        // split the items slice into the left and right partitions
+        // Split the items and distances into the left and right partitions
         let (l_items, r_items) = items.split_at_mut(mid);
+        let (l_distances, r_distances) = left_right_distances.split_at(mid - 1); // -1 to account for the left pole at index 0
+        let l_distances = l_distances.iter().map(|&(l, _)| l).collect::<Vec<_>>();
+        let r_distances = r_distances.iter().map(|&(_, r)| r).collect::<Vec<_>>();
 
-        // Move the right pole to the 0th index in the right slice
-        r_items.swap(0, r_items.len() - 1);
-
-        Self { l_items, r_items, span }
+        Self {
+            l_items,
+            r_items,
+            span,
+            l_distances,
+            r_distances,
+        }
     }
 }
 
