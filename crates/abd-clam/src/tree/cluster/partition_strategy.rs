@@ -28,6 +28,8 @@ use super::Cluster;
 pub struct PartitionStrategy<P> {
     /// The predicate that determines whether a cluster should be partitioned into child clusters.
     pub(crate) predicate: P,
+    /// The minimum size of the smaller child cluster when partitioning a cluster.
+    pub(crate) min_split: MinSplit,
     /// The branching factor of the cluster tree.
     pub(crate) branching_factor: BranchingFactor,
     /// Span reduction factor.
@@ -48,6 +50,7 @@ impl<T, A> Default for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn default() -> Self {
         Self {
             predicate: |b: &Cluster<T, A>| b.cardinality > 2,
+            min_split: MinSplit::None,
             branching_factor: BranchingFactor::Fixed(2),
             span_reduction: SpanReductionFactor::default(),
         }
@@ -59,6 +62,7 @@ impl<P> PartitionStrategy<P> {
     pub fn new(predicate: P) -> Self {
         Self {
             predicate,
+            min_split: MinSplit::None,
             branching_factor: BranchingFactor::default(),
             span_reduction: SpanReductionFactor::default(),
         }
@@ -70,6 +74,7 @@ impl<P> PartitionStrategy<P> {
     pub const fn with_predicate<Q>(&self, predicate: Q) -> PartitionStrategy<Q> {
         PartitionStrategy {
             predicate,
+            min_split: self.min_split,
             branching_factor: self.branching_factor,
             span_reduction: self.span_reduction,
         }
@@ -91,6 +96,22 @@ impl<P> PartitionStrategy<P> {
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
     {
         (self.predicate)(cluster)
+    }
+
+    /// Sets the minimum size of the smaller child cluster when partitioning a cluster.
+    ///
+    /// If set to `MinSplit::Fixed` with a value outside the range `(0.0, 0.5]`, it defaults to `MinSplit::None`.
+    pub fn with_min_split(mut self, min_split: MinSplit) -> Self {
+        self.min_split = if let MinSplit::Fixed(fraction) = min_split {
+            if (0.0 < fraction) && (fraction <= 0.5) {
+                MinSplit::Fixed(fraction)
+            } else {
+                MinSplit::None
+            }
+        } else {
+            min_split
+        };
+        self
     }
 
     /// Sets the branching factor of the cluster tree.
@@ -140,6 +161,35 @@ impl<'a, T, A> From<&'a str> for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
 impl<T, A> From<String> for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
+    }
+}
+
+/// The minimum fraction of items that must be in the smaller child cluster when partitioning a cluster.
+#[must_use]
+#[derive(Debug, Clone, Copy)]
+pub enum MinSplit {
+    /// The minimum fraction of items in the smaller child cluster is fixed.
+    Fixed(f64),
+    /// The minimum fraction of items in the smaller child cluster is `1 / 10`.
+    Tenth,
+    /// The minimum fraction of items in the smaller child cluster is `1 / 4`.
+    Quarter,
+    /// No minimum fraction is enforced. This is the default.
+    None,
+}
+
+impl MinSplit {
+    /// Returns the maximum number of items that can be in the larger child cluster when partitioning a cluster of the given cardinality.
+    #[must_use]
+    #[expect(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn max_items_for(&self, cardinality: usize) -> Option<usize> {
+        let fraction = match self {
+            Self::Fixed(fraction) => Some(*fraction),
+            Self::Tenth => Some(0.1),
+            Self::Quarter => Some(0.25),
+            Self::None => None,
+        };
+        fraction.map(|f| ((cardinality as f64) * (1.0 - f)).floor() as usize).map(|n| n.max(1))
     }
 }
 
