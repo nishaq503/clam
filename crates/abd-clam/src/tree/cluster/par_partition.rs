@@ -95,6 +95,7 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Parallel version of [`Self::new`].
+    #[expect(clippy::too_many_lines)]
     fn par_new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
     where
         T: DistanceValue + Send + Sync,
@@ -117,27 +118,40 @@ impl<T, A> Cluster<T, A> {
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
-        let BipolarSplit { l_items, r_items, span, .. } = BipolarSplit::par_new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
+        let BipolarSplit {
+            l_items,
+            r_items,
+            span,
+            l_distances,
+            r_distances,
+        } = BipolarSplit::par_new(&mut items[1..], metric, InitialPole::RadialIndex(radius_index));
         // Adjust center indices for child clusters. We will have to keep track of these alongside the splits of the `items` slice as we order the splits using
         // the heap.
         let (lci, rci) = (center_index + 1, center_index + 1 + l_items.len());
 
         let mut child_items = if let Some(max_size) = strategy.min_split.max_items_for(cluster.cardinality) {
             let mut child_items = SizedHeap::new(None);
-            // We need to keep track of the center indices of the child clusters as we order the items in the heap
+
             let nl = l_items.len();
-            child_items.push((l_items, (nl, lci)));
             let nr = r_items.len();
-            child_items.push((r_items, (nr, rci)));
+
+            child_items.push(((l_items, l_distances), (nl, lci)));
+            child_items.push(((r_items, r_distances), (nr, rci)));
 
             while child_items.peek().is_some_and(|(_, (s, _))| *s > max_size) {
                 // Pop the largest child cluster
-                let (items, (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
+                let ((items, distances), (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() < 2 {
                     break;
                 }
                 // Partition it further
-                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::par_new(items, metric, InitialPole::None);
+                let BipolarSplit {
+                    l_items,
+                    r_items,
+                    l_distances,
+                    r_distances,
+                    ..
+                } = BipolarSplit::par_new(items, metric, InitialPole::Distances(distances));
 
                 let nl = l_items.len();
                 let nr = r_items.len();
@@ -145,63 +159,74 @@ impl<T, A> Cluster<T, A> {
                 let rci = ci + nl;
 
                 // Push the new child clusters back into the heap
-                child_items.push((l_items, (nl, lci)));
-                child_items.push((r_items, (nr, rci)));
+                child_items.push(((l_items, l_distances), (nl, lci)));
+                child_items.push(((r_items, r_distances), (nr, rci)));
             }
 
-            child_items.take_items().map(|(c_items, (_, ci))| (ci, c_items)).collect::<Vec<_>>()
+            child_items.take_items().map(|((c_items, _), (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         } else if let Some(n_children) = strategy.branching_factor.for_cardinality(cluster.cardinality) {
             let mut child_items = SizedHeap::new(Some(n_children));
 
             let nl = l_items.len();
             let nr = r_items.len();
 
-            child_items.push((l_items, (nl, lci)));
-            child_items.push((r_items, (nr, rci)));
+            child_items.push(((l_items, l_distances), (nl, lci)));
+            child_items.push(((r_items, r_distances), (nr, rci)));
 
             while !child_items.is_full() {
-                let (items, (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
+                let ((items, distances), (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() <= 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::par_new(items, metric, InitialPole::None);
+                let BipolarSplit {
+                    l_items,
+                    r_items,
+                    l_distances,
+                    r_distances,
+                    ..
+                } = BipolarSplit::par_new(items, metric, InitialPole::Distances(distances));
 
                 let nl = l_items.len();
                 let nr = r_items.len();
                 let lci = ci;
                 let rci = ci + nl;
 
-                child_items.push((l_items, (nl, lci)));
-                child_items.push((r_items, (nr, rci)));
+                child_items.push(((l_items, l_distances), (nl, lci)));
+                child_items.push(((r_items, r_distances), (nr, rci)));
             }
 
-            child_items.take_items().map(|(c_items, (_, ci))| (ci, c_items)).collect::<Vec<_>>()
+            child_items.take_items().map(|((c_items, _), (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         } else {
-            let max_span = strategy.span_reduction.max_child_span_for(span);
-
             let mut child_items = SizedHeap::new(None);
 
             let (l_span, r_span) = rayon::join(|| par_span_estimate(l_items, metric), || par_span_estimate(r_items, metric));
 
-            child_items.push((l_items, (l_span, lci)));
-            child_items.push((r_items, (r_span, rci)));
+            child_items.push(((l_items, l_distances), (l_span, lci)));
+            child_items.push(((r_items, r_distances), (r_span, rci)));
 
+            let max_span = strategy.span_reduction.max_child_span_for(span);
             while child_items.peek().is_some_and(|(_, (s, _))| *s > max_span) {
-                let (items, (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
+                let ((items, distances), (_, ci)) = child_items.pop().unwrap_or_else(|| unreachable!("child_items is not empty"));
                 if items.len() <= 2 {
                     break;
                 }
-                let BipolarSplit { l_items, r_items, .. } = BipolarSplit::par_new(items, metric, InitialPole::None);
+                let BipolarSplit {
+                    l_items,
+                    r_items,
+                    l_distances,
+                    r_distances,
+                    ..
+                } = BipolarSplit::par_new(items, metric, InitialPole::Distances(distances));
 
                 let (l_span, r_span) = rayon::join(|| par_span_estimate(l_items, metric), || par_span_estimate(r_items, metric));
                 let lci = ci;
                 let rci = ci + l_items.len();
 
-                child_items.push((l_items, (l_span, lci)));
-                child_items.push((r_items, (r_span, rci)));
+                child_items.push(((l_items, l_distances), (l_span, lci)));
+                child_items.push(((r_items, r_distances), (r_span, rci)));
             }
 
-            child_items.take_items().map(|(c_items, (_, ci))| (ci, c_items)).collect::<Vec<_>>()
+            child_items.take_items().map(|((c_items, _), (_, ci))| (ci, c_items)).collect::<Vec<_>>()
         };
         child_items.sort_by_key(|&(c_index, _)| c_index);
         ftlog::debug!("Created {} child clusters for a cluster at depth {}", child_items.len(), cluster.depth);
@@ -374,7 +399,7 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
     ///
     /// - An array containing the two partitions of items.
     /// - The span of the partition (distance between the two poles).
-    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<'a, T>) -> Self
+    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
     where
         Id: Send + Sync,
         I: Send + Sync,
@@ -397,26 +422,15 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         }
         ftlog::debug!("Splitting a cluster with {} items", items.len());
 
-        let left_pole_index = match initial_pole {
-            InitialPole::None => {
-                // Find the item farthest from the first item.
-                items
-                    .iter()
-                    .enumerate()
-                    .skip(1)
-                    .max_by_key(|&(_, (_, item))| crate::utils::MaxItem((), metric(&items[0].1, item)))
-                    .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
+        let mut left_distances = match initial_pole {
+            InitialPole::RadialIndex(i) => {
+                // Move the left pole to the 0th index in the slice
+                items.swap(0, i);
+                // Compute distances from the left pole to all other items
+                items.par_iter().skip(1).map(|(_, item)| metric(&items[0].1, item)).collect::<Vec<_>>()
             }
-            InitialPole::RadialIndex(i) => i,
-            _ => todo!(),
+            InitialPole::Distances(distances) => distances,
         };
-
-        // Move the left pole to the 0th index in the slice
-        items.swap(0, left_pole_index);
-
-        // Compute distances from the left pole to all other items
-        let left_pole = &items[0].1;
-        let mut left_distances = items.par_iter().skip(1).map(|(_, item)| metric(left_pole, item)).collect::<Vec<_>>();
 
         // Find the item farthest from the left pole
         let (right_pole_index, span) = left_distances
@@ -448,6 +462,9 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         let (l_distances, r_distances) = left_right_distances.split_at(mid - 1); // -1 to account for the left pole at index 0
         let l_distances = l_distances.iter().map(|&(l, _)| l).collect::<Vec<_>>();
         let r_distances = r_distances.iter().map(|&(_, r)| r).collect::<Vec<_>>();
+
+        // Move the right pole to the 0th index of the right partition
+        r_items.swap(0, r_items.len() - 1);
 
         Self {
             l_items,
