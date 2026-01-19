@@ -8,7 +8,7 @@ use crate::DistanceValue;
 
 mod cluster;
 
-pub use cluster::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, lfd_estimate};
+pub use cluster::{BranchingFactor, Cluster, MinSplit, PartitionStrategy, SpanReductionFactor, lfd_estimate};
 
 /// The `Tree` struct is the main data structure used in CLAM.
 ///

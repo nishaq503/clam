@@ -21,7 +21,7 @@ pub mod cakes;
 mod tree;
 pub mod utils;
 
-pub use tree::{BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree};
+pub use tree::{BranchingFactor, Cluster, MinSplit, PartitionStrategy, SpanReductionFactor, Tree};
 
 #[cfg(feature = "musals")]
 pub mod musals;
