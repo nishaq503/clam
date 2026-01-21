@@ -3,7 +3,7 @@
 use crate::{
     Cluster, DistanceValue, Tree,
     cakes::{ParSearch, Search},
-    tree::lfd_estimate,
+    utils::lfd_estimate,
     utils::{MaxItem, SizedHeap},
 };
 

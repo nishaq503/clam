@@ -4,11 +4,10 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, PartitionStrategy,
-    tree::cluster::partition::{BipolarSplit, InitialPole},
-    utils::SizedHeap,
+    utils::{SizedHeap, lfd_estimate},
 };
 
-use super::{Cluster, lfd_estimate, reorder_items_in_place};
+use super::{BipolarSplit, Cluster, InitialPole, reorder_items_in_place};
 
 impl<T, A> Cluster<T, A> {
     /// Parallel version of [`Self::new_root`].

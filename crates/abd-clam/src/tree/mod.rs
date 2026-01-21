@@ -7,8 +7,11 @@ use serde::{Deserialize, Serialize};
 use crate::DistanceValue;
 
 mod cluster;
+pub mod partition_strategy;
 
-pub use cluster::{BranchingFactor, Cluster, MinSplit, PartitionStrategy, SpanReductionFactor, lfd_estimate};
+pub use cluster::Cluster;
+
+use partition_strategy::PartitionStrategy;
 
 /// The `Tree` struct is the main data structure used in CLAM.
 ///

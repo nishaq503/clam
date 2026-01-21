@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 
 use abd_clam::{
-    BranchingFactor, Cluster, PartitionStrategy, SpanReductionFactor, Tree,
+    Cluster, PartitionStrategy, Tree,
     cakes::{KnnBfs, KnnDfs, ParSearch, selection},
+    partition_strategy::{BranchingFactor, SpanReductionFactor},
 };
 use clap::Parser;
 use rand::prelude::*;

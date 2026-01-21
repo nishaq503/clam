@@ -1,13 +1,12 @@
 //! A `Cluster` in a `Tree` for use in CLAM.
 
+mod bipolar_split;
 mod par_partition;
 mod partition;
-mod partition_strategy;
 #[cfg(feature = "serde")]
 mod to_csv;
 
-pub use partition::{lfd_estimate, reorder_items_in_place};
-pub use partition_strategy::{BranchingFactor, MinSplit, PartitionStrategy, SpanReductionFactor};
+use bipolar_split::{BipolarSplit, InitialPole, reorder_items_in_place};
 
 use crate::DistanceValue;
 

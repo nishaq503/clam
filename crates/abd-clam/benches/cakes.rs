@@ -5,8 +5,9 @@
 use std::usize;
 
 use abd_clam::{
-    BranchingFactor, Cluster, DistanceValue, PartitionStrategy, SpanReductionFactor, Tree,
+    Cluster, DistanceValue, PartitionStrategy, Tree,
     cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, approximate, search_quality_stats},
+    partition_strategy::{BranchingFactor, SpanReductionFactor},
 };
 use rand::prelude::*;
 
