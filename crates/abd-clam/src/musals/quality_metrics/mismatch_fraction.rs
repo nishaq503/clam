@@ -2,10 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    musals::{CostMatrix, Sequence},
-};
+use crate::{DistanceValue, musals::Sequence};
 
 use super::{MsaQuality, mu_sigma_min_max, random_sample_indices};
 
@@ -51,40 +48,42 @@ impl MsaQuality for MismatchFraction {
         self.max
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn compute<Id, S, T, M>(aligned_items: &[(Id, S)], _: &M, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
         M: Fn(&S, &S) -> T,
         Self: Sized,
     {
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let items = indices.iter().map(|&i| &msa_tree.items[i]).collect::<Vec<_>>();
-        let (mean, std_dev, min, max) = mu_sigma_min_max(mm_inner(&items));
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+
+        let (mean, std_dev, min, max) = mu_sigma_min_max(mm_inner(&sequences));
         Self { mean, std_dev, min, max }
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn par_compute<Id, S, T, M>(aligned_items: &[(Id, S)], _: &M, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
         T: DistanceValue + Send + Sync,
-        A: Send + Sync,
         M: Fn(&S, &S) -> T + Send + Sync,
         Self: Sized + Send + Sync,
     {
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let items = indices.iter().map(|&i| &msa_tree.items[i]).collect::<Vec<_>>();
-        let (mean, std_dev, min, max) = mu_sigma_min_max(par_mm_inner(&items));
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+
+        let (mean, std_dev, min, max) = mu_sigma_min_max(par_mm_inner(&sequences));
         Self { mean, std_dev, min, max }
     }
 }
 
 /// A helper for calculating mismatch fractions between all pairs of sequences.
-fn mm_inner<Id, I: AsRef<[u8]>>(seqs: &[&(Id, I)]) -> Vec<f64> {
-    seqs.iter()
+fn mm_inner<S: Sequence>(sequences: &[&S]) -> Vec<f64> {
+    sequences
+        .iter()
         .enumerate()
-        .flat_map(|(i, (_, s1))| seqs.iter().skip(i + 1).map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref())))
+        .flat_map(|(i, s1)| sequences.iter().skip(i + 1).map(move |s2| mm_single(s1.as_ref(), s2.as_ref())))
         .collect()
 }
 
@@ -95,9 +94,10 @@ fn mm_single(s1: &[u8], s2: &[u8]) -> f64 {
 }
 
 /// Parallel version of [`mm_inner`].
-fn par_mm_inner<Id: Send + Sync, I: AsRef<[u8]> + Send + Sync>(seqs: &[&(Id, I)]) -> Vec<f64> {
-    seqs.par_iter()
+fn par_mm_inner<S: Sequence + Send + Sync>(sequences: &[&S]) -> Vec<f64> {
+    sequences
+        .par_iter()
         .enumerate()
-        .flat_map(|(i, (_, s1))| seqs.par_iter().skip(i + 1).map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref())))
+        .flat_map(|(i, s1)| sequences.par_iter().skip(i + 1).map(move |s2| mm_single(s1.as_ref(), s2.as_ref())))
         .collect()
 }

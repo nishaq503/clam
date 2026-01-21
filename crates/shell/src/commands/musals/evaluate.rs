@@ -2,10 +2,7 @@
 
 use std::path::Path;
 
-use abd_clam::{
-    DistanceValue, Tree,
-    musals::{CostMatrix, Sequence},
-};
+use abd_clam::{DistanceValue, Tree, musals::Sequence};
 
 use crate::{data::OutputFormat, metrics::Metric, trees::ShellTree};
 
@@ -14,7 +11,6 @@ pub fn evaluate_msa<P: AsRef<Path>>(
     tree_dir: P,
     metric: &Metric,
     quality_metrics: &[super::ShellQualityMetric],
-    cost_matrix: &super::ShellCostMatrix,
     sample_size: Option<usize>,
     out_path: P,
 ) -> Result<(), String> {
@@ -57,10 +53,10 @@ pub fn evaluate_msa<P: AsRef<Path>>(
 
     match tree {
         ShellTree::Lcs(tree) => {
-            eval_msa(&tree, &cost_matrix.get(), quality_metrics, sample_size, out_dir, suffix, ext)?;
+            eval_msa(&tree, quality_metrics, sample_size, out_dir, suffix, ext)?;
         }
         ShellTree::Levenshtein(tree) => {
-            eval_msa(&tree, &cost_matrix.get(), quality_metrics, sample_size, out_dir, suffix, ext)?;
+            eval_msa(&tree, quality_metrics, sample_size, out_dir, suffix, ext)?;
         }
         _ => return Err("MUSALS evaluation currently only supports Levenshtein and Lcs metrics.".to_string()),
     };
@@ -70,7 +66,6 @@ pub fn evaluate_msa<P: AsRef<Path>>(
 
 fn eval_msa<Id, S, T, A, M>(
     tree: &Tree<Id, S, T, A, M>,
-    cost_matrix: &CostMatrix<T>,
     quality_metrics: &[super::ShellQualityMetric],
     sample_size: Option<usize>,
     out_dir: &Path,
@@ -86,7 +81,7 @@ where
 {
     for m in quality_metrics {
         ftlog::info!("Computing quality metric: {}", m.name());
-        let result = tree.par_compute_quality_metric(&m.get(), cost_matrix, sample_size);
+        let result = tree.par_compute_quality_metric(&m.get(), tree.metric(), sample_size);
         ftlog::info!(
             "Computed quality metric: {}, mean: {}, std_dev: {}, min: {}, max: {}",
             result.name(),

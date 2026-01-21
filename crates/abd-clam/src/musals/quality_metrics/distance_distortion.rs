@@ -2,16 +2,9 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    musals::{CostMatrix, Sequence},
-};
+use crate::{DistanceValue, musals::Sequence};
 
-use super::{
-    MsaQuality, mu_sigma_min_max,
-    pairwise_scores::{apply_pairwise, par_apply_pairwise},
-    random_sample_indices,
-};
+use super::{MsaQuality, mu_sigma_min_max, random_sample_indices};
 
 /// The scores of pairwise alignments in the MSA.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -55,32 +48,45 @@ impl MsaQuality for DistanceDistortion {
         self.max
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn compute<Id, S, T, M>(aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
         M: Fn(&S, &S) -> T,
         Self: Sized,
     {
-        let scorer = |(_, s1): &(Id, S), (_, s2): &(Id, S)| dd_inner(s1, s2, &msa_tree.metric);
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let pairwise_scores = apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+
+        let pairwise_scores = sequences
+            .iter()
+            .enumerate()
+            .flat_map(|(i, &s1)| sequences.iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .map(|(s1, s2)| dd_inner(s1, s2, metric))
+            .collect::<Vec<_>>();
+
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
         Self { mean, std_dev, min, max }
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, _: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn par_compute<Id, S, T, M>(aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
         T: DistanceValue + Send + Sync,
-        A: Send + Sync,
         M: Fn(&S, &S) -> T + Send + Sync,
         Self: Sized + Send + Sync,
     {
-        let scorer = |(_, s1): &(Id, S), (_, s2): &(Id, S)| dd_inner(s1, s2, &msa_tree.metric);
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let pairwise_scores = par_apply_pairwise(&msa_tree.items, &indices, scorer).collect::<Vec<_>>();
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+
+        let pairwise_scores = sequences
+            .par_iter()
+            .enumerate()
+            .flat_map(|(i, &s1)| sequences.par_iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .map(|(s1, s2)| dd_inner(s1, s2, metric))
+            .collect::<Vec<_>>();
+
         let (mean, std_dev, min, max) = mu_sigma_min_max(&pairwise_scores);
         Self { mean, std_dev, min, max }
     }
@@ -88,16 +94,13 @@ impl MsaQuality for DistanceDistortion {
 
 /// Measures the distortion of the Levenshtein edit distance between the unaligned sequences and the Hamming distance between the aligned sequences.
 fn dd_inner<S: Sequence, T: DistanceValue, M: Fn(&S, &S) -> T>(s1: &S, s2: &S, metric: &M) -> f64 {
-    let (s1, s2) = (s1.as_ref(), s2.as_ref());
-    let ham = s1.iter().zip(s2.iter()).filter(|(a, b)| a != b).count();
-
-    let s1 = S::from_vec(s1.iter().filter(|&&c| c != S::GAP).copied().collect());
-    let s2 = S::from_vec(s2.iter().filter(|&&c| c != S::GAP).copied().collect());
-    let m = metric(&s1, &s2);
-
-    if m == T::zero() {
+    let ham = s1.as_ref().iter().zip(s2.as_ref().iter()).filter(|(a, b)| a != b).count();
+    let met = metric(&s1.without_gaps(), &s2.without_gaps());
+    if met == T::zero() {
         1.0
     } else {
-        ham as f64 / m.to_f64().unwrap_or_else(|| unreachable!("DistanceValue conversion to f64 failed"))
+        let ham = ham as f64;
+        let met = met.to_f64().unwrap_or_else(|| unreachable!("DistanceValue conversion to f64 failed"));
+        ham / met
     }
 }

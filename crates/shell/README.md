@@ -101,18 +101,18 @@ cargo run -rp shell -- \
     musals -c blosum62 \
     build
 
-# Evaluate the quality of the MSA
+# Evaluate the quality of the MSA on 1000 random sequences from the input FASTA file.
 cargo run -rp shell -- \
     -i target/experiments/msa-results \
     -o target/experiments/msa-results/msa-eval.json \
     -m levenshtein \
+    -n 1000 \
     musals -c blosum62 \
     evaluate \
+    -q distance-distortion \
     -q gap-fraction \
     -q mismatch-fraction \
-    -q pairwise-scores \
-    -q weighted-pairwise-scores \
-    -q distance-distortion
+    -q sum-of-pairs
 ```
 
 We could also subsample the input sequences before building the MSA tree to experiment with different cost matrices. The `-f` flag for `build` will write the

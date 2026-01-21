@@ -2,10 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    musals::{CostMatrix, Sequence},
-};
+use crate::{DistanceValue, musals::Sequence};
 
 use super::{MsaQuality, mu_sigma_min_max, random_sample_indices};
 
@@ -51,67 +48,67 @@ impl MsaQuality for SumOfPairs {
         self.max
     }
 
-    fn compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn compute<Id, S, T, M>(aligned_items: &[(Id, S)], _: &M, sample_size: Option<usize>) -> Self
     where
         S: Sequence,
         T: DistanceValue,
         M: Fn(&S, &S) -> T,
         Self: Sized,
     {
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let items = indices.iter().map(|&i| &msa_tree.items[i]).collect::<Vec<_>>();
-        let columns = msa_to_columns(&items);
-        let scores = columns.iter().map(|col| column_score(col, cost_matrix)).collect::<Vec<_>>();
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+        let columns = msa_to_columns(&sequences);
+        let scores = columns.iter().map(column_score).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&scores);
         Self { mean, std_dev, min, max }
     }
 
-    fn par_compute<Id, S, T, A, M>(msa_tree: &Tree<Id, S, T, A, M>, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> Self
+    fn par_compute<Id, S, T, M>(aligned_items: &[(Id, S)], _: &M, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,
         S: Sequence + Send + Sync,
         T: DistanceValue + Send + Sync,
-        A: Send + Sync,
         M: Fn(&S, &S) -> T + Send + Sync,
         Self: Sized + Send + Sync,
     {
-        let indices = random_sample_indices(msa_tree.cardinality(), sample_size);
-        let items = indices.iter().map(|&i| &msa_tree.items[i]).collect::<Vec<_>>();
-        let columns = par_msa_to_columns(&items);
-        let scores = columns.par_iter().map(|col| column_score(col, cost_matrix)).collect::<Vec<_>>();
+        let indices = random_sample_indices(aligned_items.len(), sample_size);
+        let sequences = indices.iter().map(|&i| &aligned_items[i].1).collect::<Vec<_>>();
+        let columns = par_msa_to_columns(&sequences);
+        let scores = columns.par_iter().map(column_score).collect::<Vec<_>>();
         let (mean, std_dev, min, max) = mu_sigma_min_max(&scores);
         Self { mean, std_dev, min, max }
     }
 }
 
 /// Converts the MSA from rows to columns.
-fn msa_to_columns<Id, S>(msa: &[&(Id, S)]) -> Vec<S>
+fn msa_to_columns<S>(sequences: &[&S]) -> Vec<S>
 where
     S: Sequence,
 {
-    let seqs = msa.iter().map(|(_, seq)| seq.as_ref()).collect::<Vec<_>>();
-    let n_cols = seqs[0].len();
-    (0..n_cols).map(|col_idx| S::from_vec(seqs.iter().map(|seq| seq[col_idx]).collect())).collect()
+    let sequences = sequences.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+    let n_cols = sequences[0].len();
+    (0..n_cols)
+        .map(|col_idx| S::from_vec(sequences.iter().map(|seq| seq[col_idx]).collect()))
+        .collect()
 }
 
 /// Parallel version of [`msa_to_columns`].
-fn par_msa_to_columns<Id, S>(msa: &[&(Id, S)]) -> Vec<S>
+fn par_msa_to_columns<S>(sequences: &[&S]) -> Vec<S>
 where
     S: Sequence + Send + Sync,
 {
-    let seqs = msa.iter().map(|(_, seq)| seq.as_ref()).collect::<Vec<_>>();
-    let n_cols = seqs[0].len();
+    let sequences = sequences.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+    let n_cols = sequences[0].len();
     (0..n_cols)
         .into_par_iter()
-        .map(|col_idx| S::from_vec(seqs.iter().map(|seq| seq[col_idx]).collect()))
+        .map(|col_idx| S::from_vec(sequences.iter().map(|seq| seq[col_idx]).collect()))
         .collect()
 }
 
 /// Computes the Sum of Pairs score for a single column in the MSA, normalized by the number of pairs.
-fn column_score<S, T>(column: &S, _: &CostMatrix<T>) -> f64
+fn column_score<S>(column: &S) -> f64
 where
     S: Sequence,
-    T: DistanceValue,
 {
     let frequencies = count_pairs(column.as_ref());
     let total_pairs: usize = frequencies.iter().sum();

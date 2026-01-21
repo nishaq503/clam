@@ -91,10 +91,6 @@ pub enum ShellQualityMetric {
     GapFraction,
     /// The fraction of mismatches between pairs of sequences in the MSA.
     MismatchFraction,
-    /// The scores of pairwise alignments in the MSA.
-    PairwiseScores,
-    /// The scores of weighted pairwise alignments in the MSA.
-    WeightedPairwiseScores,
     /// The mean distortion of alignment distances between pairs of sequences in the MSA.
     DistanceDistortion,
     /// The Sum of Pairs (SP) score of the MSA.
@@ -107,8 +103,6 @@ impl ShellQualityMetric {
         match self {
             Self::GapFraction => QualityMetric::GapFraction,
             Self::MismatchFraction => QualityMetric::MismatchFraction,
-            Self::PairwiseScores => QualityMetric::PairwiseScores,
-            Self::WeightedPairwiseScores => QualityMetric::WeightedPairwiseScores,
             Self::DistanceDistortion => QualityMetric::DistanceDistortion,
             Self::SumOfPairs => QualityMetric::SumOfPairs,
         }
@@ -119,8 +113,6 @@ impl ShellQualityMetric {
         match self {
             Self::GapFraction => "gap-fraction",
             Self::MismatchFraction => "mismatch-fraction",
-            Self::PairwiseScores => "pairwise-scores",
-            Self::WeightedPairwiseScores => "weighted-pairwise-scores",
             Self::DistanceDistortion => "distance-distortion",
             Self::SumOfPairs => "sum-of-pairs",
         }

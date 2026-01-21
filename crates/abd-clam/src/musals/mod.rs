@@ -12,7 +12,7 @@ mod alignment;
 mod quality_metrics;
 
 pub use alignment::{CostMatrix, Direction, Sequence};
-pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, PairwiseScores, QualityMetric, QualityMetricResult, WeightedPairwiseScores};
+pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, QualityMetric, QualityMetricResult};
 
 use alignment::Msa;
 use quality_metrics::MsaQuality;
@@ -34,19 +34,15 @@ where
     }
 
     /// Computes all quality metrics for the MSA represented by this tree.
-    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> QualityMetricResult
+    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, metric: &M, sample_size: Option<usize>) -> QualityMetricResult
     where
         M: Fn(&S, &S) -> T,
     {
         match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(self, cost_matrix, sample_size)),
-            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(self, cost_matrix, sample_size)),
-            QualityMetric::PairwiseScores => QualityMetricResult::PairwiseScores(PairwiseScores::compute(self, cost_matrix, sample_size)),
-            QualityMetric::WeightedPairwiseScores => {
-                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::compute(self, cost_matrix, sample_size))
-            }
-            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(self, cost_matrix, sample_size)),
-            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::compute(self, cost_matrix, sample_size)),
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(&self.items, metric, sample_size)),
+            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(&self.items, metric, sample_size)),
+            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(&self.items, metric, sample_size)),
+            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::compute(&self.items, metric, sample_size)),
         }
     }
 }
@@ -69,19 +65,15 @@ where
     }
 
     /// Parallel version of [`Self::compute_quality_metric`].
-    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric, cost_matrix: &CostMatrix<T>, sample_size: Option<usize>) -> QualityMetricResult
+    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric, metric: &M, sample_size: Option<usize>) -> QualityMetricResult
     where
-        M: Fn(&S, &S) -> T,
+        M: Fn(&S, &S) -> T + Send + Sync,
     {
         match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(self, cost_matrix, sample_size)),
-            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(self, cost_matrix, sample_size)),
-            QualityMetric::PairwiseScores => QualityMetricResult::PairwiseScores(PairwiseScores::par_compute(self, cost_matrix, sample_size)),
-            QualityMetric::WeightedPairwiseScores => {
-                QualityMetricResult::WeightedPairwiseScores(WeightedPairwiseScores::par_compute(self, cost_matrix, sample_size))
-            }
-            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(self, cost_matrix, sample_size)),
-            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::par_compute(self, cost_matrix, sample_size)),
+            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(&self.items, metric, sample_size)),
+            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(&self.items, metric, sample_size)),
+            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(&self.items, metric, sample_size)),
+            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::par_compute(&self.items, metric, sample_size)),
         }
     }
 }

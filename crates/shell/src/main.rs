@@ -110,7 +110,7 @@ fn main() -> Result<(), String> {
                 let inp_path = args
                     .inp_path
                     .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;
-                commands::musals::evaluate_msa(&inp_path, &metric, &quality_metrics, &cost_matrix, sample_size, out_path)
+                commands::musals::evaluate_msa(&inp_path, &metric, &quality_metrics, sample_size, out_path)
             }
         },
         Commands::Explore { action } => {
