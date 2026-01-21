@@ -50,8 +50,8 @@ impl Sequence for MusalsSequence {
 }
 
 /// Reads a FASTA file from the given path.
-pub fn read<P: AsRef<Path> + core::fmt::Debug>(path: P, remove_gaps: bool) -> Result<Vec<(String, MusalsSequence)>, String> {
-    let reader = fasta::Reader::from_file(&path).map_err(|e| e.to_string())?;
+pub fn read<P: AsRef<Path>>(path: P, remove_gaps: bool) -> Result<Vec<(String, MusalsSequence)>, String> {
+    let reader = fasta::Reader::from_file(path.as_ref()).map_err(|e| e.to_string())?;
 
     if remove_gaps {
         ftlog::info!("Removing gaps from sequences while reading FASTA file: {:?}", path.as_ref());

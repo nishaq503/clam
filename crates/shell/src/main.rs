@@ -62,6 +62,7 @@ fn main() -> Result<(), String> {
 
     let metric = args.metric;
     let sample_size = args.sample_size;
+    assert!(sample_size.is_some());
     let mut rng = args.seed.map_or_else(rand::rngs::StdRng::from_os_rng, rand::rngs::StdRng::seed_from_u64);
 
     match args.command {
@@ -94,8 +95,9 @@ fn main() -> Result<(), String> {
                 commands::cakes::search_tree(&inp_path, queries, &cakes_algorithms, out_path)
             }
         },
-        Commands::Musals { action, cost_matrix } => match action {
+        Commands::Musals { action } => match action {
             commands::musals::MusalsAction::Build {
+                cost_matrix,
                 save_fasta,
                 remove_gaps,
                 rebuild,
@@ -106,7 +108,7 @@ fn main() -> Result<(), String> {
                 let inp_data = InputFormat::read(&inp_path, remove_gaps, sample_size, &mut rng)?;
                 commands::musals::build_msa(inp_data, &metric, args.max_recursion_depth, &cost_matrix, out_path, save_fasta, rebuild)
             }
-            commands::musals::MusalsAction::Evaluate { quality_metrics, sample_size } => {
+            commands::musals::MusalsAction::Evaluate { quality_metrics } => {
                 let inp_path = args
                     .inp_path
                     .ok_or_else(|| "Input path (-i/--inp-path) is required for this command".to_string())?;

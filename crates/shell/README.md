@@ -128,3 +128,15 @@ cargo run -rp shell -- \
     musals -c blosum62 \
     build -f
 ```
+
+cargo run -rp shell -- \
+    -i ../data/string-data/greengenes/msa-results/gg-12 \
+    -o ../data/string-data/greengenes/msa-results/gg-12/msa-eval.json \
+    -m levenshtein \
+    -n 1000 \
+    musals -c blosum62 \
+    evaluate \
+    -q distance-distortion \
+    -q gap-fraction \
+    -q mismatch-fraction \
+    -q sum-of-pairs

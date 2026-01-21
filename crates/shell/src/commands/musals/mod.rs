@@ -17,6 +17,9 @@ pub use evaluate::evaluate_msa;
 pub enum MusalsAction {
     /// Build an MSA and save it to a new file. `out_path` must be a directory.
     Build {
+        /// The cost matrix to use for building/evaluating the MSA tree
+        #[arg(short('c'), long, default_value_t = ShellCostMatrix::Default)]
+        cost_matrix: ShellCostMatrix,
         /// Whether to also save the MSA as a FASTA file. By default, only the binary format is saved.
         #[arg(short('f'), long, default_value_t = false)]
         save_fasta: bool,
@@ -32,9 +35,6 @@ pub enum MusalsAction {
         /// The quality metrics to compute.
         #[arg(short('q'), long, value_parser = clap::value_parser!(ShellQualityMetric))]
         quality_metrics: Vec<ShellQualityMetric>,
-        /// Optional size of the subsample of the input data to use for evaluation. If not provided, the full MSA is used.
-        #[arg(short('n'), long)]
-        sample_size: Option<usize>,
     },
 }
 

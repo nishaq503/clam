@@ -83,13 +83,20 @@ fn mm_inner<S: Sequence>(sequences: &[&S]) -> Vec<f64> {
     sequences
         .iter()
         .enumerate()
-        .flat_map(|(i, s1)| sequences.iter().skip(i + 1).map(move |s2| mm_single(s1.as_ref(), s2.as_ref())))
+        .flat_map(|(i, s1)| {
+            sequences
+                .iter()
+                .enumerate()
+                .skip(i + 1)
+                .inspect(move |(j, _)| ftlog::debug!("Calculating mismatch fraction for sequence pair ({i}, {j})"))
+                .map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref(), S::GAP))
+        })
         .collect()
 }
 
 /// A helper for calculating mismatch fraction of a single pair of sequences.
-fn mm_single(s1: &[u8], s2: &[u8]) -> f64 {
-    let num_mismatches = s1.iter().zip(s2.iter()).filter(|(a, b)| a != b).count();
+fn mm_single(s1: &[u8], s2: &[u8], gap: u8) -> f64 {
+    let num_mismatches = s1.iter().zip(s2.iter()).filter(|&(&a, &b)| a != gap && b != gap && a != b).count();
     num_mismatches as f64 / s1.len() as f64
 }
 
@@ -98,6 +105,13 @@ fn par_mm_inner<S: Sequence + Send + Sync>(sequences: &[&S]) -> Vec<f64> {
     sequences
         .par_iter()
         .enumerate()
-        .flat_map(|(i, s1)| sequences.par_iter().skip(i + 1).map(move |s2| mm_single(s1.as_ref(), s2.as_ref())))
+        .flat_map(|(i, s1)| {
+            sequences
+                .par_iter()
+                .enumerate()
+                .skip(i + 1)
+                .inspect(move |(j, _)| ftlog::debug!("Calculating mismatch fraction for sequence pair ({i}, {j})"))
+                .map(move |(_, s2)| mm_single(s1.as_ref(), s2.as_ref(), S::GAP))
+        })
         .collect()
 }

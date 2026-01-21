@@ -6,16 +6,15 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, musals::quality_metrics::SumOfPairs};
+use crate::{DistanceValue, Tree};
 
 mod alignment;
 mod quality_metrics;
 
 pub use alignment::{CostMatrix, Direction, Sequence};
-pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, QualityMetric, QualityMetricResult};
+pub use quality_metrics::{DistanceDistortion, GapFraction, MismatchFraction, MsaQuality, QualityMetric, QualityMetricResult, SumOfPairs};
 
 use alignment::Msa;
-use quality_metrics::MsaQuality;
 
 /// Extension of [`Tree`], gated behind the `musals` feature, providing methods for computing multiple sequence alignments and computing MSA quality metrics.
 ///
@@ -31,19 +30,6 @@ where
         let msa = Msa::from_tree(&self, cost_matrix);
         self.items = self.items.into_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
-    }
-
-    /// Computes all quality metrics for the MSA represented by this tree.
-    pub fn compute_quality_metric(&self, quality_metric: &QualityMetric, metric: &M, sample_size: Option<usize>) -> QualityMetricResult
-    where
-        M: Fn(&S, &S) -> T,
-    {
-        match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(&self.items, metric, sample_size)),
-            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(&self.items, metric, sample_size)),
-            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(&self.items, metric, sample_size)),
-            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::compute(&self.items, metric, sample_size)),
-        }
     }
 }
 
@@ -62,19 +48,6 @@ where
         let msa = Msa::par_from_tree(&self, cost_matrix);
         self.items = self.items.into_par_iter().zip(msa).map(|((id, _), aligned_seq)| (id, aligned_seq)).collect();
         self
-    }
-
-    /// Parallel version of [`Self::compute_quality_metric`].
-    pub fn par_compute_quality_metric(&self, quality_metric: &QualityMetric, metric: &M, sample_size: Option<usize>) -> QualityMetricResult
-    where
-        M: Fn(&S, &S) -> T + Send + Sync,
-    {
-        match quality_metric {
-            QualityMetric::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(&self.items, metric, sample_size)),
-            QualityMetric::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(&self.items, metric, sample_size)),
-            QualityMetric::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(&self.items, metric, sample_size)),
-            QualityMetric::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::par_compute(&self.items, metric, sample_size)),
-        }
     }
 }
 

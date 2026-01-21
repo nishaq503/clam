@@ -33,6 +33,39 @@ pub enum QualityMetric {
     SumOfPairs,
 }
 
+impl QualityMetric {
+    /// Compute the quality metric from the given MSA tree.
+    pub fn compute<Id, S, T, M>(&self, aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> QualityMetricResult
+    where
+        S: Sequence,
+        T: DistanceValue,
+        M: Fn(&S, &S) -> T,
+    {
+        match self {
+            Self::GapFraction => QualityMetricResult::GapFraction(GapFraction::compute(aligned_items, metric, sample_size)),
+            Self::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::compute(aligned_items, metric, sample_size)),
+            Self::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::compute(aligned_items, metric, sample_size)),
+            Self::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::compute(aligned_items, metric, sample_size)),
+        }
+    }
+
+    /// Parallel version of [`compute`].
+    pub fn par_compute<Id, S, T, M>(&self, aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> QualityMetricResult
+    where
+        Id: Send + Sync,
+        S: Sequence + Send + Sync,
+        T: DistanceValue + Send + Sync,
+        M: Fn(&S, &S) -> T + Send + Sync,
+    {
+        match self {
+            Self::GapFraction => QualityMetricResult::GapFraction(GapFraction::par_compute(aligned_items, metric, sample_size)),
+            Self::MismatchFraction => QualityMetricResult::MismatchFraction(MismatchFraction::par_compute(aligned_items, metric, sample_size)),
+            Self::DistanceDistortion => QualityMetricResult::DistanceDistortion(DistanceDistortion::par_compute(aligned_items, metric, sample_size)),
+            Self::SumOfPairs => QualityMetricResult::SumOfPairs(SumOfPairs::par_compute(aligned_items, metric, sample_size)),
+        }
+    }
+}
+
 /// Quality metrics that have been computed for an MSA.
 ///
 /// Each variant has a name and description, and provides methods to access the mean, standard deviation, minimum, and maximum values of the evaluated metric.
@@ -192,6 +225,7 @@ fn random_sample_indices(max_index: usize, sample_size: Option<usize>) -> Vec<us
         let mut rng = rand::rng();
         indices.shuffle(&mut rng);
         indices.truncate(size);
+        ftlog::info!("Sampling {} indices out of {max_index}", indices.len());
     }
 
     indices

@@ -61,7 +61,14 @@ impl MsaQuality for DistanceDistortion {
         let pairwise_scores = sequences
             .iter()
             .enumerate()
-            .flat_map(|(i, &s1)| sequences.iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .flat_map(|(i, &s1)| {
+                sequences
+                    .iter()
+                    .enumerate()
+                    .skip(i + 1)
+                    .inspect(move |(j, _)| ftlog::debug!("Calculating distance distortion for sequence pair ({i}, {j})"))
+                    .map(move |(_, &s2)| (s1, s2))
+            })
             .map(|(s1, s2)| dd_inner(s1, s2, metric))
             .collect::<Vec<_>>();
 
@@ -83,7 +90,14 @@ impl MsaQuality for DistanceDistortion {
         let pairwise_scores = sequences
             .par_iter()
             .enumerate()
-            .flat_map(|(i, &s1)| sequences.par_iter().skip(i + 1).map(move |&s2| (s1, s2)))
+            .flat_map(|(i, &s1)| {
+                sequences
+                    .par_iter()
+                    .enumerate()
+                    .skip(i + 1)
+                    .inspect(move |(j, _)| ftlog::debug!("Calculating distance distortion for sequence pair ({i}, {j})"))
+                    .map(move |(_, &s2)| (s1, s2))
+            })
             .map(|(s1, s2)| dd_inner(s1, s2, metric))
             .collect::<Vec<_>>();
 

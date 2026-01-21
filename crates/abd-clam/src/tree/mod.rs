@@ -128,6 +128,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.items[cluster.center_index()].1
     }
 
+    /// Returns a reference to all items in the tree.
+    pub fn items(&self) -> &[(Id, I)] {
+        &self.items
+    }
+
     /// Returns a slice of the items in the given cluster, excluding the cluster's center.
     pub fn items_in_subtree(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
         &self.items[cluster.subtree_indices()]

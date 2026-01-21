@@ -113,11 +113,16 @@ where
     let frequencies = count_pairs(column.as_ref());
     let total_pairs: usize = frequencies.iter().sum();
 
-    let score = frequencies.iter().enumerate().filter(|&(_, &count)| count > 0).fold(0_f64, |acc, (k, &count)| {
-        let (i, j) = flat_to_lt_index(k);
-        let pair_score = if i == j { 0.0 } else { 1.0 };
-        (count as f64).mul_add(pair_score, acc)
-    });
+    let score = frequencies
+        .iter()
+        .enumerate()
+        .filter(|&(_, &count)| count > 0)
+        .inspect(|(i, _)| ftlog::debug!("Calculating SoP contribution of pair index {i}"))
+        .fold(0_f64, |acc, (k, &count)| {
+            let (i, j) = flat_to_lt_index(k);
+            let pair_score = if i == j { 0.0 } else { 1.0 };
+            (count as f64).mul_add(pair_score, acc)
+        });
 
     score / (total_pairs as f64)
 }

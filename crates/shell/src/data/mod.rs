@@ -7,7 +7,7 @@ use abd_clam::musals::Sequence;
 use rand::prelude::*;
 use rayon::prelude::*;
 
-mod fasta;
+pub mod fasta;
 pub mod npy;
 
 pub use fasta::MusalsSequence;
@@ -71,6 +71,22 @@ impl OutputFormat {
     {
         let content = match Self::from_path(&path)? {
             Self::Json => serde_json::to_string(data).map_err(|e| format!("Failed to serialize data to JSON: {e}"))?,
+            Self::Yaml => serde_yaml::to_string(data).map_err(|e| format!("Failed to serialize data to YAML: {e}"))?,
+        };
+
+        std::fs::write(&path, content).map_err(|e| format!("Failed to write file {path:?}: {e}"))?;
+
+        Ok(())
+    }
+
+    /// Writes the given data to the specified path in the output format using pretty formatting.
+    pub fn write_pretty<P, T>(path: P, data: &T) -> Result<(), String>
+    where
+        P: AsRef<Path> + core::fmt::Debug,
+        T: serde::Serialize,
+    {
+        let content = match Self::from_path(&path)? {
+            Self::Json => serde_json::to_string_pretty(data).map_err(|e| format!("Failed to serialize data to JSON: {e}"))?,
             Self::Yaml => serde_yaml::to_string(data).map_err(|e| format!("Failed to serialize data to YAML: {e}"))?,
         };
 
