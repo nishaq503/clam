@@ -1,6 +1,6 @@
 //! How a `Cluster` is partitioned into child clusters.
 
-use super::Cluster;
+use crate::Cluster;
 
 mod branching_factor;
 mod min_split;
@@ -54,10 +54,40 @@ impl<T, A> Default for PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
     fn default() -> Self {
         Self {
             predicate: |b: &Cluster<T, A>| b.cardinality > 2,
-            min_split: MinSplit::None,
+            min_split: MinSplit::default(),
             branching_factor: BranchingFactor::Fixed(2),
             span_reduction: SpanReductionFactor::default(),
         }
+    }
+}
+
+impl<T, A> PartitionStrategy<fn(&Cluster<T, A>) -> bool> {
+    /// Creates a new `PartitionStrategy` that never partitions any cluster.
+    pub fn never() -> Self {
+        Self {
+            predicate: |_| false,
+            min_split: MinSplit::default(),
+            branching_factor: BranchingFactor::default(),
+            span_reduction: SpanReductionFactor::default(),
+        }
+    }
+
+    /// Changes the `PartitionStrategy` to always partition any cluster with a radius greater than the given threshold.
+    pub fn with_radius_greater_than(self, threshold: T) -> PartitionStrategy<impl Fn(&Cluster<T, A>) -> bool>
+    where
+        T: PartialOrd,
+    {
+        self.with_predicate(move |c: &Cluster<T, A>| c.radius > threshold)
+    }
+
+    /// Changes the `PartitionStrategy` to always partition any cluster with cardinality greater than the given threshold.
+    pub fn with_cardinality_greater_than(self, threshold: usize) -> PartitionStrategy<impl Fn(&Cluster<T, A>) -> bool> {
+        self.with_predicate(move |c: &Cluster<T, A>| c.cardinality > threshold)
+    }
+
+    /// Changes the `PartitionStrategy` to always partition any cluster with depth less than the given threshold.
+    pub fn with_depth_less_than(self, threshold: usize) -> PartitionStrategy<impl Fn(&Cluster<T, A>) -> bool> {
+        self.with_predicate(move |c: &Cluster<T, A>| c.depth < threshold)
     }
 }
 

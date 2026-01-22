@@ -7,11 +7,10 @@ use serde::{Deserialize, Serialize};
 use crate::DistanceValue;
 
 mod cluster;
-pub mod partition_strategy;
+mod partition;
 
 pub use cluster::Cluster;
-
-use partition_strategy::PartitionStrategy;
+pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 
 /// The `Tree` struct is the main data structure used in CLAM.
 ///
@@ -181,8 +180,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     }
 
     /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
-    pub fn all_clusters_preorder(&self) -> Vec<&Cluster<T, A>> {
-        self.root.subtree_preorder()
+    pub fn all_clusters_postorder(&self) -> Vec<(&Cluster<T, A>, Option<T>)>
+    where
+        T: DistanceValue,
+    {
+        self.root.as_postorder_stack()
     }
 
     /// Returns a vector of references to all clusters in the tree that satisfy the given predicate.

@@ -59,7 +59,8 @@ where
     let (items, root, metric) = tree.deconstruct();
     let mut clusters = Vec::with_capacity(items.len());
 
-    for (mut cluster, span) in root.clear_annotations().unstacked_postorder_owned() {
+    let cluster_stack = root.clear_annotations();
+    for (mut cluster, span) in cluster_stack.as_postorder_stack_owned() {
         if let Some(s) = span {
             // We will only annotate parent clusters.
 
@@ -94,7 +95,7 @@ where
             ftlog::info!("  Right pole index: {arg_right}");
 
             // Annotate the cluster with the span and polar distance.
-            cluster.annotate((s, polar_distance));
+            cluster.set_annotation((s, polar_distance));
 
             // Save distances from both poles to all points in the cluster.
             let left_distances = Array1::from_vec(left_distances);

@@ -25,8 +25,8 @@ where
         let mut wtr = csv::Writer::from_path(path)?;
         wtr.write_record(Self::csv_header())?;
 
-        for cluster in self.subtree_preorder() {
-            wtr.write_record(cluster.csv_row())?;
+        for (cluster, span) in self.as_postorder_stack() {
+            wtr.write_record(cluster.csv_row(span))?;
         }
 
         wtr.flush()
@@ -38,14 +38,14 @@ where
     }
 
     /// Returns a row of CSV data representing the cluster's information.
-    fn csv_row(&self) -> [String; NUM_CLUSTER_FEATURES] {
+    fn csv_row(&self, span: Option<T>) -> [String; NUM_CLUSTER_FEATURES] {
         [
             self.center_index.to_string(),
             self.depth.to_string(),
             self.cardinality().to_string(),
             self.radius().to_string(),
             self.lfd().to_string(),
-            self.span().map_or_else(|| T::zero().to_string(), ToString::to_string),
+            span.map_or_else(|| T::zero().to_string(), |s| s.to_string()),
             self.children().map_or(0, <[_]>::len).to_string(),
         ]
     }

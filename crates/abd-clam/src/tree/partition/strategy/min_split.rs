@@ -2,7 +2,7 @@
 
 /// The minimum fraction of items that must be in the smaller child cluster when partitioning a cluster.
 #[must_use]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum MinSplit {
     /// The minimum fraction of items in the smaller child cluster is fixed.
     Fixed(f64),
@@ -11,6 +11,7 @@ pub enum MinSplit {
     /// The minimum fraction of items in the smaller child cluster is `1 / 4`.
     Quarter,
     /// No minimum fraction is enforced. This is the default.
+    #[default]
     None,
 }
 

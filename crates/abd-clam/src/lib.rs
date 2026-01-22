@@ -22,10 +22,7 @@ pub mod cakes;
 mod tree;
 mod utils;
 
-pub use tree::{
-    Cluster, Tree,
-    partition_strategy::{self, PartitionStrategy},
-};
+pub use tree::{Cluster, PartitionStrategy, Tree, partition_strategy};
 
 pub use utils::{DistanceValue, FloatDistanceValue};
 

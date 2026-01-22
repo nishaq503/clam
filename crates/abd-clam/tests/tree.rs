@@ -1,6 +1,6 @@
 //! Tests for the `Cluster` struct.
 
-use abd_clam::{Cluster, PartitionStrategy, Tree};
+use abd_clam::{PartitionStrategy, Tree};
 use ordered_float::OrderedFloat;
 use test_case::test_case;
 
@@ -14,8 +14,8 @@ fn new() -> Result<(), String> {
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
-    let tree = Tree::new(items.clone(), metric, &strategy, &|_| None)?;
+    let strategy = PartitionStrategy::never();
+    let tree = Tree::<_, _, _, (), _>::new(items.clone(), metric, &strategy, &|_| None)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -27,8 +27,8 @@ fn new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::new(items, metric, &strategy, &|_| None)?;
-    let root: &Cluster<i32, ()> = tree.root();
+    let tree = Tree::<_, _, _, (), _>::new(items, metric, &strategy, &|_| None)?;
+    let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
@@ -65,8 +65,8 @@ fn par_new() -> Result<(), String> {
     let metric = common::metrics::manhattan;
 
     // Don't partition in the root so we can run some tests.
-    let strategy = PartitionStrategy::new(|_: &Cluster<_, ()>| false);
-    let tree = Tree::par_new(items.clone(), metric, &strategy, &|_| None)?;
+    let strategy = PartitionStrategy::never();
+    let tree = Tree::<_, _, _, (), _>::par_new(items.clone(), metric, &strategy, &|_| None)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -77,8 +77,8 @@ fn par_new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::par_new(items, metric, &strategy, &|_| None)?;
-    let root: &Cluster<i32, ()> = tree.root();
+    let tree = Tree::<_, _, _, (), _>::par_new(items, metric, &strategy, &|_| None)?;
+    let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
@@ -129,7 +129,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             })
             .collect::<Vec<_>>();
         let tree = Tree::new_minimal(data, metric)?;
-        let n_clusters = tree.all_clusters_preorder().len();
+        let n_clusters = tree.all_clusters_postorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -165,7 +165,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         let data = common::data_gen::tabular(car, dim, min, max);
         let tree = Tree::par_new_minimal(data, metric)?;
 
-        let n_clusters = tree.all_clusters_preorder().len();
+        let n_clusters = tree.all_clusters_postorder().len();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -210,11 +210,11 @@ fn big_iterative(car: usize, dim: usize) -> Result<(), String> {
             .collect::<Vec<_>>();
 
         let tree_rec = Tree::new_minimal(data.clone(), metric)?;
-        let clusters_rec = tree_rec.all_clusters_preorder();
+        let clusters_rec = tree_rec.all_clusters_postorder();
 
         for max_recursion_depth in [4, 8, 16] {
             let tree_iter = Tree::new_minimal_iterative(data.clone(), metric, max_recursion_depth)?;
-            let clusters_iter = tree_iter.all_clusters_preorder();
+            let clusters_iter = tree_iter.all_clusters_postorder();
 
             // Check that the number of clusters is within a reasonable fraction of the recursive version.
             let ratio = clusters_iter.len() as f64 / clusters_rec.len() as f64;
@@ -253,11 +253,11 @@ fn par_big_iterative(car: usize, dim: usize) -> Result<(), String> {
             .collect::<Vec<_>>();
 
         let tree_rec = Tree::par_new_minimal(data.clone(), metric)?;
-        let clusters_rec = tree_rec.all_clusters_preorder();
+        let clusters_rec = tree_rec.all_clusters_postorder();
 
         for max_recursion_depth in [4, 8, 16] {
             let tree_iter = Tree::par_new_minimal_iterative(data.clone(), metric, max_recursion_depth)?;
-            let clusters_iter = tree_iter.all_clusters_preorder();
+            let clusters_iter = tree_iter.all_clusters_postorder();
 
             // Check that the number of clusters is within a reasonable fraction of the recursive version.
             let ratio = clusters_iter.len() as f64 / clusters_rec.len() as f64;

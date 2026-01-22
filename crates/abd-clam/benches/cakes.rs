@@ -5,7 +5,7 @@
 use std::usize;
 
 use abd_clam::{
-    Cluster, DistanceValue, PartitionStrategy, Tree,
+    DistanceValue, PartitionStrategy, Tree,
     cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, approximate, search_quality_stats},
     partition_strategy::{BranchingFactor, SpanReductionFactor},
 };
@@ -70,15 +70,14 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     let id = BenchmarkId::new(alg.name(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
 
-    let all_clusters = tree.all_clusters_preorder();
+    let all_clusters = tree.all_clusters_postorder();
     let size_of_tree = all_clusters.len();
-    let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
+    let max_depth = all_clusters.iter().map(|(c, _)| c.depth()).max().unwrap_or(0);
 
-    let all_leaves = all_clusters.iter().filter(|c| c.is_leaf()).copied().collect::<Vec<_>>();
+    let all_leaves = all_clusters.iter().filter(|(c, _)| c.is_leaf()).copied().collect::<Vec<_>>();
     let leaf_fraction = all_leaves.len() as f64 / size_of_tree as f64;
-    let mean_leaf_cardinality = all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
-
-    let singleton_fraction = all_leaves.iter().filter(|c| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
+    let mean_leaf_cardinality = all_leaves.iter().map(|(c, _)| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
+    let singleton_fraction = all_leaves.iter().filter(|(c, _)| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
 
     println!("Tree stats for dataset with cardinality {} after multiplier {multiplier}:", tree.cardinality());
     println!(
@@ -138,7 +137,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
         }
 
         let strategies = {
-            let mut strategies: Vec<PartitionStrategy<fn(&Cluster<f32, ()>) -> bool>> = vec![];
+            let mut strategies: Vec<PartitionStrategy<_>> = vec![];
 
             for &bf in branching_factors {
                 strategies.push(PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(bf)));
@@ -158,21 +157,20 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             strategies
         };
-        // let strategies = vec![PartitionStrategy::default().with_branching_factor(BranchingFactor::Fixed(2))];
 
         for strategy in &strategies {
             let mut group = c.benchmark_group(format!("CAKES-{}-{strategy}", dataset.name()));
-            // let mut group = c.benchmark_group(format!("CAKES-{}", dataset.name()));
             config_group(&mut group, queries.len());
 
             // Build a tree with no annotations and benchmark the search algorithms
             if shuffle {
                 items.shuffle(rng);
             }
+            let id_items = items.into_iter().enumerate().collect::<Vec<_>>();
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
-            let tree = Tree::par_new_minimal(items, metric).unwrap();
+            let tree = Tree::<_, _, _, (), _>::par_new(id_items, metric, strategy, &|_| None).unwrap();
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
 
