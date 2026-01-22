@@ -3,9 +3,8 @@
 use abd_clam::{
     DistanceValue, Tree,
     cakes::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, ParSearch, RnnChess, RnnLinear, Search},
-    utils::MaxItem,
 };
-
+use ordered_float::OrderedFloat;
 use test_case::test_case;
 
 mod common;
@@ -151,7 +150,7 @@ fn check_hits<T: DistanceValue>(expected: &[(usize, T)], actual: &[(usize, T)], 
     Ok(())
 }
 
-fn sort_nondescending<T: PartialOrd>(mut items: Vec<(usize, T)>) -> Vec<(usize, T)> {
-    items.sort_by(|(_, l), (_, r)| MaxItem((), l).cmp(&MaxItem((), r)));
+fn sort_nondescending(mut items: Vec<(usize, f32)>) -> Vec<(usize, f32)> {
+    items.sort_by(|(_, l), (_, r)| OrderedFloat(*l).cmp(&OrderedFloat(*r)));
     items
 }

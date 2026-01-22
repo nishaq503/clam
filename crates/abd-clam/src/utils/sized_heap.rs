@@ -40,12 +40,6 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
         )
     }
 
-    /// Returns the maximum size of the heap.
-    #[must_use]
-    pub const fn k(&self) -> usize {
-        self.k
-    }
-
     /// Pushes an item onto the heap, maintaining the max size.
     pub fn push(&mut self, (a, item): (A, T)) {
         if self.heap.len() < self.k {
@@ -68,15 +62,6 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
         }
     }
 
-    /// Returns the sum of the items in the heap.
-    #[must_use]
-    pub fn sum(&self) -> T
-    where
-        T: std::iter::Sum + Copy,
-    {
-        self.heap.iter().map(|MinItem(_, x)| *x).sum()
-    }
-
     /// Peeks at the top item in the heap.
     #[must_use]
     pub fn peek(&self) -> Option<(&A, &T)> {
@@ -91,12 +76,6 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Consumes the `SizedHeap` and returns the items in an iterator.
     pub fn take_items(self) -> impl Iterator<Item = (A, T)> {
         self.heap.into_iter().map(|MinItem(a, x)| (a, x))
-    }
-
-    /// Returns the number of items in the heap.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.heap.len()
     }
 
     /// Returns whether the heap is empty.
@@ -114,11 +93,6 @@ impl<A, T: PartialOrd> SizedHeap<A, T> {
     /// Merge two heaps into one.
     pub fn merge(&mut self, other: Self) {
         self.extend(other.take_items());
-    }
-
-    /// Retains only the elements that satisfy the predicate.
-    pub fn retain<F: Fn(&T) -> bool>(&mut self, f: F) {
-        self.heap.retain(|MinItem(_, x)| f(x));
     }
 }
 

@@ -59,6 +59,7 @@ criterion = { workspace = true, features = ["html_reports", "csv_output"] }
 ndarray = { workspace = true }
 ndarray-npy = { workspace = true }
 distances = { workspace = true }
+ordered-float = { workspace = true }
 
 [features]
 serde = ["dep:serde", "dep:databuf", "dep:csv"]

@@ -1,6 +1,7 @@
 //! Tests for the `Cluster` struct.
 
 use abd_clam::{Cluster, PartitionStrategy, Tree};
+use ordered_float::OrderedFloat;
 use test_case::test_case;
 
 mod common;
@@ -310,18 +311,10 @@ fn counting_clusters(k: usize) {
         .map(|(i, v)| ((i, v), v as f64 / i as f64))
         .collect::<Vec<_>>();
 
-    let min_i = values
-        .iter()
-        .min_by_key(|&&((i, _), r)| abd_clam::utils::MinItem(i, r))
-        .map(|&((i, _), _)| i)
-        .unwrap();
+    let min_i = values.iter().min_by_key(|&&((i, _), r)| (OrderedFloat(r), i)).map(|&((i, _), _)| i).unwrap();
     let ((min_i, min_v), min_r) = values[min_i - noisy_n];
 
-    let max_i = values
-        .iter()
-        .max_by_key(|&&((i, _), r)| abd_clam::utils::MaxItem(i, r))
-        .map(|&((i, _), _)| i)
-        .unwrap();
+    let max_i = values.iter().max_by_key(|&&((i, _), r)| (OrderedFloat(r), i)).map(|&((i, _), _)| i).unwrap();
     let ((max_i, max_v), max_r) = values[max_i - noisy_n];
 
     let mean_r = values.iter().map(|&(_, r)| r).sum::<f64>() / (values.len() as f64);

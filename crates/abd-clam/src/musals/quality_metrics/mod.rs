@@ -49,7 +49,7 @@ impl QualityMetric {
         }
     }
 
-    /// Parallel version of [`compute`].
+    /// Parallel version of [`Self::compute`].
     pub fn par_compute<Id, S, T, M>(&self, aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> QualityMetricResult
     where
         Id: Send + Sync,
@@ -192,7 +192,7 @@ pub trait MsaQuality: serde::Serialize + for<'de> serde::Deserialize<'de> {
         M: Fn(&S, &S) -> T,
         Self: Sized;
 
-    /// Parallel version of [`compute`].
+    /// Parallel version of [`MsaQuality::compute`].
     fn par_compute<Id, S, T, M>(aligned_items: &[(Id, S)], metric: &M, sample_size: Option<usize>) -> Self
     where
         Id: Send + Sync,

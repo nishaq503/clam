@@ -2,7 +2,7 @@
 
 use crate::utils::MinItem;
 
-/// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the [`SpanReductionFactor`]).
+/// The branching factor can be fixed, logarithmic, adaptive, or effectively unbounded (controlled by the [`SpanReductionFactor`](super::SpanReductionFactor)).
 #[must_use]
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Default)]
@@ -15,7 +15,7 @@ pub enum BranchingFactor {
     /// factor that minimizes the expected size of the subtree. This branching factor is recomputed for each cluster based on the number of non-center items in
     /// that cluster.
     Adaptive(usize),
-    /// The branching factor is effectively unbounded and will be controlled by the [`SpanReductionFactor`] (SRF).
+    /// The branching factor is effectively unbounded and will be controlled by the [`SpanReductionFactor`](super::SpanReductionFactor) (SRF).
     #[default]
     Unbounded,
 }

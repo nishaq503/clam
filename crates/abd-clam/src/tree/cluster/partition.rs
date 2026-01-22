@@ -2,7 +2,7 @@
 
 use crate::{
     DistanceValue, PartitionStrategy,
-    utils::{SizedHeap, lfd_estimate},
+    utils::{SizedHeap, geometric_median, lfd_estimate},
 };
 
 use super::{BipolarSplit, Cluster, InitialPole};
@@ -328,42 +328,10 @@ where
     M: Fn(&I, &I) -> T,
 {
     if items.len() > 2 {
-        let center_index = gm_index(items, metric);
+        // Find the index of the item with the minimum total distance to all other items.
+        let center_index = geometric_median(items, metric);
         items.swap(0, center_index);
     }
-}
-
-/// Returns the index of the geometric median of the given items.
-///
-/// The geometric median is the item that minimizes the sum of distances to
-/// all other items in the slice.
-///
-/// The user must ensure that the items slice is not empty.
-pub fn gm_index<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
-where
-    T: DistanceValue,
-    M: Fn(&I, &I) -> T,
-{
-    // Compute the full distance matrix for the items.
-    let distance_matrix = {
-        let mut matrix = vec![vec![T::zero(); items.len()]; items.len()];
-        for (r, (_, i)) in items.iter().enumerate() {
-            for (c, (_, j)) in items.iter().enumerate().take(r) {
-                let d = metric(i, j);
-                matrix[r][c] = d;
-                matrix[c][r] = d;
-            }
-        }
-        matrix
-    };
-
-    // Find the index of the item with the minimum total distance to all other items.
-    distance_matrix
-        .into_iter()
-        .map(|row| row.into_iter().sum::<T>())
-        .enumerate()
-        .min_by_key(|&(i, v)| crate::utils::MinItem(i, v))
-        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }
 
 /// Estimates the Span (maximum distance between any two items) of the given items using a heuristic approach.

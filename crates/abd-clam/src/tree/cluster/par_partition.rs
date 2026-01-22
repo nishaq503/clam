@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, PartitionStrategy,
-    utils::{SizedHeap, lfd_estimate},
+    utils::{SizedHeap, lfd_estimate, par_geometric_median},
 };
 
 use super::{BipolarSplit, Cluster, InitialPole, reorder_items_in_place};
@@ -337,54 +337,10 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     if items.len() > 2 {
-        let center_index = par_gm_index(items, metric);
+        // Find the index of the item with the minimum total distance to all other items.
+        let center_index = par_geometric_median(items, metric);
         items.swap(0, center_index);
     }
-}
-
-/// Returns the index of the geometric median of the given items.
-///
-/// The geometric median is the item that minimizes the sum of distances to
-/// all other items in the slice.
-///
-/// The user must ensure that the items slice is not empty.
-pub fn par_gm_index<I, Id, T, M>(items: &[(Id, I)], metric: &M) -> usize
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    M: Fn(&I, &I) -> T + Send + Sync,
-{
-    // Compute the full distance matrix for the items.
-    let distance_matrix = {
-        let matrix = vec![vec![T::zero(); items.len()]; items.len()];
-
-        items.par_iter().enumerate().for_each(|(r, (_, i))| {
-            items.par_iter().enumerate().take(r).for_each(|(c, (_, j))| {
-                let d = metric(i, j);
-                // SAFETY: We have exclusive access to each cell in the matrix
-                // because every (r, c) pair is unique.
-                #[allow(unsafe_code)]
-                unsafe {
-                    let row_ptr = &mut *matrix.as_ptr().cast_mut().add(r);
-                    row_ptr[c] = d;
-
-                    let col_ptr = &mut *matrix.as_ptr().cast_mut().add(c);
-                    col_ptr[r] = d;
-                }
-            });
-        });
-
-        matrix
-    };
-
-    // Find the index of the item with the minimum total distance to all other items.
-    distance_matrix
-        .into_par_iter()
-        .map(|row| row.into_iter().sum::<T>())
-        .enumerate()
-        .min_by_key(|&(i, v)| crate::utils::MinItem(i, v))
-        .map_or_else(|| unreachable!("items must be non-empty"), |(i, _)| i)
 }
 
 impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {

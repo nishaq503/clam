@@ -13,11 +13,10 @@ CLAM is a library crate so you can add it to your crate using `cargo add abd_cla
 
 This crate provides the following features:
 
-- `disk-io`: Enables easy IO for several structs, primarily using `bitcode` and `serde`.
-- `chaoda`: Enables anomaly detection using the CHAODA.
-- `musals`: Enables multiple sequence alignment.
-- `mbed`: Enables dimensionality reduction algorithms.
-- `all`: Enables all features.
+- `serde`: Enables serialization and deserialization using `serde` and `databuf`.
+- `musals`: Enables multiple sequence alignment using the `musals` module.
+- `all`: Enables `serde` and `musals` features.
+- `profile`: Enables profiling using the `profi` crate.
 
 ### `Cakes`: Nearest Neighbor Search
 

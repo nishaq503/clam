@@ -16,6 +16,7 @@ dependencies = [
  "ndarray-npy",
  "num",
  "num-traits",
+ "ordered-float",
  "profi",
  "rand 0.9.2",
  "rayon",

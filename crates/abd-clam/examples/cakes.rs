@@ -5,8 +5,8 @@ use std::path::Path;
 use abd_clam::{
     Tree,
     cakes::{KnnBfs, KnnDfs, KnnRrnn, ParSearch, RnnChess},
-    utils::MaxItem,
 };
+use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
 fn metric(a: &Vec<f32>, b: &Vec<f32>) -> f32 {
@@ -73,7 +73,7 @@ fn search_tree<'a, M: Fn(&Vec<f32>, &Vec<f32>) -> f32 + Send + Sync>(tree: Tree<
 
     let oracles = dfs_results
         .iter()
-        .map(|res| res.iter().max_by_key(|&&(_, d)| MaxItem((), d)).map(|&(_, radius)| RnnChess(radius)).unwrap())
+        .map(|res| res.iter().max_by_key(|&&(_, d)| OrderedFloat(d)).map(|&(_, radius)| RnnChess(radius)).unwrap())
         .collect::<Vec<_>>();
 
     let tree = tree.with_metric(oracle_metric);
