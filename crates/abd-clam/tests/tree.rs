@@ -34,7 +34,7 @@ fn new() -> Result<(), String> {
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
-    let subtree = root.subtree_preorder();
+    let subtree = root.as_postorder_stack();
     if subtree.len() != 3 {
         eprintln!("{}", tree.root());
     }
@@ -84,7 +84,7 @@ fn par_new() -> Result<(), String> {
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
-    let subtree = root.subtree_preorder();
+    let subtree = root.as_postorder_stack();
     if subtree.len() != 3 {
         eprintln!("{}", tree.root());
     }

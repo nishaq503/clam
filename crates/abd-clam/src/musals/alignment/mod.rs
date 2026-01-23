@@ -72,8 +72,8 @@ impl<S: Sequence> Msa<S> {
         let stride = 128; // Arbitrary stride over depth to avoid deep recursion
 
         let target_depth = cluster.depth + stride;
-        let selector = |c: &Cluster<_, _>| c.depth == target_depth;
-        let targets = cluster.filter_clusters_mut(&selector);
+        let selector = |c: &Cluster<_, _>, (): &()| c.depth == target_depth;
+        let targets = cluster.filter_clusters_mut(&selector, &());
         for c in targets {
             let msa = Self::from_cluster_collapse(c, all_items, cost_matrix);
             ftlog::info!(
@@ -182,8 +182,8 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         let stride = 128; // Arbitrary stride over depth to avoid deep recursion
 
         let target_depth = cluster.depth + stride;
-        let selector = |c: &Cluster<_, _>| c.depth == target_depth;
-        let targets = cluster.filter_clusters_mut(&selector);
+        let selector = |c: &Cluster<_, _>, (): &()| c.depth == target_depth;
+        let targets = cluster.filter_clusters_mut(&selector, &());
         targets.into_par_iter().for_each(|c| {
             let msa = Self::par_from_cluster_collapse(c, all_items, cost_matrix);
             ftlog::info!(

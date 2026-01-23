@@ -72,12 +72,12 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
 
     let all_clusters = tree.all_clusters_postorder();
     let size_of_tree = all_clusters.len();
-    let max_depth = all_clusters.iter().map(|(c, _)| c.depth()).max().unwrap_or(0);
+    let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
 
-    let all_leaves = all_clusters.iter().filter(|(c, _)| c.is_leaf()).copied().collect::<Vec<_>>();
+    let all_leaves = all_clusters.iter().filter(|c| c.is_leaf()).copied().collect::<Vec<_>>();
     let leaf_fraction = all_leaves.len() as f64 / size_of_tree as f64;
-    let mean_leaf_cardinality = all_leaves.iter().map(|(c, _)| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
-    let singleton_fraction = all_leaves.iter().filter(|(c, _)| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
+    let mean_leaf_cardinality = all_leaves.iter().map(|c| c.cardinality()).sum::<usize>() as f64 / all_leaves.len() as f64;
+    let singleton_fraction = all_leaves.iter().filter(|c| c.is_singleton()).count() as f64 / all_leaves.len() as f64;
 
     println!("Tree stats for dataset with cardinality {} after multiplier {multiplier}:", tree.cardinality());
     println!(

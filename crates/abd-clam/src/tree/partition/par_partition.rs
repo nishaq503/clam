@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    bipolar_split::{BipolarSplit, InitialPole, reorder_items_in_place},
+    bipolar_split::{BipolarSplit, InitialPole},
     strategy::PartitionStrategy,
 };
 
@@ -55,8 +55,8 @@ impl<T, A> Cluster<T, A> {
         ftlog::info!("Finished creating the root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
 
         // Find unfinished leaves that still satisfy the original predicate
-        let unfinished_selector = |c: &Self| c.is_leaf() && predicate(c);
-        let mut unfinished_leaves = root.filter_clusters_mut(&unfinished_selector);
+        let unfinished_selector = |c: &Self, (): &()| c.is_leaf() && predicate(c);
+        let mut unfinished_leaves = root.filter_clusters_mut(&unfinished_selector, &());
 
         // Iteratively increase recursion depth and partition unfinished leaves
         let mut step = 1;
@@ -86,7 +86,7 @@ impl<T, A> Cluster<T, A> {
                     *leaf = Self::par_new(leaf.depth, leaf.center_index, leaf_items, metric, &iterative_strategy, annotator);
 
                     // Return any new unfinished leaves
-                    leaf.filter_clusters_mut(&unfinished_selector)
+                    leaf.filter_clusters_mut(&unfinished_selector, &())
                 })
                 .collect();
 
@@ -343,101 +343,6 @@ where
         // Find the index of the item with the minimum total distance to all other items.
         let center_index = par_geometric_median(items, metric);
         items.swap(0, center_index);
-    }
-}
-
-impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
-    /// Splits the given items into two partitions based on their distances to two poles.
-    ///
-    /// The two poles are chosen as follows:
-    ///
-    /// - If `arg_left` is provided, the item at that index is chosen as the left pole.
-    /// - If `arg_left` is `None`, an arbitrary item (the first one) is temporarily chosen, and the item farthest from it is chosen as the left pole.
-    /// - The right pole is then chosen as the item farthest from the left pole.
-    ///
-    /// The `span` of the partition is defined as the distance between the two poles.
-    ///
-    /// The items are then partitioned based on their distances to the two poles with ties going to the left partition.
-    /// Finally, the poles are added back into their respective partitions, as the last item in each.
-    ///
-    /// # Returns
-    ///
-    /// - An array containing the two partitions of items.
-    /// - The span of the partition (distance between the two poles).
-    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
-    where
-        Id: Send + Sync,
-        I: Send + Sync,
-        T: DistanceValue + Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-    {
-        if items.len() == 2 {
-            ftlog::debug!("Splitting a cluster with only two items");
-            // If there are only two items, just return them as the two partitions.
-            let span = metric(&items[0].1, &items[1].1);
-            let (l_items, r_items) = items.split_at_mut(1);
-            let (l_distances, r_distances) = (vec![span], vec![span]);
-            return Self {
-                l_items,
-                r_items,
-                span,
-                l_distances,
-                r_distances,
-            };
-        }
-        ftlog::debug!("Splitting a cluster with {} items", items.len());
-
-        let mut left_distances = match initial_pole {
-            InitialPole::RadialIndex(i) => {
-                // Move the left pole to the 0th index in the slice
-                items.swap(0, i);
-                // Compute distances from the left pole to all other items
-                items.par_iter().skip(1).map(|(_, item)| metric(&items[0].1, item)).collect::<Vec<_>>()
-            }
-            InitialPole::Distances(distances) => distances,
-        };
-
-        // Find the item farthest from the left pole
-        let (right_pole_index, span) = left_distances
-            .iter()
-            .enumerate()
-            .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
-            .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
-
-        // Move the right pole and its distance to the left pole to the end of their respective slices
-        let last = items.len() - 1;
-        items.swap(right_pole_index, last);
-        left_distances.swap(right_pole_index - 1, last - 1);
-
-        // Compute the distance from the right pole to all items
-        let right_pole = &items[items.len() - 1].1;
-        let mut left_right_distances = items
-            .par_iter()
-            .skip(1)
-            .zip(left_distances)
-            .take(items.len() - 2)
-            .map(|((_, item), l)| (l, metric(right_pole, item)))
-            .collect::<Vec<_>>();
-
-        // Reorder the items in place by their distances to the two poles
-        let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
-
-        // Split the items and distances into the left and right partitions
-        let (l_items, r_items) = items.split_at_mut(mid);
-        let (l_distances, r_distances) = left_right_distances.split_at(mid - 1); // -1 to account for the left pole at index 0
-        let l_distances = l_distances.iter().map(|&(l, _)| l).collect::<Vec<_>>();
-        let r_distances = r_distances.iter().map(|&(_, r)| r).collect::<Vec<_>>();
-
-        // Move the right pole to the 0th index of the right partition
-        r_items.swap(0, r_items.len() - 1);
-
-        Self {
-            l_items,
-            r_items,
-            span,
-            l_distances,
-            r_distances,
-        }
     }
 }
 

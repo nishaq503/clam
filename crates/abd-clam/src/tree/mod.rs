@@ -180,7 +180,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     }
 
     /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
-    pub fn all_clusters_postorder(&self) -> Vec<(&Cluster<T, A>, Option<T>)>
+    pub fn all_clusters_postorder(&self) -> Vec<&Cluster<T, A>>
     where
         T: DistanceValue,
     {
@@ -190,31 +190,31 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Returns a vector of references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters<P>(&self, predicate: P) -> Vec<&Cluster<T, A>>
+    pub fn filter_clusters<P, Args>(&self, predicate: P, args: &Args) -> Vec<&Cluster<T, A>>
     where
-        P: Fn(&Cluster<T, A>) -> bool,
+        P: Fn(&Cluster<T, A>, &Args) -> bool,
     {
-        self.root.filter_clusters(&predicate)
+        self.root.filter_clusters(&predicate, args)
     }
 
     /// Returns a vector of mutable references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters_mut<P>(&mut self, predicate: P) -> Vec<&mut Cluster<T, A>>
+    pub fn filter_clusters_mut<P, Args>(&mut self, predicate: P, args: &Args) -> Vec<&mut Cluster<T, A>>
     where
-        P: Fn(&Cluster<T, A>) -> bool,
+        P: Fn(&Cluster<T, A>, &Args) -> bool,
     {
-        self.root.filter_clusters_mut(&predicate)
+        self.root.filter_clusters_mut(&predicate, args)
     }
 
     /// Returns a vector of references to all leaf clusters in the tree.
     pub fn leaf_clusters(&self) -> Vec<&Cluster<T, A>> {
-        self.filter_clusters(Cluster::is_leaf)
+        self.filter_clusters(|cluster, ()| cluster.is_leaf(), &())
     }
 
     /// Returns a vector of mutable references to all leaf clusters in the tree.
     pub fn leaf_clusters_mut(&mut self) -> Vec<&mut Cluster<T, A>> {
-        self.filter_clusters_mut(Cluster::is_leaf)
+        self.filter_clusters_mut(|cluster, ()| cluster.is_leaf(), &())
     }
 }
 

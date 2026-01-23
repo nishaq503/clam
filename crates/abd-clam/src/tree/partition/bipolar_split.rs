@@ -1,5 +1,7 @@
 //! Bipolar split partitioning of items into two clusters.
 
+use rayon::prelude::*;
+
 use crate::DistanceValue;
 
 /// A bipolar partition of items into two partitions.
@@ -26,7 +28,10 @@ pub enum InitialPole<T> {
     Distances(Vec<T>),
 }
 
-impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
+impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T>
+where
+    T: DistanceValue,
+{
     /// Splits the given items into two partitions based on their distances to two poles.
     ///
     /// The two poles are chosen as follows:
@@ -46,7 +51,6 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
     /// - The span of the partition (distance between the two poles).
     pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
     where
-        T: DistanceValue,
         M: Fn(&I, &I) -> T,
     {
         if items.len() == 2 {
@@ -104,7 +108,114 @@ impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T> {
         let (l_items, r_items) = items.split_at_mut(mid);
         let (l_distances, r_distances) = left_right_distances.split_at(mid - 1); // -1 to account for the left pole at index 0
         let l_distances = l_distances.iter().map(|&(l, _)| l).collect::<Vec<_>>();
-        let r_distances = r_distances.iter().map(|&(_, r)| r).collect::<Vec<_>>();
+        let r_distances = {
+            // The first distance is just a placeholder for the right pole itself. We will swap it to the front to match with the right pole's position.
+            let mut r_distances = core::iter::once(T::zero()).chain(r_distances.iter().map(|&(_, r)| r)).collect::<Vec<_>>();
+            r_distances.swap_remove(0); // Remove the placeholder and move the first actual distance to the front
+            r_distances
+        };
+
+        // Move the right pole to the 0th index of the right partition
+        r_items.swap(0, r_items.len() - 1);
+
+        Self {
+            l_items,
+            r_items,
+            span,
+            l_distances,
+            r_distances,
+        }
+    }
+}
+
+impl<'a, Id, I, T> BipolarSplit<'a, Id, I, T>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+{
+    /// Splits the given items into two partitions based on their distances to two poles.
+    ///
+    /// The two poles are chosen as follows:
+    ///
+    /// - If `arg_left` is provided, the item at that index is chosen as the left pole.
+    /// - If `arg_left` is `None`, an arbitrary item (the first one) is temporarily chosen, and the item farthest from it is chosen as the left pole.
+    /// - The right pole is then chosen as the item farthest from the left pole.
+    ///
+    /// The `span` of the partition is defined as the distance between the two poles.
+    ///
+    /// The items are then partitioned based on their distances to the two poles with ties going to the left partition.
+    /// Finally, the poles are added back into their respective partitions, as the last item in each.
+    ///
+    /// # Returns
+    ///
+    /// - An array containing the two partitions of items.
+    /// - The span of the partition (distance between the two poles).
+    pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
+    where
+        M: Fn(&I, &I) -> T + Send + Sync,
+    {
+        if items.len() == 2 {
+            ftlog::debug!("Splitting a cluster with only two items");
+            // If there are only two items, just return them as the two partitions.
+            let span = metric(&items[0].1, &items[1].1);
+            let (l_items, r_items) = items.split_at_mut(1);
+            let (l_distances, r_distances) = (vec![span], vec![span]);
+            return Self {
+                l_items,
+                r_items,
+                span,
+                l_distances,
+                r_distances,
+            };
+        }
+        ftlog::debug!("Splitting a cluster with {} items", items.len());
+
+        let mut left_distances = match initial_pole {
+            InitialPole::RadialIndex(i) => {
+                // Move the left pole to the 0th index in the slice
+                items.swap(0, i);
+                // Compute distances from the left pole to all other items
+                items.par_iter().skip(1).map(|(_, item)| metric(&items[0].1, item)).collect::<Vec<_>>()
+            }
+            InitialPole::Distances(distances) => distances,
+        };
+
+        // Find the item farthest from the left pole
+        let (right_pole_index, span) = left_distances
+            .iter()
+            .enumerate()
+            .max_by_key(|&(i, &d)| crate::utils::MaxItem(i, d))
+            .map_or_else(|| unreachable!("items has at least two elements"), |(i, &d)| (i + 1, d));
+
+        // Move the right pole and its distance to the left pole to the end of their respective slices
+        let last = items.len() - 1;
+        items.swap(right_pole_index, last);
+        left_distances.swap(right_pole_index - 1, last - 1);
+
+        // Compute the distance from the right pole to all items
+        let right_pole = &items[items.len() - 1].1;
+        let mut left_right_distances = items
+            .par_iter()
+            .skip(1)
+            .zip(left_distances)
+            .take(items.len() - 2)
+            .map(|((_, item), l)| (l, metric(right_pole, item)))
+            .collect::<Vec<_>>();
+
+        // Reorder the items in place by their distances to the two poles
+        let mid = reorder_items_in_place(&mut items[1..last], &mut left_right_distances) + 1; // +1 to account for the left pole at index 0
+
+        // Split the items and distances into the left and right partitions
+        let (l_items, r_items) = items.split_at_mut(mid);
+        let (l_distances, r_distances) = left_right_distances.split_at(mid - 1); // -1 to account for the left pole at index 0
+        let l_distances = l_distances.iter().map(|&(l, _)| l).collect::<Vec<_>>();
+        let r_distances = {
+            // The first distance is just a placeholder for the right pole itself. We will swap it to the front to match with the right pole's position.
+            let mut r_distances = core::iter::once(T::zero()).chain(r_distances.iter().map(|&(_, r)| r)).collect::<Vec<_>>();
+            r_distances.swap_remove(0); // Remove the placeholder and move the first actual distance to the front
+            r_distances
+        };
 
         // Move the right pole to the 0th index of the right partition
         r_items.swap(0, r_items.len() - 1);

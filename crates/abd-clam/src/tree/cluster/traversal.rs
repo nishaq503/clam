@@ -68,8 +68,8 @@ impl<T, A> Cluster<T, A> {
         func(self, args);
     }
 
-    /// Returns all clusters in a stack in post-order, placing the span of each cluster alongside it.
-    pub fn as_postorder_stack(&self) -> Vec<(&Self, Option<T>)>
+    /// Returns all clusters in a stack in post-order.
+    pub fn as_postorder_stack(&self) -> Vec<&Self>
     where
         T: DistanceValue,
     {
@@ -77,13 +77,10 @@ impl<T, A> Cluster<T, A> {
         let mut stack_2 = Vec::new();
 
         while let Some(c) = stack_1.pop() {
-            let span = if let Some((children, span)) = c.children_and_span() {
+            if let Some(children) = c.children() {
                 stack_1.extend(children);
-                Some(*span)
-            } else {
-                None
-            };
-            stack_2.push((c, span));
+            }
+            stack_2.push(c);
         }
 
         stack_2

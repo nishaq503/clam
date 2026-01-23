@@ -45,10 +45,6 @@ bytecount = { workspace = true, optional = true }
 # smartcore = { workspace = true, features = ["serde"], optional = true }
 
 # For:
-#  - MSA
-# stringzilla = { workspace = true, optional = true, features = ["cpus"] }
-
-# For:
 #  - The mass-spring-system in the dimension reduction
 # slotmap = { workspace = true, optional = true }
 
@@ -64,7 +60,8 @@ ordered-float = { workspace = true }
 [features]
 serde = ["dep:serde", "dep:databuf", "dep:csv"]
 musals = ["dep:num", "dep:bytecount"]
-all = ["serde", "musals"]
+codec = []
+all = ["serde", "musals", "codec"]
 profile = ["profi/enable"]
 # chaoda = ["dep:smartcore"]
 # mbed = ["chaoda", "dep:slotmap"]

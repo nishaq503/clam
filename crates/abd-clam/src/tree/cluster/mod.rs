@@ -102,12 +102,12 @@ where
     }
 }
 
-impl<T, A> Cluster<T, A>
-where
-    T: Clone,
-{
+impl<T, A> Cluster<T, A> {
     /// Returns a cloned cluster without any annotations.
-    pub fn clone_without_annotations<B>(&self) -> Cluster<T, B> {
+    pub fn clone_without_annotations<B>(&self) -> Cluster<T, B>
+    where
+        T: Clone,
+    {
         // Post-order traversal stack
         let mut stack = {
             let mut stack_1 = vec![self];
@@ -152,19 +152,6 @@ where
 
         cloned_children.pop().unwrap_or_else(|| unreachable!("The root cluster is always present"))
     }
-}
-
-impl<T, A> Cluster<T, A> {
-    /// Returns all clusters in the subtree rooted at this cluster, including this cluster, in pre-order.
-    pub fn subtree_preorder(&self) -> Vec<&Self> {
-        if let Some((children, _)) = &self.children {
-            core::iter::once(self)
-                .chain(children.iter().flat_map(|child| child.subtree_preorder()))
-                .collect()
-        } else {
-            vec![self]
-        }
-    }
 
     /// Clears the annotation of this cluster and all its descendants.
     pub fn clear_annotations<B>(self) -> Cluster<T, B> {
@@ -192,14 +179,14 @@ impl<T, A> Cluster<T, A> {
     /// Returns references to the clusters in the subtree rooted here that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters<P>(&self, predicate: &P) -> Vec<&Self>
+    pub fn filter_clusters<P, Args>(&self, predicate: &P, args: &Args) -> Vec<&Self>
     where
-        P: Fn(&Self) -> bool,
+        P: Fn(&Self, &Args) -> bool,
     {
-        if predicate(self) {
+        if predicate(self, args) {
             vec![self]
         } else if let Some((children, _)) = &self.children {
-            children.iter().flat_map(|child| child.filter_clusters(predicate)).collect()
+            children.iter().flat_map(|child| child.filter_clusters(predicate, args)).collect()
         } else {
             vec![]
         }
@@ -208,14 +195,14 @@ impl<T, A> Cluster<T, A> {
     /// Returns mutable references to the clusters in the subtree rooted here that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters_mut<P>(&mut self, predicate: &P) -> Vec<&mut Self>
+    pub fn filter_clusters_mut<P, Args>(&mut self, predicate: &P, args: &Args) -> Vec<&mut Self>
     where
-        P: Fn(&Self) -> bool,
+        P: Fn(&Self, &Args) -> bool,
     {
-        if predicate(self) {
+        if predicate(self, args) {
             vec![self]
         } else if let Some((children, _)) = &mut self.children {
-            children.iter_mut().flat_map(|child| child.filter_clusters_mut(predicate)).collect()
+            children.iter_mut().flat_map(|child| child.filter_clusters_mut(predicate, args)).collect()
         } else {
             vec![]
         }
