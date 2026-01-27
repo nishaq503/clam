@@ -56,7 +56,7 @@ where
         NpzWriter::new_compressed(file)
     };
 
-    let (items, root, metric) = tree.deconstruct();
+    let (items, root, metric) = tree.into_parts();
     let mut clusters = Vec::with_capacity(items.len());
 
     let cluster_stack = root.clear_annotations();

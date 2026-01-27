@@ -6,6 +6,8 @@ mod setters;
 mod to_csv;
 mod traversal;
 
+pub use traversal::AnnotatedItems;
+
 /// A `Cluster` is a node in the `Tree` that represents a subset of the items in the `Tree`.
 ///
 /// It contains information about the subset including:

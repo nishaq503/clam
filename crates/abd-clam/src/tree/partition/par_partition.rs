@@ -14,21 +14,7 @@ use super::{
 
 impl<T, A> Cluster<T, A> {
     /// Parallel version of [`Self::new_root`].
-    pub(crate) fn par_new_root<Id, I, M, P, Ann>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
-    where
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        P: Fn(&Self) -> bool + Send + Sync,
-        Ann: Fn(&Self) -> Option<A> + Send + Sync,
-    {
-        Self::par_new(0, 0, items, metric, strategy, annotator)
-    }
-
-    /// Parallel version of [`Self::new_root_iterative`].
-    pub(crate) fn par_new_root_iterative<Id, I, M, P, Ann>(
+    pub(crate) fn par_new_root<Id, I, M, P, Ann>(
         items: &mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,

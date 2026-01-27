@@ -12,6 +12,8 @@ mod partition;
 pub use cluster::Cluster;
 pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 
+pub use cluster::AnnotatedItems;
+
 /// The `Tree` struct is the main data structure used in CLAM.
 ///
 /// If contains the root `Cluster`, the items stored in it, and the metric used to compute distances between items.
@@ -46,32 +48,18 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
+    /// This method will switch between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
+    ///
     /// # Errors
     ///
-    /// If `items` is empty.
+    /// See [`Self::new`].
     pub fn new_minimal(items: Vec<I>, metric: M) -> Result<Self, &'static str> {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new(items, metric, &PartitionStrategy::default(), &|_| None)
-    }
-
-    /// Same as [`Self::new_minimal`], but switches between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
-    ///
-    /// The resulting tree will be similar to, but not necessarily identical to, one created with [`Self::new_minimal`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Self::new_minimal`].
-    pub fn new_minimal_iterative(items: Vec<I>, metric: M, max_recursive_depth: usize) -> Result<Self, &'static str> {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new_iterative(items, metric, &PartitionStrategy::default(), &|_| None, max_recursive_depth)
+        Self::new(items, metric, &PartitionStrategy::default(), &|_| None, 128)
     }
 
     /// Parallel version of [`Self::new_minimal`].
@@ -90,34 +78,20 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| None)
-    }
-
-    /// Parallel version of [`Self::new_minimal_iterative`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Self::new_minimal`].
-    pub fn par_new_minimal_iterative(items: Vec<I>, metric: M, max_recursive_depth: usize) -> Result<Self, &'static str>
-    where
-        I: Send + Sync,
-        T: Send + Sync,
-        M: Send + Sync,
-    {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-
-        let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new_iterative(items, metric, &PartitionStrategy::default(), &|_| None, max_recursive_depth)
+        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| None, 128)
     }
 }
 
 /// Various getter methods for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Provides ownership of the members of the `Tree`.
-    pub fn deconstruct(self) -> (Vec<(Id, I)>, Cluster<T, A>, M) {
+    pub fn into_parts(self) -> (Vec<(Id, I)>, Cluster<T, A>, M) {
         (self.items, self.root, self.metric)
+    }
+
+    /// Creates a `Tree` from its parts.
+    pub const fn from_parts(items: Vec<(Id, I)>, root: Cluster<T, A>, metric: M) -> Self {
+        Self { items, root, metric }
     }
 
     /// Returns a reference to the identifier of the center item of the given cluster.
@@ -226,34 +200,7 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
-    /// # Arguments
-    ///
-    /// * `items` - A vector of tuples, each containing an identifier and an item.
-    /// * `metric` - A function that computes the distance between two items.
-    /// * `strategy` - A [`PartitionStrategy`] that defines how to partition clusters.
-    /// * `annotator` - A function that annotates clusters as they are created.
-    ///
-    /// # Errors
-    ///
-    /// If `items` is empty.
-    pub fn new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
-    where
-        P: Fn(&Cluster<T, A>) -> bool,
-        Ann: Fn(&Cluster<T, A>) -> Option<A>,
-    {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-        ftlog::info!("Creating tree with {} items using recursive partitioning", items.len());
-
-        let root = Cluster::new_root(&mut items, &metric, strategy, annotator);
-
-        ftlog::info!("Finished creating tree with {} items with recursive partitioning", items.len());
-
-        Ok(Self { items, root, metric })
-    }
-
-    /// Same as [`Self::new`], but switches between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
+    /// This method will switch between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
     ///
     /// # Arguments
     ///
@@ -265,13 +212,13 @@ where
     ///
     /// # Errors
     ///
-    /// See [`Self::new`].
-    pub fn new_iterative<P, Ann>(
+    /// If `items` is empty.
+    pub fn new<P, Ann>(
         mut items: Vec<(Id, I)>,
         metric: M,
         strategy: &PartitionStrategy<P>,
         annotator: &Ann,
-        max_recursive_depth: usize,
+        max_recursion_depth: usize,
     ) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
@@ -282,7 +229,7 @@ where
         }
         ftlog::info!("Creating tree with {} items using iterative partitioning", items.len());
 
-        let root = Cluster::new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
+        let root = Cluster::new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
 
         ftlog::info!("Finished creating tree with {} items using iterative partitioning", items.len());
 
@@ -322,39 +269,17 @@ where
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
-    /// Parallel version of [`new`](Self::new).
+    /// Parallel version of [`Self::new`].
     ///
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn par_new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
-    where
-        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
-        Ann: Fn(&Cluster<T, A>) -> Option<A> + Send + Sync,
-    {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-        ftlog::info!("Creating tree with {} items using parallel recursive partitioning", items.len());
-
-        let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator);
-
-        ftlog::info!("Finished creating tree with {} items using parallel recursive partitioning", items.len());
-
-        Ok(Self { items, root, metric })
-    }
-
-    /// Parallel version of [`Self::new_iterative`].
-    ///
-    /// # Errors
-    ///
-    /// See [`Self::new`].
-    pub fn par_new_iterative<P, Ann>(
+    pub fn par_new<P, Ann>(
         mut items: Vec<(Id, I)>,
         metric: M,
         strategy: &PartitionStrategy<P>,
         annotator: &Ann,
-        max_recursive_depth: usize,
+        max_recursion_depth: usize,
     ) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
@@ -365,7 +290,7 @@ where
         }
         ftlog::info!("Creating tree with {} items using parallel iterative partitioning", items.len());
 
-        let root = Cluster::par_new_root_iterative(&mut items, &metric, strategy, annotator, max_recursive_depth);
+        let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
 
         ftlog::info!("Finished creating tree with {} items using parallel iterative partitioning", items.len());
 

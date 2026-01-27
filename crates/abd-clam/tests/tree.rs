@@ -15,7 +15,7 @@ fn new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::never();
-    let tree = Tree::<_, _, _, (), _>::new(items.clone(), metric, &strategy, &|_| None)?;
+    let tree = Tree::<_, _, _, (), _>::new(items.clone(), metric, &strategy, &|_| None, 128)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -27,7 +27,7 @@ fn new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::<_, _, _, (), _>::new(items, metric, &strategy, &|_| None)?;
+    let tree = Tree::<_, _, _, (), _>::new(items, metric, &strategy, &|_| None, 128)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -66,7 +66,7 @@ fn par_new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::never();
-    let tree = Tree::<_, _, _, (), _>::par_new(items.clone(), metric, &strategy, &|_| None)?;
+    let tree = Tree::<_, _, _, (), _>::par_new(items.clone(), metric, &strategy, &|_| None, 128)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -77,7 +77,7 @@ fn par_new() -> Result<(), String> {
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::<_, _, _, (), _>::par_new(items, metric, &strategy, &|_| None)?;
+    let tree = Tree::<_, _, _, (), _>::par_new(items, metric, &strategy, &|_| None, 128)?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
@@ -212,8 +212,10 @@ fn big_iterative(car: usize, dim: usize) -> Result<(), String> {
         let tree_rec = Tree::new_minimal(data.clone(), metric)?;
         let clusters_rec = tree_rec.all_clusters_postorder();
 
+        let strategy = PartitionStrategy::default();
+        let data = data.into_iter().enumerate().collect::<Vec<_>>();
         for max_recursion_depth in [4, 8, 16] {
-            let tree_iter = Tree::new_minimal_iterative(data.clone(), metric, max_recursion_depth)?;
+            let tree_iter = Tree::<_, _, _, (), _>::new(data.clone(), metric, &strategy, &|_| None, max_recursion_depth)?;
             let clusters_iter = tree_iter.all_clusters_postorder();
 
             // Check that the number of clusters is within a reasonable fraction of the recursive version.
@@ -255,8 +257,10 @@ fn par_big_iterative(car: usize, dim: usize) -> Result<(), String> {
         let tree_rec = Tree::par_new_minimal(data.clone(), metric)?;
         let clusters_rec = tree_rec.all_clusters_postorder();
 
+        let strategy = PartitionStrategy::default();
+        let data = data.into_iter().enumerate().collect::<Vec<_>>();
         for max_recursion_depth in [4, 8, 16] {
-            let tree_iter = Tree::par_new_minimal_iterative(data.clone(), metric, max_recursion_depth)?;
+            let tree_iter = Tree::<_, _, _, (), _>::par_new(data.clone(), metric, &strategy, &|_| None, max_recursion_depth)?;
             let clusters_iter = tree_iter.all_clusters_postorder();
 
             // Check that the number of clusters is within a reasonable fraction of the recursive version.

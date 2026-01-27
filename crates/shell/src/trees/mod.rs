@@ -44,11 +44,8 @@ macro_rules! st_new_vector_arm {
         let strategy = PartitionStrategy::default();
         let items = $items.into_iter().enumerate().collect::<Vec<_>>();
         let metric: fn(&_, &_) -> $ty = $metric::<_, _, _>;
-        let tree = if let Some(max_recursion_depth) = $max_recursion_depth {
-            Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
-        } else {
-            Tree::par_new(items, metric, &strategy, &|_| None)
-        }?;
+        let max_recursion_depth = $max_recursion_depth.unwrap_or(128);
+        let tree = Tree::par_new(items, metric, &strategy, &|_| None, max_recursion_depth)?;
         Ok(ShellTree::$st_var(VectorTree::$vt_var(tree)))
     }};
 }
@@ -78,11 +75,8 @@ impl ShellTree {
                 ShellData::String(items) => {
                     let metric: fn(&MusalsSequence, &MusalsSequence) -> u32 = lcs;
                     let strategy = PartitionStrategy::default().with_min_split(MinSplit::Tenth);
-                    let tree = if let Some(max_recursion_depth) = max_recursion_depth {
-                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
-                    } else {
-                        Tree::par_new(items, metric, &strategy, &|_| None)
-                    }?;
+                    let max_recursion_depth = max_recursion_depth.unwrap_or(128);
+                    let tree = Tree::par_new(items, metric, &strategy, &|_| None, max_recursion_depth)?;
                     Ok(ShellTree::Lcs(tree))
                 }
                 _ => Err("LCS metric can only be used with string data".to_string()),
@@ -98,11 +92,8 @@ impl ShellTree {
                     let metric = Box::new(metric) as Box<dyn Fn(&MusalsSequence, &MusalsSequence) -> u32 + Send + Sync>;
 
                     let strategy = PartitionStrategy::default().with_min_split(MinSplit::Tenth);
-                    let tree = if let Some(max_recursion_depth) = max_recursion_depth {
-                        Tree::par_new_iterative(items, metric, &strategy, &|_| None, max_recursion_depth)
-                    } else {
-                        Tree::par_new(items, metric, &strategy, &|_| None)
-                    }?;
+                    let max_recursion_depth = max_recursion_depth.unwrap_or(128);
+                    let tree = Tree::par_new(items, metric, &strategy, &|_| None, max_recursion_depth)?;
                     Ok(ShellTree::Levenshtein(tree))
                 }
                 _ => Err("Levenshtein metric can only be used with string data".to_string()),

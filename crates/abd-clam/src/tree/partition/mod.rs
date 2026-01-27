@@ -13,27 +13,12 @@ use bipolar_split::{BipolarSplit, InitialPole};
 use strategy::PartitionStrategy;
 
 impl<T, A> Cluster<T, A> {
-    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
-    ///
-    /// # WARNING
-    ///
-    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new_root<Id, I, M, P, Ann>(items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
-    where
-        T: DistanceValue,
-        M: Fn(&I, &I) -> T,
-        P: Fn(&Self) -> bool,
-        Ann: Fn(&Self) -> Option<A>,
-    {
-        Self::new(0, 0, items, metric, strategy, annotator)
-    }
-
     /// Same as `new_root`, but switches between iterative and recursive partitioning to avoid stack overflows from deep recursion on large datasets.
     ///
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new_root_iterative<Id, I, M, P, Ann>(
+    pub(crate) fn new_root<Id, I, M, P, Ann>(
         items: &mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,

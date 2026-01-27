@@ -4,6 +4,11 @@ use crate::DistanceValue;
 
 use super::{CostMatrix, Direction, Edit, Edits};
 
+/* TODO(Najib):
+Add a new representation of an aligned sequence that stores the original sequence and in indices where the characters are to be inserted. Assuming that most of
+the aligned sequences have many gaps, such a representation will save space when creating and storing aligned sequences.
+*/
+
 /// A table of edit distances between prefixes of two `Sequence`s.
 type DpTable<T> = Vec<Vec<(T, Direction)>>;
 

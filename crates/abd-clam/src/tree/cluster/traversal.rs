@@ -143,3 +143,275 @@ where
         func(self, args);
     }
 }
+
+/// A `Cluster` may be annotated with the items it contains for intermediate computations in various applications.
+pub struct AnnotatedItems<Id, I, A> {
+    /// The center item of the cluster.
+    center: (Id, I),
+    /// The other items in the cluster but not in the children or descendants.
+    non_center: Option<Vec<(Id, I)>>,
+    /// The original annotation of the cluster.
+    annotation: Option<A>,
+}
+
+impl<T, A> Cluster<T, A> {
+    /// Annotates the cluster and its descendants with the items they contain.
+    ///
+    /// # Panics
+    ///
+    /// - If `items` is empty.
+    pub fn annotate_with_items<Id, I>(self, mut items: Vec<(Id, I)>) -> Cluster<T, AnnotatedItems<Id, I, A>> {
+        // TODO(Najib): Do this iteratively to avoid stack overflow for very deep trees.
+
+        // Remove the 0th item as the center and collect the rest if any.
+        let mut non_center_items = items.split_off(1);
+        let center = items.pop().unwrap_or_else(|| unreachable!("items cannot be empty"));
+
+        if let Some((children, span)) = self.children {
+            let child_items = {
+                let mut child_items = Vec::with_capacity(children.len());
+                for child in children.iter().rev() {
+                    let n = non_center_items.len() - child.cardinality;
+                    let c_items = non_center_items.split_off(n);
+                    child_items.push(c_items);
+                }
+                child_items.reverse();
+                child_items
+            };
+            let children = children
+                .into_iter()
+                .zip(child_items)
+                .map(|(child, items)| child.annotate_with_items(items))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            let annotation = AnnotatedItems {
+                center,
+                non_center: None,
+                annotation: self.annotation,
+            };
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: Some((children, span)),
+                annotation: Some(annotation),
+            }
+        } else {
+            let non_center = if non_center_items.is_empty() { None } else { Some(non_center_items) };
+            let annotation = AnnotatedItems {
+                center,
+                non_center,
+                annotation: self.annotation,
+            };
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: None,
+                annotation: Some(annotation),
+            }
+        }
+    }
+}
+
+impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, I, A>> {
+    /// Collects all items contained in the cluster and its descendants.
+    #[expect(clippy::missing_panics_doc)]
+    pub fn collect_items_from_annotations(self) -> (Cluster<T, A>, Vec<(Id, I)>) {
+        // TODO(Najib): Do this iteratively to avoid stack overflow for very deep trees.
+
+        let mut items = Vec::with_capacity(self.cardinality);
+        let AnnotatedItems {
+            center,
+            non_center,
+            annotation,
+        } = self.annotation.unwrap_or_else(|| unreachable!("Cluster must be annotated"));
+        items.push(center);
+
+        let cluster = if let Some((children, span)) = self.children {
+            let children = children
+                .into_iter()
+                .map(|child| {
+                    let (child, mut child_items) = child.collect_items_from_annotations();
+                    items.append(&mut child_items);
+                    child
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+
+            // TODO(Najib): Remove this assertion after thorough testing.
+            assert_eq!(items.len(), self.cardinality, "Collected items do not match cluster cardinality");
+
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: Some((children, span)),
+                annotation,
+            }
+        } else {
+            if let Some(mut nc_items) = non_center {
+                items.append(&mut nc_items);
+            }
+
+            // TODO(Najib): Remove this assertion after thorough testing.
+            assert_eq!(items.len(), self.cardinality, "Collected items do not match cluster cardinality");
+
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: None,
+                annotation,
+            }
+        };
+
+        (cluster, items)
+    }
+}
+
+impl<T, A> Cluster<T, A>
+where
+    T: Send,
+    A: Send,
+{
+    /// Parallel version of [`Self::annotate_with_items`].
+    ///
+    /// # Panics
+    ///
+    /// - If `items` is empty.
+    pub fn par_annotate_with_items<Id, I>(self, mut items: Vec<(Id, I)>) -> Cluster<T, AnnotatedItems<Id, I, A>>
+    where
+        Id: Send,
+        I: Send,
+    {
+        // TODO(Najib): Do this iteratively to avoid stack overflow for very deep trees.
+
+        // Remove the 0th item as the center and collect the rest if any.
+        let mut non_center_items = items.split_off(1);
+        let center = items.pop().unwrap_or_else(|| unreachable!("items cannot be empty"));
+
+        if let Some((children, span)) = self.children {
+            let child_items = {
+                let mut child_items = Vec::with_capacity(children.len());
+                for child in children.iter().rev() {
+                    let n = non_center_items.len() - child.cardinality;
+                    let c_items = non_center_items.split_off(n);
+                    child_items.push(c_items);
+                }
+                child_items.reverse();
+                child_items
+            };
+            let children = children
+                .into_par_iter()
+                .zip(child_items)
+                .map(|(child, items)| child.par_annotate_with_items(items))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            let annotation = AnnotatedItems {
+                center,
+                non_center: None,
+                annotation: self.annotation,
+            };
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: Some((children, span)),
+                annotation: Some(annotation),
+            }
+        } else {
+            let non_center = if non_center_items.is_empty() { None } else { Some(non_center_items) };
+            let annotation = AnnotatedItems {
+                center,
+                non_center,
+                annotation: self.annotation,
+            };
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: None,
+                annotation: Some(annotation),
+            }
+        }
+    }
+}
+
+impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, I, A>>
+where
+    Id: Send,
+    I: Send,
+    T: Send,
+    A: Send,
+{
+    /// Parallel version of [`Self::collect_items_from_annotations`].
+    #[expect(clippy::missing_panics_doc)]
+    pub fn par_collect_items_from_annotations(self) -> (Cluster<T, A>, Vec<(Id, I)>) {
+        // TODO(Najib): Do this iteratively to avoid stack overflow for very deep trees.
+
+        let mut items = Vec::with_capacity(self.cardinality);
+        let AnnotatedItems {
+            center,
+            non_center,
+            annotation,
+        } = self.annotation.unwrap_or_else(|| unreachable!("Cluster must be annotated"));
+        items.push(center);
+
+        let cluster = if let Some((children, span)) = self.children {
+            let children_and_items = children.into_par_iter().map(Self::par_collect_items_from_annotations).collect::<Vec<_>>();
+            let children = children_and_items
+                .into_iter()
+                .map(|(child, mut child_items)| {
+                    items.append(&mut child_items);
+                    child
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+
+            // TODO(Najib): Remove this assertion after thorough testing.
+            assert_eq!(items.len(), self.cardinality, "Collected items do not match cluster cardinality");
+
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: Some((children, span)),
+                annotation,
+            }
+        } else {
+            if let Some(mut nc_items) = non_center {
+                items.append(&mut nc_items);
+            }
+
+            // TODO(Najib): Remove this assertion after thorough testing.
+            assert_eq!(items.len(), self.cardinality, "Collected items do not match cluster cardinality");
+
+            Cluster {
+                depth: self.depth,
+                center_index: self.center_index,
+                cardinality: self.cardinality,
+                radius: self.radius,
+                lfd: self.lfd,
+                children: None,
+                annotation,
+            }
+        };
+
+        (cluster, items)
+    }
+}
