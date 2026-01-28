@@ -27,3 +27,45 @@ pub enum MaybeCodec<I: Codec> {
     /// The compressed representation of the item.
     Compressed(I::Compressed),
 }
+
+impl<I: Codec> MaybeCodec<I> {
+    /// Encodes the item into its compressed representation.
+    ///
+    /// If the item is in the `Compressed` variant, this method does nothing.
+    pub fn encode(&mut self) {
+        if let Self::Original(item) = self {
+            let compressed = item.encode();
+            *self = Self::Compressed(compressed);
+        }
+    }
+
+    /// Encodes the item in terms of a reference item.
+    ///
+    /// If the item is in the `Compressed` variant, this method does nothing.
+    pub fn encode_with(&mut self, reference: &I) {
+        if let Self::Original(item) = self {
+            let compressed = item.encode_with(reference);
+            *self = Self::Compressed(compressed);
+        }
+    }
+
+    /// Decodes the compressed representation back into the original item.
+    ///
+    /// If the item is in the `Original` variant, this method does nothing.
+    pub fn decode(&mut self) {
+        if let Self::Compressed(compressed) = self {
+            let item = I::decode(compressed);
+            *self = Self::Original(item);
+        }
+    }
+
+    /// Decodes the compressed representation in terms of a reference item.
+    ///
+    /// If the item is in the `Original` variant, this method does nothing.
+    pub fn decode_with(&mut self, reference: &I) {
+        if let Self::Compressed(compressed) = self {
+            let item = I::decode_with(compressed, reference);
+            *self = Self::Original(item);
+        }
+    }
+}

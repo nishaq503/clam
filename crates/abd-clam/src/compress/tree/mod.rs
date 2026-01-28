@@ -44,7 +44,7 @@ where
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     Id: Send,
-    I: Codec + Send,
+    I: Codec + Send + Sync,
     I::Compressed: Send,
     T: Send,
     A: Send,
@@ -61,7 +61,7 @@ where
 impl<Id, I, T, A, M> Tree<Id, MaybeCodec<I>, T, A, M>
 where
     Id: Send,
-    I: Codec + Send,
+    I: Codec + Send + Sync,
     I::Compressed: Send,
     T: Send,
     A: Send,

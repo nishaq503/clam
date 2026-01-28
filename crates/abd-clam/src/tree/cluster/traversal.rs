@@ -147,11 +147,11 @@ where
 /// A `Cluster` may be annotated with the items it contains for intermediate computations in various applications.
 pub struct AnnotatedItems<Id, I, A> {
     /// The center item of the cluster.
-    center: (Id, I),
+    pub center: (Id, I),
     /// The other items in the cluster but not in the children or descendants.
-    non_center: Option<Vec<(Id, I)>>,
+    pub non_center: Option<Vec<(Id, I)>>,
     /// The original annotation of the cluster.
-    annotation: Option<A>,
+    pub annotation: Option<A>,
 }
 
 impl<T, A> Cluster<T, A> {
