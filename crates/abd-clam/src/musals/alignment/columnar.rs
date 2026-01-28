@@ -7,7 +7,7 @@ use crate::DistanceValue;
 use super::{CostMatrix, Sequence};
 
 /// A multiple sequence alignment stored in a columnar format.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Columnar<S: Sequence>(Vec<S>);
 
 impl<S: Sequence> core::ops::Deref for Columnar<S> {

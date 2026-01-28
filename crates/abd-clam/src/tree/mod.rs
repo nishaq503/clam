@@ -59,7 +59,7 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new(items, metric, &PartitionStrategy::default(), &|_| None, 128)
+        Self::new(items, metric, &PartitionStrategy::default(), &|_| (), 128)
     }
 
     /// Parallel version of [`Self::new_minimal`].
@@ -78,7 +78,7 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| None, 128)
+        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| (), 128)
     }
 }
 
@@ -222,7 +222,7 @@ where
     ) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
-        Ann: Fn(&Cluster<T, A>) -> Option<A>,
+        Ann: Fn(&Cluster<T, A>) -> A,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
@@ -283,7 +283,7 @@ where
     ) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
-        Ann: Fn(&Cluster<T, A>) -> Option<A> + Send + Sync,
+        Ann: Fn(&Cluster<T, A>) -> A + Send + Sync,
     {
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");

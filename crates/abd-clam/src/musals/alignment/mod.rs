@@ -84,7 +84,7 @@ impl<S: Sequence> Msa<S> {
                 msa.n_seq()
             );
             c.children = None;
-            c.annotation = Some(msa);
+            c.annotation = msa;
         }
 
         Self::from_cluster(cluster, all_items, cost_matrix)
@@ -118,7 +118,8 @@ impl<S: Sequence> Msa<S> {
             );
 
             bottom
-        } else if let Some(child_msa) = cluster.take_annotation() {
+        } else if cluster.annotation.is_empty() {
+            let child_msa = cluster.take_annotation();
             // Cluster was previously collapsed and then turned back into a leaf.
             ftlog::debug!(
                 "Aligning leaf collapsed cluster at depth {} with {} sequences",
@@ -194,7 +195,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
                 msa.n_seq()
             );
             c.children = None;
-            c.annotation = Some(msa);
+            c.annotation = msa;
         });
 
         Self::par_from_cluster(cluster, all_items, cost_matrix)
@@ -233,7 +234,9 @@ impl<S: Sequence + Send + Sync> Msa<S> {
             );
 
             bottom
-        } else if let Some(child_msa) = cluster.take_annotation() {
+        } else if cluster.annotation.is_empty() {
+            let child_msa = cluster.take_annotation();
+
             // Cluster was previously collapsed and then turned back into a leaf.
             ftlog::debug!(
                 "Aligning leaf collapsed cluster at depth {} with {} sequences",

@@ -43,7 +43,8 @@ pub struct Cluster<T, A> {
     /// The children and span of this cluster, if it was partitioned. The span is the distance between the two poles used to partition the cluster.
     pub(crate) children: Option<(Box<[Self]>, T)>,
     /// Optional arbitrary data associated with this cluster.
-    pub(crate) annotation: Option<A>,
+    pub(crate) annotation: A,
+    // pub(crate) annotation: Option<A>,
 }
 
 impl<T, A> PartialEq for Cluster<T, A>
@@ -82,9 +83,11 @@ where
             fields.push(format!("indices: {}..{}", self.center_index + 1, self.center_index + self.cardinality));
         }
 
-        if let Some(annotation) = &self.annotation {
-            fields.push(format!("annotation: {annotation:?}"));
-        }
+        fields.push(format!("annotation: {:?}", self.annotation));
+        // if let Some(annotation) = &self.annotation {
+        //     fields.push(format!("annotation: {annotation:?}"));
+        // }
+
         let name = if let Some((children, span)) = &self.children {
             fields.push(format!("span: {span}"));
 
@@ -109,6 +112,7 @@ impl<T, A> Cluster<T, A> {
     pub fn clone_without_annotations<B>(&self) -> Cluster<T, B>
     where
         T: Clone,
+        B: Default,
     {
         // Post-order traversal stack
         let mut stack = {
@@ -145,7 +149,7 @@ impl<T, A> Cluster<T, A> {
                 radius: c.radius.clone(),
                 lfd: c.lfd,
                 children,
-                annotation: None,
+                annotation: B::default(),
             };
 
             // Push the cloned cluster onto the stack.
@@ -156,7 +160,10 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Clears the annotation of this cluster and all its descendants.
-    pub fn clear_annotations<B>(self) -> Cluster<T, B> {
+    pub fn clear_annotations<B>(self) -> Cluster<T, B>
+    where
+        B: Default,
+    {
         let children = self.children.map(|(boxed_children, span)| {
             let new_children = boxed_children
                 .into_vec()
@@ -174,7 +181,7 @@ impl<T, A> Cluster<T, A> {
             radius: self.radius,
             lfd: self.lfd,
             children,
-            annotation: None,
+            annotation: B::default(),
         }
     }
 

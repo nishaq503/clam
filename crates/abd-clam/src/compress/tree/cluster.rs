@@ -12,23 +12,20 @@ impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, MaybeCodec<I>, A>>
 where
     I: Codec,
 {
-    /// Gets a reference to the center item, whether compressed or not.
-    pub fn center(&self) -> &MaybeCodec<I> {
-        &self.annotation().unwrap_or_else(|| unreachable!("Cluster must have annotation")).center.1
-    }
-
     /// Gets a mutable reference to the center item, whether compressed or not.
-    pub fn center_mut(&mut self) -> &mut MaybeCodec<I> {
-        &mut self.annotation_mut().unwrap_or_else(|| unreachable!("Cluster must have annotation")).center.1
+    const fn center_mut(&mut self) -> &mut MaybeCodec<I> {
+        &mut self.annotation_mut().center.1
     }
 
     /// Compresses all items in the cluster and its descendants.
     pub fn compress_all(mut self) -> Self {
+        #[expect(unsafe_code)]
+        // SAFETY: We replace the annotation at the end of the function.
         let AnnotatedItems {
             center,
             mut non_center,
             annotation,
-        } = self.take_annotation().unwrap_or_else(|| unreachable!("Cluster must have annotation"));
+        } = unsafe { core::ptr::read(&raw const self.annotation) };
 
         let (center_id, center) = center;
         let MaybeCodec::Original(center) = center else {
@@ -82,11 +79,13 @@ where
 {
     /// Parallel version of [`Self::compress_all`].
     pub fn par_compress_all(mut self) -> Self {
+        #[expect(unsafe_code)]
+        // SAFETY: We replace the annotation at the end of the function.
         let AnnotatedItems {
             center,
             mut non_center,
             annotation,
-        } = self.take_annotation().unwrap_or_else(|| unreachable!("Cluster must have annotation"));
+        } = unsafe { core::ptr::read(&raw const self.annotation) };
 
         let (center_id, center) = center;
         let MaybeCodec::Original(center) = center else {

@@ -16,6 +16,7 @@ pub trait DistanceValue:
     + Display
     + Debug
     + FromStr
+    + Default
     + num_traits::Num
     + num_traits::NumRef
     + num_traits::RefNum<Self>
@@ -42,6 +43,7 @@ impl<T> DistanceValue for T where
         + Display
         + Debug
         + FromStr
+        + Default
         + num_traits::Num
         + num_traits::NumRef
         + num_traits::RefNum<Self>

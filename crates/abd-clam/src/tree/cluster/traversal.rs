@@ -151,7 +151,7 @@ pub struct AnnotatedItems<Id, I, A> {
     /// The other items in the cluster but not in the children or descendants.
     pub non_center: Option<Vec<(Id, I)>>,
     /// The original annotation of the cluster.
-    pub annotation: Option<A>,
+    pub annotation: A,
 }
 
 impl<T, A> Cluster<T, A> {
@@ -196,7 +196,7 @@ impl<T, A> Cluster<T, A> {
                 radius: self.radius,
                 lfd: self.lfd,
                 children: Some((children, span)),
-                annotation: Some(annotation),
+                annotation,
             }
         } else {
             let non_center = if non_center_items.is_empty() { None } else { Some(non_center_items) };
@@ -212,7 +212,7 @@ impl<T, A> Cluster<T, A> {
                 radius: self.radius,
                 lfd: self.lfd,
                 children: None,
-                annotation: Some(annotation),
+                annotation,
             }
         }
     }
@@ -229,7 +229,7 @@ impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, I, A>> {
             center,
             non_center,
             annotation,
-        } = self.annotation.unwrap_or_else(|| unreachable!("Cluster must be annotated"));
+        } = self.annotation;
         items.push(center);
 
         let cluster = if let Some((children, span)) = self.children {
@@ -328,7 +328,7 @@ where
                 radius: self.radius,
                 lfd: self.lfd,
                 children: Some((children, span)),
-                annotation: Some(annotation),
+                annotation,
             }
         } else {
             let non_center = if non_center_items.is_empty() { None } else { Some(non_center_items) };
@@ -344,7 +344,7 @@ where
                 radius: self.radius,
                 lfd: self.lfd,
                 children: None,
-                annotation: Some(annotation),
+                annotation,
             }
         }
     }
@@ -367,7 +367,7 @@ where
             center,
             non_center,
             annotation,
-        } = self.annotation.unwrap_or_else(|| unreachable!("Cluster must be annotated"));
+        } = self.annotation;
         items.push(center);
 
         let cluster = if let Some((children, span)) = self.children {

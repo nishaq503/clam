@@ -62,23 +62,26 @@ impl<T, A> Cluster<T, A> {
         self.children.take()
     }
 
-    /// Returns an optional reference to the cluster's annotation, if any.
+    /// Returns a reference to the cluster's annotation.
     ///
     /// Use this to read metadata attached to the cluster without taking ownership.
-    pub const fn annotation(&self) -> Option<&A> {
-        self.annotation.as_ref()
+    pub const fn annotation(&self) -> &A {
+        &self.annotation
     }
 
-    /// Returns an optional mutable reference to the cluster's annotation, if any.
+    /// Returns a mutable reference to the cluster's annotation.
     ///
     /// Use this to modify cluster metadata in place.
-    pub const fn annotation_mut(&mut self) -> Option<&mut A> {
-        self.annotation.as_mut()
+    pub const fn annotation_mut(&mut self) -> &mut A {
+        &mut self.annotation
     }
 
-    /// Removes and returns the cluster's annotation, if any, leaving it unannotated.
-    pub const fn take_annotation(&mut self) -> Option<A> {
-        self.annotation.take()
+    /// Removes and returns the cluster's annotation, leaving the default value in its place.
+    pub fn take_annotation(&mut self) -> A
+    where
+        A: Default,
+    {
+        core::mem::take(&mut self.annotation)
     }
 }
 
@@ -106,10 +109,5 @@ impl<T, A> Cluster<T, A> {
     /// center item of this cluster.
     pub const fn subtree_indices(&self) -> std::ops::Range<usize> {
         (self.center_index + 1)..(self.center_index + self.cardinality)
-    }
-
-    /// Returns true if this cluster has an annotation.
-    pub const fn is_annotated(&self) -> bool {
-        self.annotation.is_some()
     }
 }

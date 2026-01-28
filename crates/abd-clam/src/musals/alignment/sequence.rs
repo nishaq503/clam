@@ -65,7 +65,7 @@ type DpTable<T> = Vec<Vec<(T, Direction)>>;
 /// }
 /// ```
 #[must_use]
-pub trait Sequence: AsRef<[u8]> + Sized + Clone {
+pub trait Sequence: AsRef<[u8]> + Sized + Clone + Default {
     /// The gap character for the sequence type.
     const GAP: u8;
 

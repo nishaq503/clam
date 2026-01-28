@@ -152,7 +152,7 @@ fn main() -> Result<(), String> {
         for strategy in &strategies {
             let strategy = strategy.with_radius_greater_than(1e-6);
             ftlog::info!("Building CAKES index for dataset '{}' with strategy {strategy}", dataset.name());
-            let tree = Tree::par_new(items, metric, &strategy, &|_| None, 128)?;
+            let tree = Tree::par_new(items, metric, &strategy, &|_| (), 128)?;
 
             let root_csv_path = data_out_dir.join(strategy.to_string().to_ascii_lowercase() + "-tree.csv");
             if root_csv_path.exists() {

@@ -28,7 +28,7 @@ impl<T, A> Cluster<T, A> {
         I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
-        Ann: Fn(&Self) -> Option<A> + Send + Sync,
+        Ann: Fn(&Self) -> A + Send + Sync,
     {
         ftlog::info!("Creating a new root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
 
@@ -92,7 +92,7 @@ impl<T, A> Cluster<T, A> {
         I: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
         P: Fn(&Self) -> bool + Send + Sync,
-        Ann: Fn(&Self) -> Option<A> + Send + Sync,
+        Ann: Fn(&Self) -> A + Send + Sync,
     {
         ftlog::debug!(
             "Creating a new cluster at depth {depth} with center {center_index} and cardinality {}",
@@ -260,7 +260,9 @@ impl<T, A> Cluster<T, A> {
                 radius: T::zero(),
                 lfd: 1.0, // By definition, a singleton has LFD of 1
                 children: None,
-                annotation: None,
+                #[expect(unsafe_code)]
+                // SAFETY: This is a private function and the annotation is later set in `par_new` before being used.
+                annotation: unsafe { core::mem::zeroed() },
             };
             return (c, 0);
         } else if items.len() == 2 {
@@ -272,7 +274,9 @@ impl<T, A> Cluster<T, A> {
                 radius,
                 lfd: 1.0, // By definition, a cluster with two items has LFD of 1
                 children: None,
-                annotation: None,
+                #[expect(unsafe_code)]
+                // SAFETY: This is a private function and the annotation is later set in `par_new` before being used.
+                annotation: unsafe { core::mem::zeroed() },
             };
             return (c, 1);
         }
@@ -306,7 +310,9 @@ impl<T, A> Cluster<T, A> {
             radius,
             lfd,
             children: None,
-            annotation: None,
+            #[expect(unsafe_code)]
+            // SAFETY: This is a private function and the annotation is later set in `par_new` before being used.
+            annotation: unsafe { core::mem::zeroed() },
         };
         ftlog::debug!(
             "Created a new leaf cluster with depth {depth}, center {center_index}, cardinality {}, radius {radius}, and LFD {lfd}",
