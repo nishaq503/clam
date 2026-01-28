@@ -13,12 +13,14 @@ where
     I: Codec,
 {
     /// Gets a mutable reference to the center item, whether compressed or not.
-    const fn center_mut(&mut self) -> &mut MaybeCodec<I> {
+    pub(crate) const fn center_mut(&mut self) -> &mut MaybeCodec<I> {
         &mut self.annotation_mut().center.1
     }
 
     /// Compresses all items in the cluster and its descendants.
     pub fn compress_all(mut self) -> Self {
+        // TODO(Najib): Write this with an iterative approach to avoid stack overflows on deep trees.
+
         #[expect(unsafe_code)]
         // SAFETY: We replace the annotation at the end of the function.
         let AnnotatedItems {
@@ -64,8 +66,51 @@ where
     }
 
     /// Decompresses all items in the cluster and its descendants.
-    pub fn decompress_all(self) -> Self {
-        todo!()
+    pub fn decompress_all(mut self) -> Self {
+        // TODO(Najib): Write this with an iterative approach to avoid stack overflows on deep trees.
+
+        #[expect(unsafe_code)]
+        // SAFETY: We replace the annotation at the end of the function.
+        let AnnotatedItems {
+            center,
+            mut non_center,
+            annotation,
+        } = unsafe { core::ptr::read(&raw const self.annotation) };
+
+        let (center_id, center) = center;
+        let MaybeCodec::Original(center) = center else {
+            unreachable!("Center item must be in original form when compressing");
+        };
+
+        self.children = self.children.map(|(mut children, span)| {
+            children = children
+                .into_iter()
+                .map(|mut child| {
+                    child.center_mut().decode_with(&center);
+                    child = child.decompress_all();
+                    child
+                })
+                .collect();
+            (children, span)
+        });
+
+        non_center = non_center.map(|non_centers| {
+            non_centers
+                .into_iter()
+                .map(|(id, mut item)| {
+                    item.decode_with(&center);
+                    (id, item)
+                })
+                .collect()
+        });
+
+        self.set_annotation(AnnotatedItems {
+            center: (center_id, MaybeCodec::Original(center)),
+            non_center,
+            annotation,
+        });
+
+        self
     }
 }
 
@@ -79,6 +124,8 @@ where
 {
     /// Parallel version of [`Self::compress_all`].
     pub fn par_compress_all(mut self) -> Self {
+        // TODO(Najib): Write this with an iterative approach to avoid stack overflows on deep trees.
+
         #[expect(unsafe_code)]
         // SAFETY: We replace the annotation at the end of the function.
         let AnnotatedItems {
@@ -124,7 +171,50 @@ where
     }
 
     /// Parallel version of [`Self::decompress_all`].
-    pub fn par_decompress_all(self) -> Self {
-        todo!()
+    pub fn par_decompress_all(mut self) -> Self {
+        // TODO(Najib): Write this with an iterative approach to avoid stack overflows on deep trees.
+
+        #[expect(unsafe_code)]
+        // SAFETY: We replace the annotation at the end of the function.
+        let AnnotatedItems {
+            center,
+            mut non_center,
+            annotation,
+        } = unsafe { core::ptr::read(&raw const self.annotation) };
+
+        let (center_id, center) = center;
+        let MaybeCodec::Original(center) = center else {
+            unreachable!("Center item must be in original form when compressing");
+        };
+
+        self.children = self.children.map(|(mut children, span)| {
+            children = children
+                .into_par_iter()
+                .map(|mut child| {
+                    child.center_mut().decode_with(&center);
+                    child = child.par_decompress_all();
+                    child
+                })
+                .collect();
+            (children, span)
+        });
+
+        non_center = non_center.map(|non_centers| {
+            non_centers
+                .into_par_iter()
+                .map(|(id, mut item)| {
+                    item.decode_with(&center);
+                    (id, item)
+                })
+                .collect()
+        });
+
+        self.set_annotation(AnnotatedItems {
+            center: (center_id, MaybeCodec::Original(center)),
+            non_center,
+            annotation,
+        });
+
+        self
     }
 }
