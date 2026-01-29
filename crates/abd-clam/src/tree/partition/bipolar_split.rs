@@ -7,15 +7,15 @@ use crate::DistanceValue;
 /// A bipolar partition of items into two partitions.
 #[derive(Debug)]
 pub struct BipolarSplit<'a, Id, I, T> {
-    /// The left partition of items.
+    /// The left partition of items. The 0th item is the left pole.
     pub l_items: &'a mut [(Id, I)],
-    /// The right partition of items.
+    /// The right partition of items. The 0th item is the right pole.
     pub r_items: &'a mut [(Id, I)],
     /// The span of the partition (distance between the two poles).
     pub span: T,
-    /// Distances from the left pole to the other items (excluding the left pole itself).
+    /// Distances from the left pole to the items in the left partition (excluding the left pole itself).
     pub l_distances: Vec<T>,
-    /// Distances from the right pole to the other items (excluding the right pole itself).
+    /// Distances from the right pole to the items in the right partition (excluding the right pole itself).
     pub r_distances: Vec<T>,
 }
 
@@ -36,19 +36,16 @@ where
     ///
     /// The two poles are chosen as follows:
     ///
-    /// - If `arg_left` is provided, the item at that index is chosen as the left pole.
-    /// - If `arg_left` is `None`, an arbitrary item (the first one) is temporarily chosen, and the item farthest from it is chosen as the left pole.
+    /// - If the `initial_pole` is `RadialIndex(i)`, the item at that index is chosen as the left pole.
+    /// - If the `initial_pole` is `Distances(distances)`, the 0th item is chosen as the left pole, and the provided distances are used as distances from it to
+    ///   all other items.
     /// - The right pole is then chosen as the item farthest from the left pole.
     ///
     /// The `span` of the partition is defined as the distance between the two poles.
     ///
-    /// The items are then partitioned based on their distances to the two poles with ties going to the left partition.
-    /// Finally, the poles are added back into their respective partitions, as the last item in each.
-    ///
     /// # Returns
     ///
-    /// - An array containing the two partitions of items.
-    /// - The span of the partition (distance between the two poles).
+    /// The `BipolarSplit` containing the two partitions of items, their distances to their respective poles, and the span of the partition.
     pub fn new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
     where
         M: Fn(&I, &I) -> T,
@@ -134,23 +131,7 @@ where
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
 {
-    /// Splits the given items into two partitions based on their distances to two poles.
-    ///
-    /// The two poles are chosen as follows:
-    ///
-    /// - If `arg_left` is provided, the item at that index is chosen as the left pole.
-    /// - If `arg_left` is `None`, an arbitrary item (the first one) is temporarily chosen, and the item farthest from it is chosen as the left pole.
-    /// - The right pole is then chosen as the item farthest from the left pole.
-    ///
-    /// The `span` of the partition is defined as the distance between the two poles.
-    ///
-    /// The items are then partitioned based on their distances to the two poles with ties going to the left partition.
-    /// Finally, the poles are added back into their respective partitions, as the last item in each.
-    ///
-    /// # Returns
-    ///
-    /// - An array containing the two partitions of items.
-    /// - The span of the partition (distance between the two poles).
+    /// Parallel version of [`Self::new`].
     pub fn par_new<M>(items: &'a mut [(Id, I)], metric: &M, initial_pole: InitialPole<T>) -> Self
     where
         M: Fn(&I, &I) -> T + Send + Sync,
@@ -270,6 +251,7 @@ where
     }
 
     // TODO(Najib): Check if this last loop is even necessary
+
     // Increment `left` until we find the first item for the right pole
     while left < distances.len() && distances[left].0 <= distances[left].1 {
         left += 1;

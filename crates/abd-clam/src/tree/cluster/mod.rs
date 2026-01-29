@@ -44,7 +44,6 @@ pub struct Cluster<T, A> {
     pub(crate) children: Option<(Box<[Self]>, T)>,
     /// Optional arbitrary data associated with this cluster.
     pub(crate) annotation: A,
-    // pub(crate) annotation: Option<A>,
 }
 
 impl<T, A> PartialEq for Cluster<T, A>
@@ -84,9 +83,6 @@ where
         }
 
         fields.push(format!("annotation: {:?}", self.annotation));
-        // if let Some(annotation) = &self.annotation {
-        //     fields.push(format!("annotation: {annotation:?}"));
-        // }
 
         let name = if let Some((children, span)) = &self.children {
             fields.push(format!("span: {span}"));
@@ -114,21 +110,8 @@ impl<T, A> Cluster<T, A> {
         T: Clone,
         B: Default,
     {
-        // Post-order traversal stack
-        let mut stack = {
-            let mut stack_1 = vec![self];
-            let mut stack_2 = Vec::new();
-
-            while let Some(c) = stack_1.pop() {
-                if let Some((children, _)) = &c.children {
-                    stack_1.extend(children.iter());
-                }
-                stack_2.push(c);
-            }
-            stack_2
-        };
-
-        let mut cloned_children: Vec<Cluster<T, B>> = Vec::new();
+        let mut stack = self.as_postorder_stack();
+        let mut cloned_children = Vec::new();
         while let Some(c) = stack.pop() {
             let children = if let Some((children, span)) = &c.children {
                 // The cloned children of `c` are the last `n_children` clusters in `cloned_children`.

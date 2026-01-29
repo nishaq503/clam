@@ -48,8 +48,6 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
-    /// This method will switch between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
-    ///
     /// # Errors
     ///
     /// See [`Self::new`].
@@ -200,8 +198,6 @@ where
 {
     /// Creates a new `Tree` from the given items and metric.
     ///
-    /// This method will switch between iterative and recursive partitions in order to avoid stack overflows from deep recursion.
-    ///
     /// # Arguments
     ///
     /// * `items` - A vector of tuples, each containing an identifier and an item.
@@ -227,12 +223,11 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!("Creating tree with {} items using iterative partitioning", items.len());
+        ftlog::info!("Creating tree with {} items", items.len());
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
 
-        ftlog::info!("Finished creating tree with {} items using iterative partitioning", items.len());
-
+        ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self { items, root, metric })
     }
 
@@ -288,12 +283,11 @@ where
         if items.is_empty() {
             return Err("Cannot create a Tree with no items.");
         }
-        ftlog::info!("Creating tree with {} items using parallel iterative partitioning", items.len());
+        ftlog::info!("Creating tree with {} items in parallel", items.len());
 
         let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
 
-        ftlog::info!("Finished creating tree with {} items using parallel iterative partitioning", items.len());
-
+        ftlog::info!("Finished creating tree with {} items in parallel", items.len());
         Ok(Self { items, root, metric })
     }
 

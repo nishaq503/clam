@@ -2,8 +2,6 @@
 
 use rayon::prelude::*;
 
-use crate::DistanceValue;
-
 use super::Cluster;
 
 /// Traversal methods for `Cluster` trees.
@@ -69,10 +67,7 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Returns all clusters in a stack in post-order.
-    pub fn as_postorder_stack(&self) -> Vec<&Self>
-    where
-        T: DistanceValue,
-    {
+    pub fn as_postorder_stack(&self) -> Vec<&Self> {
         let mut stack_1 = vec![self];
         let mut stack_2 = Vec::new();
 

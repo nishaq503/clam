@@ -30,15 +30,15 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool + Send + Sync,
         Ann: Fn(&Self) -> A + Send + Sync,
     {
-        ftlog::info!("Creating a new root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
+        ftlog::info!("Creating a new root cluster in parallel with max recursion depth {max_recursion_depth}");
 
         let predicate = &strategy.predicate;
 
         // Initial partitioning up to max_recursion_depth
-        let iterative_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
-        let iterative_strategy = strategy.with_predicate(iterative_predicate);
-        let mut root = Self::par_new(0, 0, items, metric, &iterative_strategy, annotator);
-        ftlog::info!("Finished creating the root cluster with iterative partitioning up to recursion depth {max_recursion_depth}");
+        let stride_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
+        let stride_strategy = strategy.with_predicate(stride_predicate);
+        let mut root = Self::par_new(0, 0, items, metric, &stride_strategy, annotator);
+        ftlog::info!("Finished creating the root cluster in parallel using max recursion depth {max_recursion_depth}");
 
         // Find unfinished leaves that still satisfy the original predicate
         let unfinished_selector = |c: &Self, (): &()| c.is_leaf() && predicate(c);
@@ -50,10 +50,10 @@ impl<T, A> Cluster<T, A> {
             // Create a new strategy with increased recursion depth
             step += 1;
             let depth = max_recursion_depth * step;
-            let iterative_predicate = |c: &Self| c.depth < depth && predicate(c);
-            let iterative_strategy = strategy.with_predicate(iterative_predicate);
+            let stride_predicate = |c: &Self| c.depth < depth && predicate(c);
+            let stride_strategy = strategy.with_predicate(stride_predicate);
 
-            ftlog::info!("Starting step {step} of iterative partitioning, with recursion depth {depth}");
+            ftlog::info!("Starting stride {step} in parallel with max recursion depth {depth}");
 
             unfinished_leaves = unfinished_leaves
                 .into_par_iter()
@@ -69,14 +69,14 @@ impl<T, A> Cluster<T, A> {
                     };
 
                     // Re-partition the leaf and replace it in the tree
-                    *leaf = Self::par_new(leaf.depth, leaf.center_index, leaf_items, metric, &iterative_strategy, annotator);
+                    *leaf = Self::par_new(leaf.depth, leaf.center_index, leaf_items, metric, &stride_strategy, annotator);
 
                     // Return any new unfinished leaves
                     leaf.filter_clusters_mut(&unfinished_selector, &())
                 })
                 .collect();
 
-            ftlog::info!("Finished step {step} of iterative partitioning, with recursion depth {depth}");
+            ftlog::info!("Finished stride {step} in parallel with max recursion depth {depth}");
         }
 
         root
@@ -102,6 +102,7 @@ impl<T, A> Cluster<T, A> {
         let (mut cluster, radius_index) = Self::par_new_leaf(depth, center_index, items, metric);
         if !strategy.par_should_partition(&cluster) {
             ftlog::debug!("Not partitioning the cluster at depth {}", cluster.depth);
+            cluster.annotation = annotator(&cluster);
             return cluster;
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
