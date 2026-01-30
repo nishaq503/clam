@@ -2,6 +2,8 @@
 
 #![expect(clippy::type_complexity)]
 
+use std::collections::HashMap;
+
 use rayon::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -34,6 +36,8 @@ pub struct Tree<Id, I, T, A, M> {
     pub(crate) items: Vec<(Id, I)>,
     /// The root cluster of the tree.
     pub(crate) root: Cluster<T, A>,
+    /// All clusters in the tree. This is a mapping from `cluster.center_index` to `cluster`.
+    pub(crate) cluster_map: HashMap<usize, Cluster<T, A>>,
     /// The metric used to compute distances between items.
     pub(crate) metric: M,
 }
@@ -85,13 +89,18 @@ where
 /// Various getter methods for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Provides ownership of the members of the `Tree`.
-    pub fn into_parts(self) -> (Vec<(Id, I)>, Cluster<T, A>, M) {
-        (self.items, self.root, self.metric)
+    pub fn into_parts(self) -> (Vec<(Id, I)>, Cluster<T, A>, HashMap<usize, Cluster<T, A>>, M) {
+        (self.items, self.root, self.cluster_map, self.metric)
     }
 
     /// Creates a `Tree` from its parts.
-    pub const fn from_parts(items: Vec<(Id, I)>, root: Cluster<T, A>, metric: M) -> Self {
-        Self { items, root, metric }
+    pub const fn from_parts(items: Vec<(Id, I)>, root: Cluster<T, A>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
+        Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        }
     }
 
     /// Returns a reference to the identifier of the center item of the given cluster.
@@ -149,6 +158,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         Tree {
             items: self.items,
             root: self.root,
+            cluster_map: self.cluster_map,
             metric,
         }
     }
@@ -228,9 +238,15 @@ where
         ftlog::info!("Creating tree with {} items", items.len());
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
+        let cluster_map = HashMap::new();
 
         ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self { items, root, metric })
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
     }
 
     /// Returns the distance between the query item and the center of the given cluster.
@@ -288,9 +304,15 @@ where
         ftlog::info!("Creating tree with {} items in parallel", items.len());
 
         let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
+        let cluster_map = HashMap::new();
 
         ftlog::info!("Finished creating tree with {} items in parallel", items.len());
-        Ok(Self { items, root, metric })
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
     }
 
     /// Parallel version of [`distances_to_items_in_subtree`](Self::distances_to_items_in_subtree).
@@ -333,7 +355,7 @@ where
     ///
     /// If serialization fails.
     pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        (&self.items, &self.root).serialize(serializer)
+        (&self.items, &self.root, &self.cluster_map).serialize(serializer)
     }
 
     /// Deserializes a `Tree` using Serde.
@@ -342,8 +364,13 @@ where
     ///
     /// If deserialization fails.
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
-        let (items, root) = <(_, _)>::deserialize(deserializer)?;
-        Ok(Self { items, root, metric })
+        let (items, root, cluster_map) = <(_, _, _)>::deserialize(deserializer)?;
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
     }
 }
 
@@ -357,7 +384,8 @@ where
 {
     fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
         self.items.encode::<CONFIG>(buffer)?;
-        self.root.encode::<CONFIG>(buffer)
+        self.root.encode::<CONFIG>(buffer)?;
+        self.cluster_map.encode::<CONFIG>(buffer)
     }
 }
 
@@ -372,7 +400,13 @@ where
     fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
         let items = databuf::Decode::decode::<CONFIG>(buffer)?;
         let root = databuf::Decode::decode::<CONFIG>(buffer)?;
+        let cluster_map = databuf::Decode::decode::<CONFIG>(buffer)?;
         let metric = Box::new(|_: &I, _: &I| T::zero()); // Placeholder; actual metric must be provided externally
-        Ok(Self { items, root, metric })
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
     }
 }
