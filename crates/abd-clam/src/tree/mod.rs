@@ -1,5 +1,7 @@
 //! A `Tree` of `Clusters` for use in CLAM.
 
+#![expect(clippy::type_complexity)]
+
 use rayon::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

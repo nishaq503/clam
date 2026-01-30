@@ -1,7 +1,5 @@
 //! A `Cluster` in a `Tree` for use in CLAM.
 
-#![expect(clippy::type_complexity)]
-
 mod getters;
 mod setters;
 #[cfg(feature = "serde")]

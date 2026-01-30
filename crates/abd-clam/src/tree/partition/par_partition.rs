@@ -83,7 +83,6 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Parallel version of [`Self::new`].
-    #[expect(clippy::too_many_lines)]
     fn par_new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
     where
         T: DistanceValue + Send + Sync,
@@ -94,6 +93,37 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool + Send + Sync,
         Ann: Fn(&Self) -> A + Send + Sync,
     {
+        let (mut cluster, child_items, span) = Self::par_new_iterative(depth, center_index, items, metric, strategy);
+        if !child_items.is_empty() {
+            let (child_center_indices, children) = child_items
+                .into_par_iter()
+                .map(|(c_index, c_items)| (c_index, Self::par_new(depth + 1, c_index, c_items, metric, strategy, annotator)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        }
+
+        cluster.annotation = annotator(&cluster);
+
+        cluster
+    }
+
+    /// Parallel version of [`Self::new_iterative`].
+    #[expect(clippy::too_many_lines)]
+    fn par_new_iterative<'a, Id, I, M, P>(
+        depth: usize,
+        center_index: usize,
+        items: &'a mut [(Id, I)],
+        metric: &M,
+        strategy: &PartitionStrategy<P>,
+    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>, T)
+    where
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        Id: Send + Sync,
+        I: Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        P: Fn(&Self) -> bool + Send + Sync,
+    {
         ftlog::debug!(
             "Creating a new cluster at depth {depth} with center {center_index} and cardinality {}",
             items.len()
@@ -102,8 +132,7 @@ impl<T, A> Cluster<T, A> {
         let (mut cluster, radius_index) = Self::par_new_leaf(depth, center_index, items, metric);
         if !strategy.par_should_partition(&cluster) {
             ftlog::debug!("Not partitioning the cluster at depth {}", cluster.depth);
-            cluster.annotation = annotator(&cluster);
-            return cluster;
+            return (cluster, Vec::new(), T::zero());
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
@@ -221,21 +250,16 @@ impl<T, A> Cluster<T, A> {
 
         let child_cardinalities = child_items.iter().map(|(_, c_items)| c_items.len()).collect::<Vec<_>>();
         ftlog::info!(
-            "At depth {}, created {} child clusters with {:?} cardinalities",
+            "At depth {}, will create {} child clusters with {:?} cardinalities",
             cluster.depth,
             child_items.len(),
             child_cardinalities
         );
 
-        let (child_center_indices, children) = child_items
-            .into_par_iter()
-            .map(|(c_index, c_items)| (c_index, Self::par_new(depth + 1, c_index, c_items, metric, strategy, annotator)))
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-        cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
+        cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
 
-        cluster.annotation = annotator(&cluster);
-
-        cluster
+        (cluster, child_items, span)
     }
 
     /// Creates a new `Cluster` as a leaf.

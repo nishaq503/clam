@@ -79,13 +79,44 @@ impl<T, A> Cluster<T, A> {
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    #[expect(clippy::too_many_lines)]
     fn new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
         P: Fn(&Self) -> bool,
         Ann: Fn(&Self) -> A,
+    {
+        let (mut cluster, child_items, span) = Self::new_iterative(depth, center_index, items, metric, strategy);
+        if !child_items.is_empty() {
+            let (child_center_indices, children) = child_items
+                .into_iter()
+                .map(|(c_index, c_items)| (c_index, Self::new(depth + 1, c_index, c_items, metric, strategy, annotator)))
+                .unzip::<_, _, Vec<_>, Vec<_>>();
+            cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        }
+
+        cluster.annotation = annotator(&cluster);
+
+        cluster
+    }
+
+    /// Creates a new `Cluster` and returns the splits of items for its creating children.
+    ///
+    /// # WARNING
+    ///
+    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
+    #[expect(clippy::too_many_lines)]
+    fn new_iterative<'a, Id, I, M, P>(
+        depth: usize,
+        center_index: usize,
+        items: &'a mut [(Id, I)],
+        metric: &M,
+        strategy: &PartitionStrategy<P>,
+    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>, T)
+    where
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+        P: Fn(&Self) -> bool,
     {
         ftlog::debug!(
             "Creating a new cluster at depth {depth} with center {center_index} and cardinality {}",
@@ -95,8 +126,7 @@ impl<T, A> Cluster<T, A> {
         let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric);
         if !strategy.should_partition(&cluster) {
             ftlog::debug!("Not partitioning the cluster at depth {}", cluster.depth);
-            cluster.annotation = annotator(&cluster);
-            return cluster;
+            return (cluster, Vec::new(), T::zero());
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
@@ -217,21 +247,16 @@ impl<T, A> Cluster<T, A> {
 
         let child_cardinalities = child_items.iter().map(|(_, c_items)| c_items.len()).collect::<Vec<_>>();
         ftlog::info!(
-            "At depth {}, created {} child clusters with {:?} cardinalities",
-            cluster.depth,
+            "At depth {}, will create {} child clusters with {:?} cardinalities",
+            depth,
             child_items.len(),
             child_cardinalities
         );
 
-        let (child_center_indices, children) = child_items
-            .into_iter()
-            .map(|(c_index, c_items)| (c_index, Self::new(depth + 1, c_index, c_items, metric, strategy, annotator)))
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-        cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
+        cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
 
-        cluster.annotation = annotator(&cluster);
-
-        cluster
+        (cluster, child_items, span)
     }
 
     /// Creates a new `Cluster` as a leaf.
