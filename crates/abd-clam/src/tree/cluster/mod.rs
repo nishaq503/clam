@@ -1,5 +1,7 @@
 //! A `Cluster` in a `Tree` for use in CLAM.
 
+#![expect(clippy::type_complexity)]
+
 mod getters;
 mod setters;
 #[cfg(feature = "serde")]
@@ -40,8 +42,8 @@ pub struct Cluster<T, A> {
     pub(crate) radius: T,
     /// The Local Fractal Dimension of the `Cluster`.
     pub(crate) lfd: f64,
-    /// The children and span of this cluster, if it was partitioned. The span is the distance between the two poles used to partition the cluster.
-    pub(crate) children: Option<(Box<[Self]>, T)>,
+    /// The children, child center indices and span of this cluster, if it was partitioned. The span is the distance between the two poles used to partition the cluster.
+    pub(crate) children: Option<(Box<[Self]>, Box<[usize]>, T)>,
     /// Optional arbitrary data associated with this cluster.
     pub(crate) annotation: A,
 }
@@ -84,12 +86,13 @@ where
 
         fields.push(format!("annotation: {:?}", self.annotation));
 
-        let name = if let Some((children, span)) = &self.children {
+        let name = if let Some((children, child_center_indices, span)) = &self.children {
             fields.push(format!("span: {span}"));
 
             let indented_children = children
                 .iter()
-                .map(|child| format!("|--{}", format!("{child}").replace('\n', "\n|  ")))
+                .zip(child_center_indices)
+                .map(|(child, center_index)| format!("|--{center_index}-{}", format!("{child}").replace('\n', "\n|  ")))
                 .collect::<Vec<_>>();
             let children = indented_children.join("\n");
             fields.push(format!("\n{children}"));
@@ -113,12 +116,12 @@ impl<T, A> Cluster<T, A> {
         let mut stack = self.as_postorder_stack();
         let mut cloned_children = Vec::new();
         while let Some(c) = stack.pop() {
-            let children = if let Some((children, span)) = &c.children {
+            let children = if let Some((children, child_center_indices, span)) = &c.children {
                 // The cloned children of `c` are the last `n_children` clusters in `cloned_children`.
                 let n_children = children.len();
                 let start_index = cloned_children.len() - n_children;
                 let cloned_children_slice = cloned_children.split_off(start_index);
-                Some((cloned_children_slice.into_boxed_slice(), span.clone()))
+                Some((cloned_children_slice.into_boxed_slice(), child_center_indices.clone(), span.clone()))
             } else {
                 // Leaf cluster
                 None
@@ -147,14 +150,14 @@ impl<T, A> Cluster<T, A> {
     where
         B: Default,
     {
-        let children = self.children.map(|(boxed_children, span)| {
+        let children = self.children.map(|(boxed_children, child_center_indices, span)| {
             let new_children = boxed_children
                 .into_vec()
                 .into_iter()
                 .map(Self::clear_annotations)
                 .collect::<Vec<_>>()
                 .into_boxed_slice();
-            (new_children, span)
+            (new_children, child_center_indices, span)
         });
 
         Cluster {
@@ -177,7 +180,7 @@ impl<T, A> Cluster<T, A> {
     {
         if predicate(self, args) {
             vec![self]
-        } else if let Some((children, _)) = &self.children {
+        } else if let Some((children, _, _)) = &self.children {
             children.iter().flat_map(|child| child.filter_clusters(predicate, args)).collect()
         } else {
             vec![]
@@ -193,7 +196,7 @@ impl<T, A> Cluster<T, A> {
     {
         if predicate(self, args) {
             vec![self]
-        } else if let Some((children, _)) = &mut self.children {
+        } else if let Some((children, _, _)) = &mut self.children {
             children.iter_mut().flat_map(|child| child.filter_clusters_mut(predicate, args)).collect()
         } else {
             vec![]

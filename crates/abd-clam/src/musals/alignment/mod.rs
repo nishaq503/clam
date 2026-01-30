@@ -95,7 +95,7 @@ impl<S: Sequence> Msa<S> {
     where
         T: DistanceValue,
     {
-        if let Some((children, _)) = &mut cluster.children {
+        if let Some((children, _, _)) = &mut cluster.children {
             ftlog::debug!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality);
 
             let mut children = children
@@ -207,7 +207,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         Id: Send + Sync,
         T: DistanceValue + Send + Sync,
     {
-        if let Some((children, _)) = &mut cluster.children {
+        if let Some((children, _, _)) = &mut cluster.children {
             ftlog::debug!(
                 "Aligning parent cluster at depth {} with {} sequences in parallel",
                 cluster.depth,

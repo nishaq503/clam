@@ -14,7 +14,7 @@ impl<T, A> Cluster<T, A> {
         F: Fn(&mut Self, &Args),
     {
         func(self, args);
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             for child in children.iter_mut() {
                 child.apply_preorder(func, args);
             }
@@ -29,7 +29,7 @@ impl<T, A> Cluster<T, A> {
         F: FnMut(&mut Self, &mut Args),
     {
         func(self, args);
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             for child in children.iter_mut() {
                 child.apply_preorder_mut(func, args);
             }
@@ -43,7 +43,7 @@ impl<T, A> Cluster<T, A> {
     where
         F: Fn(&mut Self, &Args),
     {
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             for child in children.iter_mut() {
                 child.apply_postorder(func, args);
             }
@@ -58,7 +58,7 @@ impl<T, A> Cluster<T, A> {
     where
         F: FnMut(&mut Self, &mut Args),
     {
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             for child in children.iter_mut() {
                 child.apply_postorder_mut(func, args);
             }
@@ -82,18 +82,18 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Returns all clusters as leaves in a stack in post-order, placing the span of each cluster alongside it.
-    pub fn as_postorder_stack_owned(self) -> Vec<(Self, Option<T>)> {
+    pub fn as_postorder_stack_owned(self) -> Vec<(Self, Option<(Box<[usize]>, T)>)> {
         let mut stack_1 = vec![self];
         let mut stack_2 = Vec::new();
 
         while let Some(mut c) = stack_1.pop() {
-            let span = if let Some((children, span)) = c.take_children_and_span() {
+            let cci_and_span = if let Some((children, child_center_indices, span)) = c.take_children_and_span() {
                 stack_1.extend(children);
-                Some(span)
+                Some((child_center_indices, span))
             } else {
                 None
             };
-            stack_2.push((c, span));
+            stack_2.push((c, cci_and_span));
         }
 
         stack_2
@@ -115,7 +115,7 @@ where
         Args: Sync,
     {
         func(self, args);
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             children.par_iter_mut().for_each(|child| {
                 child.par_apply_preorder(func, args);
             });
@@ -130,7 +130,7 @@ where
         F: Fn(&mut Self, &Args) + Sync,
         Args: Sync,
     {
-        if let Some((children, _)) = &mut self.children {
+        if let Some((children, _, _)) = &mut self.children {
             children.par_iter_mut().for_each(|child| {
                 child.par_apply_postorder(func, args);
             });
@@ -162,7 +162,7 @@ impl<T, A> Cluster<T, A> {
         let mut non_center_items = items.split_off(1);
         let center = items.pop().unwrap_or_else(|| unreachable!("items cannot be empty"));
 
-        if let Some((children, span)) = self.children {
+        if let Some((children, child_center_indices, span)) = self.children {
             let child_items = {
                 let mut child_items = Vec::with_capacity(children.len());
                 for child in children.iter().rev() {
@@ -190,7 +190,7 @@ impl<T, A> Cluster<T, A> {
                 cardinality: self.cardinality,
                 radius: self.radius,
                 lfd: self.lfd,
-                children: Some((children, span)),
+                children: Some((children, child_center_indices, span)),
                 annotation,
             }
         } else {
@@ -227,7 +227,7 @@ impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, I, A>> {
         } = self.annotation;
         items.push(center);
 
-        let cluster = if let Some((children, span)) = self.children {
+        let cluster = if let Some((children, child_center_indices, span)) = self.children {
             let children = children
                 .into_iter()
                 .map(|child| {
@@ -247,7 +247,7 @@ impl<Id, I, T, A> Cluster<T, AnnotatedItems<Id, I, A>> {
                 cardinality: self.cardinality,
                 radius: self.radius,
                 lfd: self.lfd,
-                children: Some((children, span)),
+                children: Some((children, child_center_indices, span)),
                 annotation,
             }
         } else {
@@ -294,7 +294,7 @@ where
         let mut non_center_items = items.split_off(1);
         let center = items.pop().unwrap_or_else(|| unreachable!("items cannot be empty"));
 
-        if let Some((children, span)) = self.children {
+        if let Some((children, child_center_indices, span)) = self.children {
             let child_items = {
                 let mut child_items = Vec::with_capacity(children.len());
                 for child in children.iter().rev() {
@@ -322,7 +322,7 @@ where
                 cardinality: self.cardinality,
                 radius: self.radius,
                 lfd: self.lfd,
-                children: Some((children, span)),
+                children: Some((children, child_center_indices, span)),
                 annotation,
             }
         } else {
@@ -365,7 +365,7 @@ where
         } = self.annotation;
         items.push(center);
 
-        let cluster = if let Some((children, span)) = self.children {
+        let cluster = if let Some((children, child_center_indices, span)) = self.children {
             let children_and_items = children.into_par_iter().map(Self::par_collect_items_from_annotations).collect::<Vec<_>>();
             let children = children_and_items
                 .into_iter()
@@ -385,7 +385,7 @@ where
                 cardinality: self.cardinality,
                 radius: self.radius,
                 lfd: self.lfd,
-                children: Some((children, span)),
+                children: Some((children, child_center_indices, span)),
                 annotation,
             }
         } else {

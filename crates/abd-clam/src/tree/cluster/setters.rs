@@ -35,11 +35,11 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Sets the children and span of this cluster, replacing any existing children.
-    pub fn set_children_and_span(&mut self, children: Box<[Self]>, span: T)
+    pub fn set_children_and_span(&mut self, children: Box<[Self]>, child_center_indices: Box<[usize]>, span: T)
     where
         T: DistanceValue,
     {
-        self.children = Some((children, span));
+        self.children = Some((children, child_center_indices, span));
     }
 
     /// Sets the annotation of this cluster, replacing any existing annotation.

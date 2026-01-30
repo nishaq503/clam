@@ -223,12 +223,11 @@ impl<T, A> Cluster<T, A> {
             child_cardinalities
         );
 
-        let children = child_items
+        let (child_center_indices, children) = child_items
             .into_iter()
-            .map(|(c_index, c_items)| Self::new(depth + 1, c_index, c_items, metric, strategy, annotator))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        cluster.children = Some((children, span));
+            .map(|(c_index, c_items)| (c_index, Self::new(depth + 1, c_index, c_items, metric, strategy, annotator)))
+            .unzip::<_, _, Vec<_>, Vec<_>>();
+        cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
 
         cluster.annotation = annotator(&cluster);
 

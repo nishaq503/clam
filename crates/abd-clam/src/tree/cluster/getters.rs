@@ -35,18 +35,30 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Gets the children of this cluster, if it was partitioned.
-    pub fn children_and_span(&self) -> Option<(&[Self], &T)> {
-        self.children.as_ref().map(|(children, span)| (children.as_ref(), span))
+    pub fn children_and_span(&self) -> Option<(&[Self], &[usize], &T)> {
+        self.children
+            .as_ref()
+            .map(|(children, child_center_indices, span)| (children.as_ref(), child_center_indices.as_ref(), span))
     }
 
     /// Gets the children of this cluster, if it was partitioned.
     pub fn children(&self) -> Option<&[Self]> {
-        self.children.as_ref().map(|(children, _)| children.as_ref())
+        self.children.as_ref().map(|(children, _, _)| children.as_ref())
     }
 
     /// Returns a mutable reference to the children of this cluster, if any.
     pub fn children_mut(&mut self) -> Option<&mut [Self]> {
-        self.children.as_mut().map(|(children, _)| children.as_mut())
+        self.children.as_mut().map(|(children, _, _)| children.as_mut())
+    }
+
+    /// Gets the center indices of the children of this cluster, if it was partitioned.
+    pub fn child_center_indices(&self) -> Option<&[usize]> {
+        self.children.as_ref().map(|(_, child_center_indices, _)| child_center_indices.as_ref())
+    }
+
+    /// Returns a mutable reference to the center indices of the children of this cluster, if any.
+    pub fn child_center_indices_mut(&mut self) -> Option<&mut [usize]> {
+        self.children.as_mut().map(|(_, child_center_indices, _)| child_center_indices.as_mut())
     }
 
     /// Gets the span of this cluster, if it was partitioned.
@@ -54,11 +66,11 @@ impl<T, A> Cluster<T, A> {
     where
         T: DistanceValue,
     {
-        self.children.as_ref().map(|(_, span)| *span)
+        self.children.as_ref().map(|(_, _, span)| *span)
     }
 
     /// Takes ownership of the children and span of this cluster, if any, leaving it a leaf cluster.
-    pub const fn take_children_and_span(&mut self) -> Option<(Box<[Self]>, T)> {
+    pub const fn take_children_and_span(&mut self) -> Option<(Box<[Self]>, Box<[usize]>, T)> {
         self.children.take()
     }
 

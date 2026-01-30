@@ -34,7 +34,7 @@ where
             unreachable!("Center item must be in original form when compressing");
         };
 
-        self.children = self.children.map(|(mut children, span)| {
+        self.children = self.children.map(|(mut children, child_center_indices, span)| {
             children = children
                 .into_iter()
                 .map(|mut child| {
@@ -43,7 +43,7 @@ where
                     child
                 })
                 .collect();
-            (children, span)
+            (children, child_center_indices, span)
         });
 
         if let Some(non_centers) = &mut non_center {
@@ -78,7 +78,7 @@ where
             unreachable!("Center item must be in original form when compressing");
         };
 
-        self.children = self.children.map(|(mut children, span)| {
+        self.children = self.children.map(|(mut children, child_center_indices, span)| {
             children = children
                 .into_iter()
                 .map(|mut child| {
@@ -87,7 +87,7 @@ where
                     child
                 })
                 .collect();
-            (children, span)
+            (children, child_center_indices, span)
         });
 
         if let Some(non_centers) = &mut non_center {
@@ -131,7 +131,7 @@ where
             unreachable!("Center item must be in original form when compressing");
         };
 
-        self.children = self.children.map(|(mut children, span)| {
+        self.children = self.children.map(|(mut children, child_center_indices, span)| {
             children = children
                 .into_par_iter()
                 .map(|mut child| {
@@ -140,7 +140,7 @@ where
                     child
                 })
                 .collect();
-            (children, span)
+            (children, child_center_indices, span)
         });
 
         if let Some(non_centers) = &mut non_center {
@@ -173,7 +173,7 @@ where
             unreachable!("Center item must be in original form when compressing");
         };
 
-        self.children = self.children.map(|(mut children, span)| {
+        self.children = self.children.map(|(mut children, child_center_indices, span)| {
             children = children
                 .into_par_iter()
                 .map(|mut child| {
@@ -182,7 +182,7 @@ where
                     child
                 })
                 .collect();
-            (children, span)
+            (children, child_center_indices, span)
         });
 
         if let Some(non_centers) = &mut non_center {
