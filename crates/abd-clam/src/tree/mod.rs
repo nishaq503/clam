@@ -215,7 +215,7 @@ where
     /// * `items` - A vector of tuples, each containing an identifier and an item.
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
-    /// * `annotator` - A function that annotates clusters as they are created.
+    /// * `annotator` - A function that annotates clusters in post-order.
     /// * `max_recursive_depth` - The maximum depth of any recursion.
     ///
     /// # Errors
@@ -239,6 +239,56 @@ where
 
         let root = Cluster::new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
         let cluster_map = HashMap::new();
+
+        ftlog::info!("Finished creating tree with {} items", items.len());
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
+    }
+
+    /// Creates a new `Tree` from the given items and metric.
+    ///
+    /// # Arguments
+    ///
+    /// * `items` - A vector of tuples, each containing an identifier and an item.
+    /// * `metric` - A function that computes the distance between two items.
+    /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
+    /// * `annotator` - A function that annotates clusters in post-order.
+    ///
+    /// # Errors
+    ///
+    /// If `items` is empty.
+    pub fn new_iterative<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    where
+        P: Fn(&Cluster<T, A>) -> bool,
+        Ann: Fn(&Cluster<T, A>) -> A,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+        ftlog::info!("Creating tree with {} items", items.len());
+
+        let mut cluster_map = HashMap::new();
+        let mut stack = vec![Cluster::new_iterative(0, 0, &mut items, &metric, strategy)];
+        while let Some((mut cluster, child_items)) = stack.pop() {
+            stack.extend(
+                child_items
+                    .into_iter()
+                    .map(|(child_center_index, c_items)| Cluster::new_iterative(cluster.depth() + 1, child_center_index, c_items, &metric, strategy))
+                    .collect::<Vec<_>>(),
+            );
+
+            cluster.annotation = annotator(&cluster);
+            cluster_map.insert(cluster.center_index(), cluster);
+        }
+
+        // TODO(Najib): Remove this pop after completing the iterative implementation.
+        let root = cluster_map
+            .remove(&0)
+            .unwrap_or_else(|| unreachable!("Root cluster should be present in the cluster map."));
 
         ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self {
@@ -307,6 +357,49 @@ where
         let cluster_map = HashMap::new();
 
         ftlog::info!("Finished creating tree with {} items in parallel", items.len());
+        Ok(Self {
+            items,
+            root,
+            cluster_map,
+            metric,
+        })
+    }
+
+    /// Parallel version of [`Self::new_iterative`].
+    ///
+    /// # Errors
+    ///
+    /// If `items` is empty.
+    pub fn par_new_iterative<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    where
+        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
+        Ann: Fn(&Cluster<T, A>) -> A + Send + Sync,
+    {
+        if items.is_empty() {
+            return Err("Cannot create a Tree with no items.");
+        }
+        ftlog::info!("Creating tree with {} items", items.len());
+
+        let mut cluster_map = HashMap::new();
+        let mut stack = vec![Cluster::par_new_iterative(0, 0, &mut items, &metric, strategy)];
+        while let Some((mut cluster, child_items)) = stack.pop() {
+            stack.extend(
+                child_items
+                    .into_par_iter()
+                    .map(|(child_center_index, c_items)| Cluster::par_new_iterative(cluster.depth() + 1, child_center_index, c_items, &metric, strategy))
+                    .collect::<Vec<_>>(),
+            );
+
+            cluster.annotation = annotator(&cluster);
+            cluster_map.insert(cluster.center_index(), cluster);
+        }
+
+        // TODO(Najib): Remove this pop after completing the iterative implementation.
+        let root = cluster_map
+            .remove(&0)
+            .unwrap_or_else(|| unreachable!("Root cluster should be present in the cluster map."));
+
+        ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self {
             items,
             root,

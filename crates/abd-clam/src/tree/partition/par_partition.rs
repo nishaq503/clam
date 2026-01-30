@@ -93,8 +93,9 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool + Send + Sync,
         Ann: Fn(&Self) -> A + Send + Sync,
     {
-        let (mut cluster, child_items, span) = Self::par_new_iterative(depth, center_index, items, metric, strategy);
+        let (mut cluster, child_items) = Self::par_new_iterative(depth, center_index, items, metric, strategy);
         if !child_items.is_empty() {
+            let span = cluster.span().unwrap_or_else(|| unreachable!("cluster has children, so span must be defined"));
             let (child_center_indices, children) = child_items
                 .into_par_iter()
                 .map(|(c_index, c_items)| (c_index, Self::par_new(depth + 1, c_index, c_items, metric, strategy, annotator)))
@@ -109,13 +110,13 @@ impl<T, A> Cluster<T, A> {
 
     /// Parallel version of [`Self::new_iterative`].
     #[expect(clippy::too_many_lines)]
-    fn par_new_iterative<'a, Id, I, M, P>(
+    pub fn par_new_iterative<'a, Id, I, M, P>(
         depth: usize,
         center_index: usize,
         items: &'a mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,
-    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>, T)
+    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>)
     where
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
@@ -132,7 +133,7 @@ impl<T, A> Cluster<T, A> {
         let (mut cluster, radius_index) = Self::par_new_leaf(depth, center_index, items, metric);
         if !strategy.par_should_partition(&cluster) {
             ftlog::debug!("Not partitioning the cluster at depth {}", cluster.depth);
-            return (cluster, Vec::new(), T::zero());
+            return (cluster, Vec::new());
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
@@ -259,7 +260,7 @@ impl<T, A> Cluster<T, A> {
         let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
         cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
 
-        (cluster, child_items, span)
+        (cluster, child_items)
     }
 
     /// Creates a new `Cluster` as a leaf.

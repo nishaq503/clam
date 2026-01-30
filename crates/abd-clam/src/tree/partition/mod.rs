@@ -86,8 +86,9 @@ impl<T, A> Cluster<T, A> {
         P: Fn(&Self) -> bool,
         Ann: Fn(&Self) -> A,
     {
-        let (mut cluster, child_items, span) = Self::new_iterative(depth, center_index, items, metric, strategy);
+        let (mut cluster, child_items) = Self::new_iterative(depth, center_index, items, metric, strategy);
         if !child_items.is_empty() {
+            let span = cluster.span().unwrap_or_else(|| unreachable!("cluster has children, so span must be defined"));
             let (child_center_indices, children) = child_items
                 .into_iter()
                 .map(|(c_index, c_items)| (c_index, Self::new(depth + 1, c_index, c_items, metric, strategy, annotator)))
@@ -106,13 +107,13 @@ impl<T, A> Cluster<T, A> {
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
     #[expect(clippy::too_many_lines)]
-    fn new_iterative<'a, Id, I, M, P>(
+    pub fn new_iterative<'a, Id, I, M, P>(
         depth: usize,
         center_index: usize,
         items: &'a mut [(Id, I)],
         metric: &M,
         strategy: &PartitionStrategy<P>,
-    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>, T)
+    ) -> (Self, Vec<(usize, &'a mut [(Id, I)])>)
     where
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
@@ -126,7 +127,7 @@ impl<T, A> Cluster<T, A> {
         let (mut cluster, radius_index) = Self::new_leaf(depth, center_index, items, metric);
         if !strategy.should_partition(&cluster) {
             ftlog::debug!("Not partitioning the cluster at depth {}", cluster.depth);
-            return (cluster, Vec::new(), T::zero());
+            return (cluster, Vec::new());
         }
         ftlog::debug!("Partitioning the cluster at depth {}", cluster.depth);
 
@@ -256,7 +257,7 @@ impl<T, A> Cluster<T, A> {
         let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
         cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
 
-        (cluster, child_items, span)
+        (cluster, child_items)
     }
 
     /// Creates a new `Cluster` as a leaf.
