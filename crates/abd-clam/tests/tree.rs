@@ -15,25 +15,25 @@ fn new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::never();
-    let tree = Tree::new(items.clone(), metric, &strategy, &|_| (), 128)?;
+    let tree = Tree::new(items.clone(), metric, &strategy, &|_| ())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(root.is_leaf(), "Root should be a leaf: {root}");
-    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root}");
+    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root}");
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::new(items, metric, &strategy, &|_| (), 128)?;
+    let tree = Tree::new(items, metric, &strategy, &|_| ())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
-    let subtree = root.as_postorder_stack();
+    let subtree = tree.all_clusters();
     if subtree.len() != 3 {
         eprintln!("{}", tree.root());
     }
@@ -65,25 +65,25 @@ fn par_new() -> Result<(), String> {
 
     // Don't partition in the root so we can run some tests.
     let strategy = PartitionStrategy::never();
-    let tree = Tree::par_new(items.clone(), metric, &strategy, &|_| (), 128)?;
+    let tree = Tree::par_new(items.clone(), metric, &strategy, &|_| ())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(root.is_leaf(), "Root should be a leaf: {root}");
-    assert_eq!(tree.center_of_cluster(root), &vec![5, 6], "Center mismatch: {root}");
+    assert_eq!(tree.items()[root.center_index()].1, vec![5, 6], "Center mismatch: {root}");
     assert_eq!(root.radius(), 12, "Radius mismatch: {root}");
 
     // Now partition the root
     let strategy = PartitionStrategy::default().with_branching_factor(2.into());
-    let tree = Tree::par_new(items, metric, &strategy, &|_| (), 128)?;
+    let tree = Tree::par_new(items, metric, &strategy, &|_| ())?;
     let root = tree.root();
 
     assert_eq!(root.cardinality(), cardinality, "Cardinality mismatch: {root}");
     assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
     assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
 
-    let subtree = root.as_postorder_stack();
+    let subtree = tree.all_clusters();
     if subtree.len() != 3 {
         eprintln!("{}", tree.root());
     }
@@ -128,7 +128,7 @@ fn big(car: usize, dim: usize) -> Result<(), String> {
             })
             .collect::<Vec<_>>();
         let tree = Tree::new_minimal(data, metric)?;
-        let n_clusters = tree.all_clusters_postorder().len();
+        let n_clusters = tree.n_clusters();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -163,8 +163,7 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
     for i in 0..10 {
         let data = common::data_gen::tabular(car, dim, min, max);
         let tree = Tree::par_new_minimal(data, metric)?;
-
-        let n_clusters = tree.all_clusters_postorder().len();
+        let n_clusters = tree.n_clusters();
 
         // These bounds were derived for large `car`
         let min_ratio = 2.0 / 3.0;
@@ -183,96 +182,6 @@ fn par_big(car: usize, dim: usize) -> Result<(), String> {
         assert!(!root.is_singleton(), "Root should not be a singleton: {root}");
         assert!(!root.is_leaf(), "Root should not be a leaf: {root}");
         assert!(root.radius() <= hypot / 2.0, "Radius too large: {:.6}", root.radius());
-    }
-
-    Ok(())
-}
-
-#[test_case(1_000, 10 ; "1_000x10")]
-#[test_case(10_000, 10 ; "10_000x10")]
-fn big_iterative(car: usize, dim: usize) -> Result<(), String> {
-    let metric = |a: &Vec<f32>, b: &Vec<f32>| {
-        let d = common::metrics::euclidean::<_, _, f32>(a, b);
-        (d * 1000.0).trunc() / 1000.0 // Truncate to 3 decimal places to help debugging
-    };
-    let (min, max) = (-1.0, 1.0);
-
-    for _ in 0..10 {
-        let data = common::data_gen::tabular(car, dim, min, max);
-        let data = data
-            .into_iter()
-            .map(|v| {
-                v.into_iter()
-                    .map(|f| (f * 1000.0).trunc() / 1000.0) // Truncate to 3 decimal places to help debugging
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        let tree_rec = Tree::new_minimal(data.clone(), metric)?;
-        let clusters_rec = tree_rec.all_clusters_postorder();
-
-        let strategy = PartitionStrategy::default();
-        let data = data.into_iter().enumerate().collect::<Vec<_>>();
-        for max_recursion_depth in [4, 8, 16] {
-            let tree_iter = Tree::new(data.clone(), metric, &strategy, &|_| (), max_recursion_depth)?;
-            let clusters_iter = tree_iter.all_clusters_postorder();
-
-            // Check that the number of clusters is within a reasonable fraction of the recursive version.
-            let ratio = clusters_iter.len() as f64 / clusters_rec.len() as f64;
-            let delta = 0.01; // Allow 1% difference
-            assert!(
-                (1.0 - delta..=1.0 + delta).contains(&ratio),
-                "Number of clusters mismatch between recursive and iterative implementations: recursive = {}, iterative = {}, ratio = {:.3}",
-                clusters_rec.len(),
-                clusters_iter.len(),
-                ratio
-            );
-        }
-    }
-
-    Ok(())
-}
-
-#[test_case(10_000, 10 ; "10_000x10")]
-#[test_case(100_000, 10 ; "100_000x10")]
-fn par_big_iterative(car: usize, dim: usize) -> Result<(), String> {
-    let metric = |a: &Vec<f32>, b: &Vec<f32>| {
-        let d = common::metrics::euclidean::<_, _, f32>(a, b);
-        (d * 1000.0).trunc() / 1000.0 // Truncate to 3 decimal places to help debugging
-    };
-    let (min, max) = (-1.0, 1.0);
-
-    for _ in 0..10 {
-        let data = common::data_gen::tabular(car, dim, min, max);
-        let data = data
-            .into_iter()
-            .map(|v| {
-                v.into_iter()
-                    .map(|f| (f * 1000.0).trunc() / 1000.0) // Truncate to 3 decimal places to help debugging
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        let tree_rec = Tree::par_new_minimal(data.clone(), metric)?;
-        let clusters_rec = tree_rec.all_clusters_postorder();
-
-        let strategy = PartitionStrategy::default();
-        let data = data.into_iter().enumerate().collect::<Vec<_>>();
-        for max_recursion_depth in [4, 8, 16] {
-            let tree_iter = Tree::par_new(data.clone(), metric, &strategy, &|_| (), max_recursion_depth)?;
-            let clusters_iter = tree_iter.all_clusters_postorder();
-
-            // Check that the number of clusters is within a reasonable fraction of the recursive version.
-            let ratio = clusters_iter.len() as f64 / clusters_rec.len() as f64;
-            let delta = 0.01; // Allow 1% difference
-            assert!(
-                (1.0 - delta..=1.0 + delta).contains(&ratio),
-                "Number of clusters mismatch between recursive and iterative implementations: recursive = {}, iterative = {}, ratio = {:.3}",
-                clusters_rec.len(),
-                clusters_iter.len(),
-                ratio
-            );
-        }
     }
 
     Ok(())

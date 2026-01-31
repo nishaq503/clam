@@ -16,7 +16,7 @@ mod partition;
 pub use cluster::Cluster;
 pub use partition::strategy::{self as partition_strategy, PartitionStrategy};
 
-pub use cluster::AnnotatedItems;
+// pub use cluster::AnnotatedItems;
 
 /// The `Tree` struct is the main data structure used in CLAM.
 ///
@@ -34,8 +34,6 @@ pub use cluster::AnnotatedItems;
 pub struct Tree<Id, I, T, A, M> {
     /// The items stored in the tree, each paired with its identifier.
     pub(crate) items: Vec<(Id, I)>,
-    /// The root cluster of the tree.
-    pub(crate) root: Cluster<T, A>,
     /// All clusters in the tree. This is a mapping from `cluster.center_index` to `cluster`.
     pub(crate) cluster_map: HashMap<usize, Cluster<T, A>>,
     /// The metric used to compute distances between items.
@@ -63,7 +61,7 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::new(items, metric, &PartitionStrategy::default(), &|_| (), 128)
+        Self::new(items, metric, &PartitionStrategy::default(), &|_| ())
     }
 
     /// Parallel version of [`Self::new_minimal`].
@@ -82,35 +80,20 @@ where
         }
 
         let items = items.into_iter().enumerate().collect::<Vec<_>>();
-        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| (), 128)
+        Self::par_new(items, metric, &PartitionStrategy::default(), &|_| ())
     }
 }
 
 /// Various getter methods for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     /// Provides ownership of the members of the `Tree`.
-    pub fn into_parts(self) -> (Vec<(Id, I)>, Cluster<T, A>, HashMap<usize, Cluster<T, A>>, M) {
-        (self.items, self.root, self.cluster_map, self.metric)
+    pub fn into_parts(self) -> (Vec<(Id, I)>, HashMap<usize, Cluster<T, A>>, M) {
+        (self.items, self.cluster_map, self.metric)
     }
 
     /// Creates a `Tree` from its parts.
-    pub const fn from_parts(items: Vec<(Id, I)>, root: Cluster<T, A>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
-        Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        }
-    }
-
-    /// Returns a reference to the identifier of the center item of the given cluster.
-    pub fn center_id_of_cluster(&self, cluster: &Cluster<T, A>) -> &Id {
-        &self.items[cluster.center_index()].0
-    }
-
-    /// Returns a reference to the center item of the given cluster.
-    pub fn center_of_cluster(&self, cluster: &Cluster<T, A>) -> &I {
-        &self.items[cluster.center_index()].1
+    pub const fn from_parts(items: Vec<(Id, I)>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
+        Self { items, cluster_map, metric }
     }
 
     /// Returns a reference to all items in the tree.
@@ -118,34 +101,36 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.items
     }
 
-    /// Returns a slice of the items in the given cluster, excluding the cluster's center.
-    pub fn items_in_subtree(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
-        &self.items[cluster.subtree_indices()]
-    }
-
-    /// Returns a slice of the items in the given cluster, including the cluster's center.
-    pub(crate) fn items_in_cluster(&self, cluster: &Cluster<T, A>) -> &[(Id, I)] {
-        &self.items[cluster.all_items_indices()]
-    }
-
     /// Consumes the tree and returns all items stored in it.
     pub fn take_items(self) -> Vec<(Id, I)> {
         self.items
     }
 
-    /// Returns a reference to the root cluster of the tree.
-    pub const fn root(&self) -> &Cluster<T, A> {
-        &self.root
-    }
-
-    /// Returns a mutable reference to the root cluster of the tree.
-    pub const fn root_mut(&mut self) -> &mut Cluster<T, A> {
-        &mut self.root
-    }
-
     /// Returns the number of items stored in the tree.
     pub const fn cardinality(&self) -> usize {
         self.items.len()
+    }
+
+    /// Returns a reference to the hash map of all clusters in the tree.
+    pub const fn cluster_map(&self) -> &HashMap<usize, Cluster<T, A>> {
+        &self.cluster_map
+    }
+
+    /// Returns a reference to the hash map of all clusters in the tree.
+    pub fn cluster_map_mut(&mut self) -> &mut HashMap<usize, Cluster<T, A>> {
+        &mut self.cluster_map
+    }
+
+    /// Returns the number of clusters in the tree.
+    pub fn n_clusters(&self) -> usize {
+        self.cluster_map.len()
+    }
+
+    /// Returns all clusters in the tree in sorted order of their center indices.
+    pub fn all_clusters(&self) -> Vec<&Cluster<T, A>> {
+        let mut clusters = self.cluster_map.values().collect::<Vec<_>>();
+        clusters.sort_by_key(|c| c.center_index());
+        clusters
     }
 
     /// Returns a reference to the metric used in the tree.
@@ -157,48 +142,51 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N> {
         Tree {
             items: self.items,
-            root: self.root,
             cluster_map: self.cluster_map,
             metric,
         }
     }
 
-    /// Returns a vector of references to all clusters in the tree, in pre-order traversal.
-    pub fn all_clusters_postorder(&self) -> Vec<&Cluster<T, A>>
-    where
-        T: DistanceValue,
-    {
-        self.root.as_postorder_stack()
+    /// Returns a reference to the root cluster of the tree.
+    pub fn root(&self) -> &Cluster<T, A> {
+        self.cluster_map
+            .get(&0)
+            .unwrap_or_else(|| unreachable!("Tree must have a root cluster with center_index 0"))
+    }
+
+    /// Returns a reference to the cluster with the given center index, if it exists.
+    pub fn cluster_by_center_index(&self, center_index: usize) -> Option<&Cluster<T, A>> {
+        self.cluster_map.get(&center_index)
     }
 
     /// Returns a vector of references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters<P, Args>(&self, predicate: P, args: &Args) -> Vec<&Cluster<T, A>>
+    pub fn filter_clusters<P, Args>(&self, predicate: &P, args: &Args) -> impl Iterator<Item = &Cluster<T, A>>
     where
         P: Fn(&Cluster<T, A>, &Args) -> bool,
     {
-        self.root.filter_clusters(&predicate, args)
+        self.cluster_map.values().filter(|cluster| predicate(cluster, args))
     }
 
     /// Returns a vector of mutable references to all clusters in the tree that satisfy the given predicate.
     ///
     /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters_mut<P, Args>(&mut self, predicate: P, args: &Args) -> Vec<&mut Cluster<T, A>>
+    pub fn filter_clusters_mut<P, Args>(&mut self, predicate: &P, args: &Args) -> impl Iterator<Item = &mut Cluster<T, A>>
     where
         P: Fn(&Cluster<T, A>, &Args) -> bool,
     {
-        self.root.filter_clusters_mut(&predicate, args)
+        self.cluster_map.values_mut().filter(|cluster| predicate(cluster, args))
     }
 
     /// Returns a vector of references to all leaf clusters in the tree.
     pub fn leaf_clusters(&self) -> Vec<&Cluster<T, A>> {
-        self.filter_clusters(|cluster, ()| cluster.is_leaf(), &())
+        self.filter_clusters(&|cluster, ()| cluster.is_leaf(), &()).collect()
     }
 
     /// Returns a vector of mutable references to all leaf clusters in the tree.
     pub fn leaf_clusters_mut(&mut self) -> Vec<&mut Cluster<T, A>> {
-        self.filter_clusters_mut(|cluster, ()| cluster.is_leaf(), &())
+        self.filter_clusters_mut(&|cluster, ()| cluster.is_leaf(), &()).collect()
     }
 }
 
@@ -216,52 +204,11 @@ where
     /// * `metric` - A function that computes the distance between two items.
     /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
     /// * `annotator` - A function that annotates clusters in post-order.
-    /// * `max_recursive_depth` - The maximum depth of any recursion.
     ///
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn new<P, Ann>(
-        mut items: Vec<(Id, I)>,
-        metric: M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-        max_recursion_depth: usize,
-    ) -> Result<Self, &'static str>
-    where
-        P: Fn(&Cluster<T, A>) -> bool,
-        Ann: Fn(&Cluster<T, A>) -> A,
-    {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-        ftlog::info!("Creating tree with {} items", items.len());
-
-        let root = Cluster::new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
-        let cluster_map = HashMap::new();
-
-        ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
-    }
-
-    /// Creates a new `Tree` from the given items and metric.
-    ///
-    /// # Arguments
-    ///
-    /// * `items` - A vector of tuples, each containing an identifier and an item.
-    /// * `metric` - A function that computes the distance between two items.
-    /// * `strategy` - A `PartitionStrategy` that defines how to partition clusters.
-    /// * `annotator` - A function that annotates clusters in post-order.
-    ///
-    /// # Errors
-    ///
-    /// If `items` is empty.
-    pub fn new_iterative<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    pub fn new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool,
         Ann: Fn(&Cluster<T, A>) -> A,
@@ -285,41 +232,28 @@ where
             cluster_map.insert(cluster.center_index(), cluster);
         }
 
-        // TODO(Najib): Remove this pop after completing the iterative implementation.
-        let root = cluster_map
-            .remove(&0)
-            .unwrap_or_else(|| unreachable!("Root cluster should be present in the cluster map."));
-
         ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
+        Ok(Self { items, cluster_map, metric })
+    }
+
+    /// Returns the distance between the query item and the item with the given index.
+    pub fn distance_to(&self, query: &I, i: usize) -> T {
+        (self.metric)(query, &self.items[i].1)
     }
 
     /// Returns the distance between the query item and the center of the given cluster.
     pub fn distance_to_center(&self, query: &I, cluster: &Cluster<T, A>) -> T {
-        (self.metric)(query, self.center_of_cluster(cluster))
+        self.distance_to(query, cluster.center_index())
     }
 
     /// Returns the distances between the query item and all items in the given cluster, excluding the cluster's center.
-    pub fn distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        cluster
-            .subtree_indices()
-            .zip(self.items_in_subtree(cluster))
-            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
-            .collect()
+    pub fn distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
+        cluster.subtree_indices().map(|i| (i, self.distance_to(query, i)))
     }
 
     /// Returns the distances between the query item and all items in the given cluster, including the cluster's center.
-    pub fn distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        cluster
-            .all_items_indices()
-            .zip(self.items_in_cluster(cluster))
-            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
-            .collect()
+    pub fn distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
+        cluster.all_items_indices().map(|i| (i, self.distance_to(query, i)))
     }
 }
 
@@ -337,40 +271,7 @@ where
     /// # Errors
     ///
     /// If `items` is empty.
-    pub fn par_new<P, Ann>(
-        mut items: Vec<(Id, I)>,
-        metric: M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-        max_recursion_depth: usize,
-    ) -> Result<Self, &'static str>
-    where
-        P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
-        Ann: Fn(&Cluster<T, A>) -> A + Send + Sync,
-    {
-        if items.is_empty() {
-            return Err("Cannot create a Tree with no items.");
-        }
-        ftlog::info!("Creating tree with {} items in parallel", items.len());
-
-        let root = Cluster::par_new_root(&mut items, &metric, strategy, annotator, max_recursion_depth);
-        let cluster_map = HashMap::new();
-
-        ftlog::info!("Finished creating tree with {} items in parallel", items.len());
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
-    }
-
-    /// Parallel version of [`Self::new_iterative`].
-    ///
-    /// # Errors
-    ///
-    /// If `items` is empty.
-    pub fn par_new_iterative<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
+    pub fn par_new<P, Ann>(mut items: Vec<(Id, I)>, metric: M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Result<Self, &'static str>
     where
         P: Fn(&Cluster<T, A>) -> bool + Send + Sync,
         Ann: Fn(&Cluster<T, A>) -> A + Send + Sync,
@@ -394,38 +295,18 @@ where
             cluster_map.insert(cluster.center_index(), cluster);
         }
 
-        // TODO(Najib): Remove this pop after completing the iterative implementation.
-        let root = cluster_map
-            .remove(&0)
-            .unwrap_or_else(|| unreachable!("Root cluster should be present in the cluster map."));
-
         ftlog::info!("Finished creating tree with {} items", items.len());
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
+        Ok(Self { items, cluster_map, metric })
     }
 
     /// Parallel version of [`distances_to_items_in_subtree`](Self::distances_to_items_in_subtree).
-    pub fn par_distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        cluster
-            .subtree_indices()
-            .into_par_iter()
-            .zip(self.items_in_subtree(cluster))
-            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
-            .collect()
+    pub fn par_distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
+        cluster.subtree_indices().into_par_iter().map(|i| (i, self.distance_to(query, i)))
     }
 
     /// Parallel version of [`distances_to_items_in_cluster`](Self::distances_to_items_in_cluster).
-    pub fn par_distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> Vec<(usize, T)> {
-        cluster
-            .all_items_indices()
-            .into_par_iter()
-            .zip(self.items_in_cluster(cluster))
-            .map(|(i, (_, item))| (i, (self.metric)(query, item)))
-            .collect()
+    pub fn par_distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
+        cluster.all_items_indices().into_par_iter().map(|i| (i, self.distance_to(query, i)))
     }
 }
 
@@ -448,7 +329,7 @@ where
     ///
     /// If serialization fails.
     pub fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        (&self.items, &self.root, &self.cluster_map).serialize(serializer)
+        (&self.items, &self.cluster_map).serialize(serializer)
     }
 
     /// Deserializes a `Tree` using Serde.
@@ -457,13 +338,8 @@ where
     ///
     /// If deserialization fails.
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D, metric: M) -> Result<Self, D::Error> {
-        let (items, root, cluster_map) = <(_, _, _)>::deserialize(deserializer)?;
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
+        let (items, cluster_map) = <(_, _)>::deserialize(deserializer)?;
+        Ok(Self { items, cluster_map, metric })
     }
 }
 
@@ -477,7 +353,6 @@ where
 {
     fn encode<const CONFIG: u16>(&self, buffer: &mut (impl std::io::Write + ?Sized)) -> std::io::Result<()> {
         self.items.encode::<CONFIG>(buffer)?;
-        self.root.encode::<CONFIG>(buffer)?;
         self.cluster_map.encode::<CONFIG>(buffer)
     }
 }
@@ -492,14 +367,8 @@ where
 {
     fn decode<const CONFIG: u16>(buffer: &mut &'de [u8]) -> databuf::Result<Self> {
         let items = databuf::Decode::decode::<CONFIG>(buffer)?;
-        let root = databuf::Decode::decode::<CONFIG>(buffer)?;
         let cluster_map = databuf::Decode::decode::<CONFIG>(buffer)?;
         let metric = Box::new(|_: &I, _: &I| T::zero()); // Placeholder; actual metric must be provided externally
-        Ok(Self {
-            items,
-            root,
-            cluster_map,
-            metric,
-        })
+        Ok(Self { items, cluster_map, metric })
     }
 }

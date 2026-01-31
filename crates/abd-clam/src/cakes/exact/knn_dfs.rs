@@ -19,12 +19,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = &tree.root;
+        let root = tree.root();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, root);
+            return tree.distances_to_items_in_cluster(query, root).collect();
         }
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
@@ -74,7 +74,7 @@ where
 #[allow(clippy::type_complexity)]
 pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     query: &I,
-    tree: &Tree<Id, I, T, A, M>,
+    tree: &'a Tree<Id, I, T, A, M>,
     candidates: &mut SizedHeap<&'a Cluster<T, A>, Reverse<(T, T, T)>>,
     hits: &mut SizedHeap<usize, T>,
 ) -> (&'a Cluster<T, A>, T, usize) {
@@ -87,14 +87,17 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
     {
         profi::prof!("pop-while-not-leaf");
 
-        candidates.pop().and_then(|(parent, _)| parent.children()).map_or_else(
+        candidates.pop().and_then(|(parent, _)| parent.child_center_indices()).map_or_else(
             || unreachable!("Top candidate is a parent."),
-            |children| {
-                distance_computations += children.len();
+            |center_indices| {
+                distance_computations += center_indices.len();
 
-                for child in children {
-                    let d = tree.distance_to_center(query, child);
-                    hits.push((child.center_index(), d));
+                for &ci in center_indices {
+                    let d = tree.distance_to(query, ci);
+                    hits.push((ci, d));
+                    let child = tree
+                        .cluster_by_center_index(ci)
+                        .unwrap_or_else(|| unreachable!("Center index must correspond to a cluster."));
                     candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
                 }
             },

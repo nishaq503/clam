@@ -17,12 +17,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = &tree.root;
+        let root = tree.root();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, root);
+            return tree.distances_to_items_in_cluster(query, root).collect();
         }
 
         let mut candidates = Vec::new();
@@ -55,9 +55,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                     }
                 } else {
                     profi::prof!("KnnBfs::process_parent");
-                    for child in cluster.children().unwrap_or_else(|| unreachable!("Cluster is a parent")) {
-                        let d = tree.distance_to_center(query, child);
-                        hits.push((child.center_index(), d));
+                    for &ci in cluster.child_center_indices().unwrap_or_else(|| unreachable!("Cluster is a parent")) {
+                        let d = tree.distance_to(query, ci);
+                        hits.push((ci, d));
+                        let child = tree
+                            .cluster_by_center_index(ci)
+                            .unwrap_or_else(|| unreachable!("Center index must correspond to a cluster."));
                         next_candidates.push((child, d_max(child, d)));
                     }
                 }

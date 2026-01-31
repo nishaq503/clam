@@ -33,12 +33,12 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = &tree.root;
+        let root = tree.root();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, root);
+            return tree.distances_to_items_in_cluster(query, root).collect();
         }
         // let tol = 0.01; // Tolerance for hit improvement.
 

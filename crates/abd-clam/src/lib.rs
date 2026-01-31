@@ -29,5 +29,5 @@ pub use utils::{DistanceValue, FloatDistanceValue};
 #[cfg(feature = "musals")]
 pub mod musals;
 
-#[cfg(feature = "codec")]
-pub mod compress;
+// #[cfg(feature = "codec")]
+// pub mod compress;

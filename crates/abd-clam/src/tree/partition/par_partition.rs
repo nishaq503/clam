@@ -13,101 +13,6 @@ use super::{
 };
 
 impl<T, A> Cluster<T, A> {
-    /// Parallel version of [`Self::new_root`].
-    pub(crate) fn par_new_root<Id, I, M, P, Ann>(
-        items: &mut [(Id, I)],
-        metric: &M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-        max_recursion_depth: usize,
-    ) -> Self
-    where
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        P: Fn(&Self) -> bool + Send + Sync,
-        Ann: Fn(&Self) -> A + Send + Sync,
-    {
-        ftlog::info!("Creating a new root cluster in parallel with max recursion depth {max_recursion_depth}");
-
-        let predicate = &strategy.predicate;
-
-        // Initial partitioning up to max_recursion_depth
-        let stride_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
-        let stride_strategy = strategy.with_predicate(stride_predicate);
-        let mut root = Self::par_new(0, 0, items, metric, &stride_strategy, annotator);
-        ftlog::info!("Finished creating the root cluster in parallel using max recursion depth {max_recursion_depth}");
-
-        // Find unfinished leaves that still satisfy the original predicate
-        let unfinished_selector = |c: &Self, (): &()| c.is_leaf() && predicate(c);
-        let mut unfinished_leaves = root.filter_clusters_mut(&unfinished_selector, &());
-
-        // Iteratively increase recursion depth and partition unfinished leaves
-        let mut step = 1;
-        while !unfinished_leaves.is_empty() {
-            // Create a new strategy with increased recursion depth
-            step += 1;
-            let depth = max_recursion_depth * step;
-            let stride_predicate = |c: &Self| c.depth < depth && predicate(c);
-            let stride_strategy = strategy.with_predicate(stride_predicate);
-
-            ftlog::info!("Starting stride {step} in parallel with max recursion depth {depth}");
-
-            unfinished_leaves = unfinished_leaves
-                .into_par_iter()
-                .flat_map(|leaf| {
-                    // Get the items corresponding to this leaf
-                    //
-                    // SAFETY: The indices in different leaves are disjoint, so there are no concurrent mutable accesses to the same item. All items are also in
-                    // the original `items` slice, and so they are part of the same allocation and, thus, are contiguous in memory.
-                    #[allow(unsafe_code)]
-                    let leaf_items = unsafe {
-                        let items_ptr = &mut *items.as_ptr().cast_mut().add(leaf.center_index);
-                        std::slice::from_raw_parts_mut(items_ptr, leaf.cardinality)
-                    };
-
-                    // Re-partition the leaf and replace it in the tree
-                    *leaf = Self::par_new(leaf.depth, leaf.center_index, leaf_items, metric, &stride_strategy, annotator);
-
-                    // Return any new unfinished leaves
-                    leaf.filter_clusters_mut(&unfinished_selector, &())
-                })
-                .collect();
-
-            ftlog::info!("Finished stride {step} in parallel with max recursion depth {depth}");
-        }
-
-        root
-    }
-
-    /// Parallel version of [`Self::new`].
-    fn par_new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
-    where
-        T: DistanceValue + Send + Sync,
-        A: Send + Sync,
-        Id: Send + Sync,
-        I: Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
-        P: Fn(&Self) -> bool + Send + Sync,
-        Ann: Fn(&Self) -> A + Send + Sync,
-    {
-        let (mut cluster, child_items) = Self::par_new_iterative(depth, center_index, items, metric, strategy);
-        if !child_items.is_empty() {
-            let span = cluster.span().unwrap_or_else(|| unreachable!("cluster has children, so span must be defined"));
-            let (child_center_indices, children) = child_items
-                .into_par_iter()
-                .map(|(c_index, c_items)| (c_index, Self::par_new(depth + 1, c_index, c_items, metric, strategy, annotator)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
-        }
-
-        cluster.annotation = annotator(&cluster);
-
-        cluster
-    }
-
     /// Parallel version of [`Self::new_iterative`].
     #[expect(clippy::too_many_lines)]
     pub fn par_new_iterative<'a, Id, I, M, P>(
@@ -258,7 +163,7 @@ impl<T, A> Cluster<T, A> {
         );
 
         let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
-        cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        cluster.children = Some((child_center_indices.into_boxed_slice(), span));
 
         (cluster, child_items)
     }

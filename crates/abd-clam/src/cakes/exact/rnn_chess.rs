@@ -22,17 +22,17 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let (mut hits, subsumed, straddlers) = tree_search(tree, &tree.root, query, self.0);
+        let (mut hits, subsumed, straddlers) = tree_search(tree, tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.extend(subsumed.into_iter().flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster)));
 
         // Check all items from straddling clusters
-        hits.extend(straddlers.into_iter().flat_map(|cluster| {
-            tree.distances_to_items_in_subtree(query, cluster)
+        hits.extend(
+            straddlers
                 .into_iter()
-                .filter(|(_, dist)| *dist <= self.0)
-        }));
+                .flat_map(|cluster| tree.distances_to_items_in_subtree(query, cluster).filter(|(_, dist)| *dist <= self.0)),
+        );
 
         hits
     }
@@ -47,7 +47,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let (mut hits, subsumed, straddlers) = par_tree_search(tree, &tree.root, query, self.0);
+        let (mut hits, subsumed, straddlers) = par_tree_search(tree, &tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.par_extend(
@@ -57,11 +57,11 @@ where
         );
 
         // Check all items from straddling clusters
-        hits.par_extend(straddlers.into_par_iter().flat_map(|cluster| {
-            tree.par_distances_to_items_in_subtree(query, cluster)
+        hits.par_extend(
+            straddlers
                 .into_par_iter()
-                .filter(|(_, dist)| *dist <= self.0)
-        }));
+                .flat_map(|cluster| tree.par_distances_to_items_in_subtree(query, cluster).filter(|(_, dist)| *dist <= self.0)),
+        );
 
         hits
     }
@@ -117,11 +117,14 @@ where
     let mut subsumed = Vec::new();
     let mut straddlers = Vec::new();
 
-    match cluster.children() {
+    match cluster.child_center_indices() {
         None => (centers, Vec::new(), vec![cluster]), // Leaf cluster
-        Some(children) => {
+        Some(center_indices) => {
             // Recurse into children
-            for child in children {
+            for &ci in center_indices {
+                let child = tree
+                    .cluster_by_center_index(ci)
+                    .unwrap_or_else(|| panic!("Invalid center index {ci} from parent {}", cluster.center_index));
                 let (child_centers, child_subsumed, child_straddlers) = tree_search(tree, child, query, radius);
                 centers.extend(child_centers);
                 subsumed.extend(child_subsumed);
@@ -170,11 +173,18 @@ where
     let mut subsumed = Vec::new();
     let mut straddlers = Vec::new();
 
-    match cluster.children() {
+    match cluster.child_center_indices() {
         None => (centers, Vec::new(), vec![cluster]), // Leaf cluster
-        Some(children) => {
+        Some(center_indices) => {
             // Recurse into children
-            let returns = children.par_iter().map(|child| par_tree_search(tree, child, query, radius)).collect::<Vec<_>>();
+            let returns = center_indices
+                .par_iter()
+                .map(|&ci| {
+                    tree.cluster_by_center_index(ci)
+                        .unwrap_or_else(|| panic!("Invalid center index {ci} from parent {}", cluster.center_index))
+                })
+                .map(|child| par_tree_search(tree, child, query, radius))
+                .collect::<Vec<_>>();
 
             for (child_centers, child_subsumed, child_straddlers) in returns {
                 centers.extend(child_centers);

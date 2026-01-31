@@ -4,7 +4,7 @@ use crate::DistanceValue;
 
 use super::Cluster;
 
-/// Getters for `Cluster` properties that are stored as fields.
+/// Getters for `Cluster` properties.
 impl<T, A> Cluster<T, A> {
     /// Returns the depth of this cluster in the tree.
     pub const fn depth(&self) -> usize {
@@ -35,30 +35,18 @@ impl<T, A> Cluster<T, A> {
     }
 
     /// Gets the children of this cluster, if it was partitioned.
-    pub fn children_and_span(&self) -> Option<(&[Self], &[usize], &T)> {
-        self.children
-            .as_ref()
-            .map(|(children, child_center_indices, span)| (children.as_ref(), child_center_indices.as_ref(), span))
-    }
-
-    /// Gets the children of this cluster, if it was partitioned.
-    pub fn children(&self) -> Option<&[Self]> {
-        self.children.as_ref().map(|(children, _, _)| children.as_ref())
-    }
-
-    /// Returns a mutable reference to the children of this cluster, if any.
-    pub fn children_mut(&mut self) -> Option<&mut [Self]> {
-        self.children.as_mut().map(|(children, _, _)| children.as_mut())
+    pub fn children_and_span(&self) -> Option<(&[usize], &T)> {
+        self.children.as_ref().map(|(child_center_indices, span)| (child_center_indices.as_ref(), span))
     }
 
     /// Gets the center indices of the children of this cluster, if it was partitioned.
     pub fn child_center_indices(&self) -> Option<&[usize]> {
-        self.children.as_ref().map(|(_, child_center_indices, _)| child_center_indices.as_ref())
+        self.children.as_ref().map(|(child_center_indices, _)| child_center_indices.as_ref())
     }
 
     /// Returns a mutable reference to the center indices of the children of this cluster, if any.
     pub fn child_center_indices_mut(&mut self) -> Option<&mut [usize]> {
-        self.children.as_mut().map(|(_, child_center_indices, _)| child_center_indices.as_mut())
+        self.children.as_mut().map(|(child_center_indices, _)| child_center_indices.as_mut())
     }
 
     /// Gets the span of this cluster, if it was partitioned.
@@ -66,11 +54,11 @@ impl<T, A> Cluster<T, A> {
     where
         T: DistanceValue,
     {
-        self.children.as_ref().map(|(_, _, span)| *span)
+        self.children.as_ref().map(|(_, span)| *span)
     }
 
     /// Takes ownership of the children and span of this cluster, if any, leaving it a leaf cluster.
-    pub const fn take_children_and_span(&mut self) -> Option<(Box<[Self]>, Box<[usize]>, T)> {
+    pub const fn take_children_and_span(&mut self) -> Option<(Box<[usize]>, T)> {
         self.children.take()
     }
 
@@ -95,10 +83,24 @@ impl<T, A> Cluster<T, A> {
     {
         core::mem::take(&mut self.annotation)
     }
-}
 
-/// Getters for `Cluster` properties that are cheaply computed from fields.
-impl<T, A> Cluster<T, A> {
+    /// Clears the annotation of this cluster.
+    pub fn without_annotation<B>(&self) -> Cluster<T, B>
+    where
+        T: Clone,
+        B: Default,
+    {
+        Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius.clone(),
+            lfd: self.lfd,
+            children: self.children.clone(),
+            annotation: B::default(),
+        }
+    }
+
     /// Returns true if this cluster is a singleton (i.e., contains exactly one item or has a radius of zero).
     pub fn is_singleton(&self) -> bool
     where

@@ -54,7 +54,7 @@ impl<S: Sequence> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences", tree.cardinality());
 
-        let mut root = tree.root.clone_without_annotations();
+        let mut root = tree.root().without_annotation();
         let columnar = Self::from_cluster_collapse(&mut root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA from tree with {} columns", columnar.len());
 
@@ -95,7 +95,7 @@ impl<S: Sequence> Msa<S> {
     where
         T: DistanceValue,
     {
-        if let Some((children, _, _)) = &mut cluster.children {
+        if let Some((children, _)) = &mut cluster.children {
             ftlog::debug!("Aligning parent cluster at depth {} with {} sequences", cluster.depth, cluster.cardinality);
 
             let mut children = children
@@ -164,7 +164,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
     {
         ftlog::info!("Creating MSA from tree with {} sequences in parallel", tree.cardinality());
 
-        let mut root = tree.root.clone_without_annotations();
+        let mut root = tree.root().without_annotation();
         let columnar = Self::par_from_cluster_collapse(&mut root, &tree.items, cost_matrix);
         ftlog::info!("Finished creating Columnar MSA from tree with {} columns in parallel", columnar.len());
 
@@ -207,7 +207,7 @@ impl<S: Sequence + Send + Sync> Msa<S> {
         Id: Send + Sync,
         T: DistanceValue + Send + Sync,
     {
-        if let Some((children, _, _)) = &mut cluster.children {
+        if let Some((children, _)) = &mut cluster.children {
             ftlog::debug!(
                 "Aligning parent cluster at depth {} with {} sequences in parallel",
                 cluster.depth,

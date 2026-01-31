@@ -13,101 +13,13 @@ use bipolar_split::{BipolarSplit, InitialPole};
 use strategy::PartitionStrategy;
 
 impl<T, A> Cluster<T, A> {
-    /// Creates a new root `Cluster` and partitions it using the given strategy and annotates every cluster on the way back up the recursion.
-    ///
-    /// # WARNING
-    ///
-    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    pub(crate) fn new_root<Id, I, M, P, Ann>(
-        items: &mut [(Id, I)],
-        metric: &M,
-        strategy: &PartitionStrategy<P>,
-        annotator: &Ann,
-        max_recursion_depth: usize,
-    ) -> Self
-    where
-        T: DistanceValue,
-        M: Fn(&I, &I) -> T,
-        P: Fn(&Self) -> bool,
-        Ann: Fn(&Self) -> A,
-    {
-        ftlog::info!("Creating a new root cluster using max recursion depth {max_recursion_depth}");
-
-        let predicate = &strategy.predicate;
-
-        let stride_predicate = |c: &Self| c.depth < max_recursion_depth && predicate(c);
-        let stride_strategy = strategy.with_predicate(stride_predicate);
-        let mut root = Self::new(0, 0, items, metric, &stride_strategy, annotator);
-        ftlog::info!("Finished creating the root cluster using max recursion depth {max_recursion_depth}");
-
-        // Find unfinished leaves that still satisfy the original predicate
-        let unfinished_selector = |c: &Self, (): &()| c.is_leaf() && predicate(c);
-        let mut unfinished_leaves = root.filter_clusters_mut(&unfinished_selector, &());
-
-        // Iteratively increase recursion depth and partition unfinished leaves
-        let mut step = 1;
-        while !unfinished_leaves.is_empty() {
-            // Create a new strategy with increased recursion depth
-            step += 1;
-            let depth = max_recursion_depth * step;
-            let stride_predicate = |c: &Self| c.depth < depth && predicate(c);
-            let stride_strategy = strategy.with_predicate(stride_predicate);
-
-            ftlog::info!("Starting stride {step} with max recursion depth {depth}");
-
-            unfinished_leaves = unfinished_leaves
-                .into_iter()
-                .flat_map(|leaf| {
-                    // Get the items corresponding to this leaf
-                    let leaf_items = &mut items[leaf.all_items_indices()];
-
-                    // Re-partition the leaf and replace it in the tree
-                    *leaf = Self::new(leaf.depth, leaf.center_index, leaf_items, metric, &stride_strategy, annotator);
-                    // Return any new unfinished leaves
-                    leaf.filter_clusters_mut(&unfinished_selector, &())
-                })
-                .collect();
-
-            ftlog::info!("Finished stride {step} with max recursion depth {depth}");
-        }
-
-        root
-    }
-
-    /// Creates a new `Cluster` and recursively partitions it if it has more than two items.
-    ///
-    /// # WARNING
-    ///
-    /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
-    fn new<Id, I, M, P, Ann>(depth: usize, center_index: usize, items: &mut [(Id, I)], metric: &M, strategy: &PartitionStrategy<P>, annotator: &Ann) -> Self
-    where
-        T: DistanceValue,
-        M: Fn(&I, &I) -> T,
-        P: Fn(&Self) -> bool,
-        Ann: Fn(&Self) -> A,
-    {
-        let (mut cluster, child_items) = Self::new_iterative(depth, center_index, items, metric, strategy);
-        if !child_items.is_empty() {
-            let span = cluster.span().unwrap_or_else(|| unreachable!("cluster has children, so span must be defined"));
-            let (child_center_indices, children) = child_items
-                .into_iter()
-                .map(|(c_index, c_items)| (c_index, Self::new(depth + 1, c_index, c_items, metric, strategy, annotator)))
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-            cluster.children = Some((children.into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
-        }
-
-        cluster.annotation = annotator(&cluster);
-
-        cluster
-    }
-
     /// Creates a new `Cluster` and returns the splits of items for its creating children.
     ///
     /// # WARNING
     ///
     /// This function assumes that `items` is non-empty. In our implementation, this is checked *once* when creating the `Tree`.
     #[expect(clippy::too_many_lines)]
-    pub fn new_iterative<'a, Id, I, M, P>(
+    pub(crate) fn new_iterative<'a, Id, I, M, P>(
         depth: usize,
         center_index: usize,
         items: &'a mut [(Id, I)],
@@ -255,7 +167,7 @@ impl<T, A> Cluster<T, A> {
         );
 
         let child_center_indices = child_items.iter().map(|&(c_index, _)| c_index).collect::<Vec<_>>();
-        cluster.children = Some((Vec::new().into_boxed_slice(), child_center_indices.into_boxed_slice(), span));
+        cluster.children = Some((child_center_indices.into_boxed_slice(), span));
 
         (cluster, child_items)
     }

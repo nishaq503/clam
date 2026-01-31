@@ -4,9 +4,9 @@ mod getters;
 mod setters;
 #[cfg(feature = "serde")]
 mod to_csv;
-mod traversal;
+// mod traversal;
 
-pub use traversal::AnnotatedItems;
+// pub use traversal::AnnotatedItems;
 
 /// A `Cluster` is a node in the `Tree` that represents a subset of the items in the `Tree`.
 ///
@@ -40,8 +40,8 @@ pub struct Cluster<T, A> {
     pub(crate) radius: T,
     /// The Local Fractal Dimension of the `Cluster`.
     pub(crate) lfd: f64,
-    /// The children, child center indices and span of this cluster, if it was partitioned. The span is the distance between the two poles used to partition the cluster.
-    pub(crate) children: Option<(Box<[Self]>, Box<[usize]>, T)>,
+    /// The indices of child centers and the span of this cluster, if it was partitioned. The span is the distance between the two poles used to partition the cluster.
+    pub(crate) children: Option<(Box<[usize]>, T)>,
     /// Optional arbitrary data associated with this cluster.
     pub(crate) annotation: A,
 }
@@ -84,16 +84,9 @@ where
 
         fields.push(format!("annotation: {:?}", self.annotation));
 
-        let name = if let Some((children, child_center_indices, span)) = &self.children {
+        let name = if let Some((child_center_indices, span)) = &self.children {
             fields.push(format!("span: {span}"));
-
-            let indented_children = children
-                .iter()
-                .zip(child_center_indices)
-                .map(|(child, center_index)| format!("|--{center_index}-{}", format!("{child}").replace('\n', "\n|  ")))
-                .collect::<Vec<_>>();
-            let children = indented_children.join("\n");
-            fields.push(format!("\n{children}"));
+            fields.push(format!("child_centers: {:?}", child_center_indices));
 
             "P"
         } else {
@@ -101,103 +94,5 @@ where
         };
 
         write!(f, "{name}: {}", fields.join(", "))
-    }
-}
-
-impl<T, A> Cluster<T, A> {
-    /// Returns a cloned cluster without any annotations.
-    pub fn clone_without_annotations<B>(&self) -> Cluster<T, B>
-    where
-        T: Clone,
-        B: Default,
-    {
-        let mut stack = self.as_postorder_stack();
-        let mut cloned_children = Vec::new();
-        while let Some(c) = stack.pop() {
-            let children = if let Some((children, child_center_indices, span)) = &c.children {
-                // The cloned children of `c` are the last `n_children` clusters in `cloned_children`.
-                let n_children = children.len();
-                let start_index = cloned_children.len() - n_children;
-                let cloned_children_slice = cloned_children.split_off(start_index);
-                Some((cloned_children_slice.into_boxed_slice(), child_center_indices.clone(), span.clone()))
-            } else {
-                // Leaf cluster
-                None
-            };
-
-            // Create the cloned cluster without annotation.
-            let cloned_cluster = Cluster {
-                depth: c.depth,
-                center_index: c.center_index,
-                cardinality: c.cardinality,
-                radius: c.radius.clone(),
-                lfd: c.lfd,
-                children,
-                annotation: B::default(),
-            };
-
-            // Push the cloned cluster onto the stack.
-            cloned_children.push(cloned_cluster);
-        }
-
-        cloned_children.pop().unwrap_or_else(|| unreachable!("The root cluster is always present"))
-    }
-
-    /// Clears the annotation of this cluster and all its descendants.
-    pub fn clear_annotations<B>(self) -> Cluster<T, B>
-    where
-        B: Default,
-    {
-        let children = self.children.map(|(boxed_children, child_center_indices, span)| {
-            let new_children = boxed_children
-                .into_vec()
-                .into_iter()
-                .map(Self::clear_annotations)
-                .collect::<Vec<_>>()
-                .into_boxed_slice();
-            (new_children, child_center_indices, span)
-        });
-
-        Cluster {
-            depth: self.depth,
-            center_index: self.center_index,
-            cardinality: self.cardinality,
-            radius: self.radius,
-            lfd: self.lfd,
-            children,
-            annotation: B::default(),
-        }
-    }
-
-    /// Returns references to the clusters in the subtree rooted here that satisfy the given predicate.
-    ///
-    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters<P, Args>(&self, predicate: &P, args: &Args) -> Vec<&Self>
-    where
-        P: Fn(&Self, &Args) -> bool,
-    {
-        if predicate(self, args) {
-            vec![self]
-        } else if let Some((children, _, _)) = &self.children {
-            children.iter().flat_map(|child| child.filter_clusters(predicate, args)).collect()
-        } else {
-            vec![]
-        }
-    }
-
-    /// Returns mutable references to the clusters in the subtree rooted here that satisfy the given predicate.
-    ///
-    /// Once the predicate returns `true` for a cluster, its subtree is not searched further.
-    pub fn filter_clusters_mut<P, Args>(&mut self, predicate: &P, args: &Args) -> Vec<&mut Self>
-    where
-        P: Fn(&Self, &Args) -> bool,
-    {
-        if predicate(self, args) {
-            vec![self]
-        } else if let Some((children, _, _)) = &mut self.children {
-            children.iter_mut().flat_map(|child| child.filter_clusters_mut(predicate, args)).collect()
-        } else {
-            vec![]
-        }
     }
 }

@@ -23,12 +23,12 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let root = &tree.root;
+        let root = tree.root();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, root);
+            return tree.distances_to_items_in_cluster(query, root).collect();
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
@@ -40,14 +40,17 @@ where
 
         let mut latest = root;
         while !latest.is_leaf() {
-            let (child, d) = latest
-                .children()
+            let (ci, d) = latest
+                .child_center_indices()
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
                 .iter()
-                .map(|c| (c, tree.distance_to_center(query, c)))
+                .map(|&ci| (ci, tree.distance_to(query, ci)))
                 .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
 
+            let child = tree
+                .cluster_by_center_index(ci)
+                .unwrap_or_else(|| unreachable!("We know `ci` is a valid center index from above"));
             candidate_radii.push((1, Reverse(d_min(child, d))));
             candidate_radii.push((child.cardinality().half() + 1, Reverse(d)));
             candidate_radii.push((child.cardinality(), Reverse(d_max(child, d))));

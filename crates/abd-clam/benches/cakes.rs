@@ -70,7 +70,7 @@ fn bench_one_alg<Id, I, T, A, M, Alg>(
     let id = BenchmarkId::new(alg.name(), multiplier);
     group.bench_function(id, |b| b.iter_with_large_drop(|| alg.par_batch_search(&tree, &queries)));
 
-    let all_clusters = tree.all_clusters_postorder();
+    let all_clusters = tree.cluster_map().values().collect::<Vec<_>>();
     let size_of_tree = all_clusters.len();
     let max_depth = all_clusters.iter().map(|c| c.depth()).max().unwrap_or(0);
 
@@ -170,7 +170,7 @@ fn run_group<P: AsRef<std::path::Path>, R: rand::Rng>(
 
             println!("Building Tree");
             let tree_start = std::time::Instant::now();
-            let tree = Tree::par_new(id_items, metric, strategy, &|_| (), 128).unwrap();
+            let tree = Tree::par_new(id_items, metric, strategy, &|_| ()).unwrap();
             let tree_time = tree_start.elapsed();
             println!("Built Tree in {:.6}", tree_time.as_secs_f32());
 
