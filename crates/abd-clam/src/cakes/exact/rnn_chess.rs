@@ -47,7 +47,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        let (mut hits, subsumed, straddlers) = par_tree_search(tree, &tree.root(), query, self.0);
+        let (mut hits, subsumed, straddlers) = par_tree_search(tree, tree.root(), query, self.0);
 
         // Add all items from fully subsumed clusters
         hits.par_extend(
@@ -124,7 +124,7 @@ where
             for &ci in center_indices {
                 let child = tree
                     .cluster_by_center_index(ci)
-                    .unwrap_or_else(|| panic!("Invalid center index {ci} from parent {}", cluster.center_index));
+                    .unwrap_or_else(|| unreachable!("Invalid center index {ci} from parent {}", cluster.center_index));
                 let (child_centers, child_subsumed, child_straddlers) = tree_search(tree, child, query, radius);
                 centers.extend(child_centers);
                 subsumed.extend(child_subsumed);
@@ -181,7 +181,7 @@ where
                 .par_iter()
                 .map(|&ci| {
                     tree.cluster_by_center_index(ci)
-                        .unwrap_or_else(|| panic!("Invalid center index {ci} from parent {}", cluster.center_index))
+                        .unwrap_or_else(|| unreachable!("Invalid center index {ci} from parent {}", cluster.center_index))
                 })
                 .map(|child| par_tree_search(tree, child, query, radius))
                 .collect::<Vec<_>>();

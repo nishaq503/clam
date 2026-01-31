@@ -86,7 +86,7 @@ where
 
         let name = if let Some((child_center_indices, span)) = &self.children {
             fields.push(format!("span: {span}"));
-            fields.push(format!("child_centers: {:?}", child_center_indices));
+            fields.push(format!("child_centers: {child_center_indices:?}"));
 
             "P"
         } else {

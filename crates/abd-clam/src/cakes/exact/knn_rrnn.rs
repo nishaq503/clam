@@ -23,16 +23,16 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all
             // items with their distances.
-            return tree.distances_to_items_in_cluster(query, &tree.root()).collect();
+            return tree.distances_to_items_in_cluster(query, tree.root()).collect();
         }
 
         // Estimate an initial radius to cover k points.
-        let mut radius = radius_for_k(&tree.root(), self.0);
+        let mut radius = radius_for_k(tree.root(), self.0);
 
         // Perform the initial tree search.
         let (mut centers, mut subsumed, mut straddlers) = tree_search(
             tree,
-            &tree.root(),
+            tree.root(),
             query,
             T::from_f64(radius).unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
         );
@@ -53,7 +53,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
             radius *= multiplier;
             (centers, subsumed, straddlers) = tree_search(
                 tree,
-                &tree.root(),
+                tree.root(),
                 query,
                 T::from_f64(radius).unwrap_or_else(|| unreachable!("f64 to {} conversion failed", std::any::type_name::<T>())),
             );

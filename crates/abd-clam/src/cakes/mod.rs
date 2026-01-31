@@ -236,8 +236,8 @@ pub(crate) fn d_max<T: DistanceValue, A>(cluster: &super::Cluster<T, A>, d: T) -
 pub fn search_quality_stats<T: DistanceValue>(true_hits: &[Vec<(usize, T)>], pred_hits: &[Vec<(usize, T)>]) -> Vec<(String, f64)> {
     assert_eq!(true_hits.len(), pred_hits.len());
     assert!(!true_hits.is_empty());
-    assert!(true_hits.iter().all(|v| !v.is_empty()));
-    assert!(true_hits.iter().zip(pred_hits.iter()).all(|(a, b)| a.len() == b.len()));
+    // assert!(true_hits.iter().all(|v| !v.is_empty()));
+    // assert!(true_hits.iter().zip(pred_hits.iter()).all(|(a, b)| a.len() == b.len()));
 
     let true_hits = true_hits.iter().map(|v| sorted_by_distance(v)).collect::<Vec<_>>();
     let pred_hits = pred_hits.iter().map(|v| sorted_by_distance(v)).collect::<Vec<_>>();
@@ -286,9 +286,15 @@ fn compute_summary_stats(values: &[f64]) -> Vec<(&'static str, f64)> {
 /// The `true_hits` and `pred_hits` slices should be sorted by distance in non-decreasing order.
 #[expect(clippy::cast_precision_loss, clippy::unwrap_used)]
 fn compute_recall_single<T: DistanceValue>(true_hits: &[(usize, T)], pred_hits: &[(usize, T)]) -> f64 {
-    let max_distance = true_hits.last().unwrap().1;
-    let n_valid_hits = pred_hits.iter().filter(|&&(_, d)| d <= max_distance).count();
-    n_valid_hits as f64 / true_hits.len() as f64
+    if true_hits.is_empty() {
+        if pred_hits.is_empty() { 1.0 } else { 0.0 }
+    } else if pred_hits.is_empty() {
+        0.0
+    } else {
+        let max_distance = true_hits.last().unwrap().1;
+        let n_valid_hits = pred_hits.iter().filter(|&&(_, d)| d <= max_distance).count();
+        n_valid_hits as f64 / true_hits.len() as f64
+    }
 }
 
 /// Sorts the search results by distance in non-decreasing order.
@@ -301,14 +307,18 @@ fn sorted_by_distance<T: DistanceValue>(hits: &[(usize, T)]) -> Vec<(usize, T)> 
 /// Computes the distance-error of pairs of true and predicted nearest neighbor search results.
 #[expect(clippy::cast_precision_loss, clippy::unwrap_used)]
 fn compute_distance_error<T: DistanceValue>(true_hits: &[(usize, T)], pred_hits: &[(usize, T)]) -> f64 {
-    let err_sum = true_hits
-        .iter()
-        .zip(pred_hits.iter())
-        .map(|((_, d_true), (_, d_pred))| {
-            let d_true = d_true.to_f64().unwrap();
-            let d_pred = d_pred.to_f64().unwrap();
-            if d_true == 0.0 || d_pred == 0.0 { 0.0 } else { d_pred / d_true - 1.0 }
-        })
-        .sum::<f64>();
-    err_sum / true_hits.len() as f64
+    if true_hits.is_empty() {
+        if pred_hits.is_empty() { 0.0 } else { 1.0 }
+    } else {
+        let err_sum = true_hits
+            .iter()
+            .zip(pred_hits.iter())
+            .map(|((_, d_true), (_, d_pred))| {
+                let d_true = d_true.to_f64().unwrap();
+                let d_pred = d_pred.to_f64().unwrap();
+                if d_true == 0.0 || d_pred == 0.0 { 0.0 } else { d_pred / d_true - 1.0 }
+            })
+            .sum::<f64>();
+        err_sum / true_hits.len() as f64
+    }
 }

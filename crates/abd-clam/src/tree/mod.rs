@@ -117,7 +117,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     }
 
     /// Returns a reference to the hash map of all clusters in the tree.
-    pub fn cluster_map_mut(&mut self) -> &mut HashMap<usize, Cluster<T, A>> {
+    pub const fn cluster_map_mut(&mut self) -> &mut HashMap<usize, Cluster<T, A>> {
         &mut self.cluster_map
     }
 
