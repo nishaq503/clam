@@ -30,4 +30,39 @@ impl<T, A> Cluster<T, A> {
         let new_annotation = f(self, &self.annotation, args);
         std::mem::replace(&mut self.annotation, new_annotation)
     }
+
+    /// Changes the annotation of this cluster as well as the type of the annotation.
+    pub fn change_annotation<NewA>(&self, new_annotation: NewA) -> Cluster<T, NewA>
+    where
+        T: Clone,
+    {
+        Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius.clone(),
+            lfd: self.lfd,
+            children: self.children.clone(),
+            annotation: new_annotation,
+            parent_center_index: self.parent_center_index,
+        }
+    }
+
+    /// Changes the annotation of this cluster as well as the type of the annotation, using the given function and additional parameter.
+    pub fn change_annotation_with<F: FnOnce(&Self, &A, Args) -> NewA, NewA, Args>(&self, f: F, args: Args) -> Cluster<T, NewA>
+    where
+        T: Clone,
+    {
+        let new_annotation = f(self, &self.annotation, args);
+        Cluster {
+            depth: self.depth,
+            center_index: self.center_index,
+            cardinality: self.cardinality,
+            radius: self.radius.clone(),
+            lfd: self.lfd,
+            children: self.children.clone(),
+            annotation: new_annotation,
+            parent_center_index: self.parent_center_index,
+        }
+    }
 }

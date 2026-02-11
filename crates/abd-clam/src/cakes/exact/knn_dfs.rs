@@ -23,13 +23,13 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.distances_to_items_in_cluster(query, root).collect();
+            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
         }
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = tree.distance_to_center(query, root);
+        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
         hits.push((root.center_index(), d));
         candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
 
@@ -91,7 +91,7 @@ pub fn pop_till_leaf<'a, Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
 
                 for child in children {
                     let ci = child.center_index();
-                    let d = tree.distance_to(query, ci);
+                    let d = (tree.metric)(query, &tree.items[ci].1);
                     hits.push((ci, d));
                     candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
                 }
@@ -123,7 +123,11 @@ pub fn leaf_into_hits<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T>(
         0
     } else {
         // A non-singleton leaf may have non-zero radius, so we need to compute the distance from the query to each item in the leaf.
-        hits.extend(tree.distances_to_items_in_subtree(query, leaf));
+        let distances = leaf
+            .subtree_indices()
+            .zip(tree.items[leaf.subtree_indices()].iter())
+            .map(|(i, (_, item))| (i, (tree.metric)(query, item)));
+        hits.extend(distances);
         leaf.cardinality() - 1 // We already knew the distance to the center.
     }
 }

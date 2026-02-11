@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use rayon::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +89,11 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         (self.items, self.cluster_map, self.metric)
     }
 
+    /// Creates a `Tree` from its members.
+    pub(crate) const fn from_parts(items: Vec<(Id, I)>, cluster_map: HashMap<usize, Cluster<T, A>>, metric: M) -> Self {
+        Self { items, cluster_map, metric }
+    }
+
     /// Returns a reference to all items in the tree.
     pub fn items(&self) -> &[(Id, I)] {
         &self.items
@@ -163,7 +167,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
     }
 }
 
-/// Constructors and methods for computing distances in `Tree`.
+/// Constructors for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     T: DistanceValue,
@@ -210,7 +214,7 @@ where
                 );
 
                 // Increment relevant indices
-                child.depth += 1;
+                child.depth = cluster.depth + 1;
                 child.increment_indices(offset);
                 for (ci, _) in &mut child_splits {
                     *ci += offset;
@@ -229,29 +233,9 @@ where
         ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self { items, cluster_map, metric })
     }
-
-    /// Returns the distance between the query item and the item with the given index.
-    pub fn distance_to(&self, query: &I, i: usize) -> T {
-        (self.metric)(query, &self.items[i].1)
-    }
-
-    /// Returns the distance between the query item and the center of the given cluster.
-    pub fn distance_to_center(&self, query: &I, cluster: &Cluster<T, A>) -> T {
-        self.distance_to(query, cluster.center_index())
-    }
-
-    /// Returns the distances between the query item and all items in the given cluster, excluding the cluster's center.
-    pub fn distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
-        cluster.items_indices().skip(1).map(|i| (i, self.distance_to(query, i)))
-    }
-
-    /// Returns the distances between the query item and all items in the given cluster, including the cluster's center.
-    pub fn distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl Iterator<Item = (usize, T)> {
-        cluster.items_indices().map(|i| (i, self.distance_to(query, i)))
-    }
 }
 
-/// Parallelized constructors and methods for computing distances in `Tree`.
+/// Parallelized constructors for `Tree`.
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
     Id: Send + Sync,
@@ -294,7 +278,7 @@ where
                 );
 
                 // Increment relevant indices
-                child.depth += 1;
+                child.depth = cluster.depth + 1;
                 child.increment_indices(offset);
                 for (ci, _) in &mut child_splits {
                     *ci += offset;
@@ -312,16 +296,6 @@ where
 
         ftlog::info!("Finished creating tree with {} items", items.len());
         Ok(Self { items, cluster_map, metric })
-    }
-
-    /// Parallel version of [`distances_to_items_in_subtree`](Self::distances_to_items_in_subtree).
-    pub fn par_distances_to_items_in_subtree(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
-        cluster.items_indices().into_par_iter().skip(1).map(|i| (i, self.distance_to(query, i)))
-    }
-
-    /// Parallel version of [`distances_to_items_in_cluster`](Self::distances_to_items_in_cluster).
-    pub fn par_distances_to_items_in_cluster(&self, query: &I, cluster: &Cluster<T, A>) -> impl ParallelIterator<Item = (usize, T)> {
-        cluster.items_indices().into_par_iter().map(|i| (i, self.distance_to(query, i)))
     }
 }
 

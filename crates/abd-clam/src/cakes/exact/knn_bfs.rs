@@ -21,13 +21,13 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.distances_to_items_in_cluster(query, root).collect();
+            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
         }
 
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = tree.distance_to_center(query, root);
+        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
         hits.push((root.center_index(), d));
         candidates.push((root, d_max(root, d)));
 
@@ -49,13 +49,17 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                         hits.extend(cluster.items_indices().skip(1).map(|i| (i, d)));
                     } else {
                         // Not a singleton, so compute distances to all non-center items and add them to hits
-                        hits.extend(tree.distances_to_items_in_subtree(query, cluster));
+                        let distances = cluster
+                            .subtree_indices()
+                            .zip(tree.items[cluster.subtree_indices()].iter())
+                            .map(|(i, (_, item))| (i, (tree.metric)(query, item)));
+                        hits.extend(distances);
                     }
                 } else {
                     profi::prof!("KnnBfs::process_parent");
                     for child in tree.children_of(cluster).unwrap_or_else(|| unreachable!("Cluster is a parent")) {
                         let ci = child.center_index();
-                        let d = tree.distance_to(query, ci);
+                        let d = (tree.metric)(query, &tree.items[ci].1);
                         hits.push((ci, d));
                         next_candidates.push((child, d_max(child, d)));
                     }

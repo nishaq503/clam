@@ -36,15 +36,14 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         let root = tree.root();
 
         if self.0 > tree.cardinality() {
-            // If k is greater than the number of points in the tree, return all
-            // items with their distances.
-            return tree.distances_to_items_in_cluster(query, root).collect();
+            // If k is greater than the number of points in the tree, return all items with their distances.
+            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
         }
         // let tol = 0.01; // Tolerance for hit improvement.
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
-        let d = tree.distance_to_center(query, root);
+        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
         hits.push((root.center_index(), d));
         candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
 

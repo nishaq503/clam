@@ -22,8 +22,13 @@ where
     }
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        tree.distances_to_items_in_cluster(query, tree.root())
-            .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })
+        tree.items
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (_, item))| {
+                let d = (tree.metric)(query, item);
+                if d <= self.0 { Some((i, d)) } else { None }
+            })
             .collect()
     }
 }
@@ -37,8 +42,13 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        tree.par_distances_to_items_in_cluster(query, tree.root())
-            .filter_map(|(idx, dist)| if dist <= self.0 { Some((idx, dist)) } else { None })
+        tree.items
+            .par_iter()
+            .enumerate()
+            .filter_map(|(i, (_, item))| {
+                let d = (tree.metric)(query, item);
+                if d <= self.0 { Some((i, d)) } else { None }
+            })
             .collect()
     }
 }

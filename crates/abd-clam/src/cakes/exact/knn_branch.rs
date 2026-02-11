@@ -27,12 +27,12 @@ where
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.distances_to_items_in_cluster(query, root).collect();
+            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
         }
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = tree.distance_to_center(query, root);
+        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
         candidate_radii.push((1, Reverse(d_min(root, d))));
         candidate_radii.push((tree.cardinality().half() + 1, Reverse(d)));
         candidate_radii.push((tree.cardinality(), Reverse(d_max(root, d))));
@@ -43,7 +43,7 @@ where
                 .children_of(latest)
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"))
                 .into_iter()
-                .map(|child| (child, tree.distance_to(query, child.center_index())))
+                .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
                 .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
                 .unwrap_or_else(|| unreachable!("We checked is_leaf above"));
 

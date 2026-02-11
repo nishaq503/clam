@@ -20,7 +20,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
-            return tree.distances_to_items_in_cluster(query, tree.root()).collect();
+            return tree.items.iter().enumerate().map(|(i, (_, item))| (i, (tree.metric())(query, item))).collect();
         }
 
         // Estimate an initial radius to cover k points.
@@ -65,10 +65,14 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         for cluster in subsumed.into_iter().chain(straddlers) {
             if cluster.is_singleton() {
                 // TODO(Najib): Figure out how to get this distance from the heap
-                let d = tree.distance_to_center(query, cluster);
+                let d = (tree.metric)(query, &tree.items[cluster.center_index()].1);
                 heap.extend(cluster.items_indices().skip(1).map(|i| (i, d)));
             } else {
-                heap.extend(tree.distances_to_items_in_subtree(query, cluster));
+                let distances = cluster
+                    .subtree_indices()
+                    .zip(tree.items[cluster.subtree_indices()].iter())
+                    .map(|(i, (_, item))| (i, (tree.metric)(query, item)));
+                heap.extend(distances);
             }
         }
 
@@ -163,7 +167,7 @@ where
     T: DistanceValue + 'a,
     M: Fn(&I, &I) -> T,
 {
-    let center_dist = tree.distance_to_center(query, cluster);
+    let center_dist = (tree.metric)(query, &tree.items[cluster.center_index()].1);
 
     if center_dist > cluster.radius() + radius {
         // No overlapping volume between the query cluster and this cluster

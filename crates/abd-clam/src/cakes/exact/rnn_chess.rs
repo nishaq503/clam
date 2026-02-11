@@ -23,7 +23,7 @@ where
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = tree.distance_to(query, 0); // root center index is always 0
+        let d_root = (tree.metric)(query, &tree.items[0].1); // root center index is always 0
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -48,12 +48,14 @@ where
 
                         if self.0 >= d + cluster.radius() {
                             // Fully subsumed cluster
-                            tree.distances_to_items_in_subtree(query, cluster).for_each(|item| local_hits.push(item));
+                            for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
+                                local_hits.push((i, (tree.metric)(query, item)));
+                            }
                             (Vec::new(), local_hits)
                         } else if let Some(children) = tree.children_of(cluster) {
                             let mut new_frontier = Vec::new();
                             for child in children {
-                                let d_child = tree.distance_to_center(query, child);
+                                let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
                                 // Check children for overlap
                                 if d_child <= self.0 + child.radius() {
                                     new_frontier.push((d_child, child));
@@ -62,9 +64,16 @@ where
                             (new_frontier, local_hits)
                         } else {
                             // Leaf cluster and not fully subsumed
-                            tree.distances_to_items_in_subtree(query, cluster)
-                                .filter(|(_, dist)| *dist <= self.0)
-                                .for_each(|item| local_hits.push(item));
+                            for (i, d) in cluster
+                                .subtree_indices()
+                                .zip(&tree.items[cluster.subtree_indices()])
+                                .filter_map(|(i, (_, item))| {
+                                    let dist = (tree.metric)(query, item);
+                                    if dist <= self.0 { Some((i, dist)) } else { None }
+                                })
+                            {
+                                local_hits.push((i, d));
+                            }
                             (Vec::new(), local_hits)
                         }
                     } else {
@@ -91,7 +100,7 @@ where
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = tree.distance_to(query, 0); // root center index is always 0
+        let d_root = (tree.metric)(query, &tree.items[0].1); // root center index is always 0
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -116,31 +125,39 @@ where
 
                         if self.0 >= d + cluster.radius() {
                             // Fully subsumed cluster
-                            for item in tree.par_distances_to_items_in_subtree(query, cluster).collect::<Vec<_>>() {
-                                local_hits.push(item);
+                            for (i, (_, item)) in cluster
+                                .subtree_indices()
+                                .into_par_iter()
+                                .zip(&tree.items[cluster.subtree_indices()])
+                                .collect::<Vec<_>>()
+                            {
+                                local_hits.push((i, (tree.metric)(query, item)));
                             }
                             (Vec::new(), local_hits)
                         } else if let Some(children) = tree.children_of(cluster) {
-                            let new_frontier = children
-                                .into_par_iter()
-                                .filter_map(|child| {
-                                    let d_child = tree.distance_to_center(query, child);
-                                    // Check children for overlap
-                                    if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
-                                })
-                                .collect::<Vec<_>>();
-
+                            let mut new_frontier = Vec::new();
+                            for child in children {
+                                let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
+                                // Check children for overlap
+                                if d_child <= self.0 + child.radius() {
+                                    new_frontier.push((d_child, child));
+                                }
+                            }
                             (new_frontier, local_hits)
                         } else {
                             // Leaf cluster and not fully subsumed
-                            for item in tree
-                                .par_distances_to_items_in_subtree(query, cluster)
-                                .filter(|(_, dist)| *dist <= self.0)
+                            for (i, d) in cluster
+                                .subtree_indices()
+                                .into_par_iter()
+                                .zip(&tree.items[cluster.subtree_indices()])
+                                .filter_map(|(i, (_, item))| {
+                                    let dist = (tree.metric)(query, item);
+                                    if dist <= self.0 { Some((i, dist)) } else { None }
+                                })
                                 .collect::<Vec<_>>()
                             {
-                                local_hits.push(item);
+                                local_hits.push((i, d));
                             }
-
                             (Vec::new(), local_hits)
                         }
                     } else {

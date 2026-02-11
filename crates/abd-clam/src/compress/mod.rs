@@ -7,11 +7,18 @@ pub trait Codec {
     /// The type of the compressed representation.
     type Compressed;
 
-    /// Encodes the item in terms of a reference item.
-    fn compress_with(&self, reference: &Self) -> Self::Compressed;
+    /// Encodes the target item in terms of itself.
+    fn compress(&self, target: &Self) -> Self::Compressed;
 
-    /// Decodes the compressed representation in terms of a reference item.
-    fn decompress_with(compressed: &Self::Compressed, reference: &Self) -> Self;
+    /// Decodes the compressed representation in terms of itself.
+    #[must_use]
+    fn decompress(&self, compressed: &Self::Compressed) -> Self;
+
+    /// Returns the number of bytes in the compressed representation.
+    fn compressed_size(compressed: &Self::Compressed) -> usize;
+
+    /// Returns the number of bytes in the original item.
+    fn original_size(&self) -> usize;
 }
 
 /// An item that might be stored in a compressed form.
@@ -23,23 +30,35 @@ pub enum MaybeCompressed<I: Codec> {
 }
 
 impl<I: Codec> MaybeCompressed<I> {
-    /// Encodes the item in terms of a reference item.
-    ///
-    /// If the item is in the `Compressed` variant, this method does nothing.
-    pub fn compress_with(&mut self, reference: &I) {
-        if let Self::Original(item) = self {
-            let compressed = item.compress_with(reference);
-            *self = Self::Compressed(compressed);
+    /// Returns the original item if the item is stored in its original form, and None otherwise.
+    pub(crate) fn take_original(self) -> Option<I> {
+        match self {
+            Self::Original(item) => Some(item),
+            Self::Compressed(_) => None,
         }
     }
 
-    /// Decodes the compressed representation in terms of a reference item.
-    ///
-    /// If the item is in the `Original` variant, this method does nothing.
-    pub fn decompress_with(&mut self, reference: &I) {
-        if let Self::Compressed(compressed) = self {
-            let item = I::decompress_with(compressed, reference);
-            *self = Self::Original(item);
+    /// Returns a reference to the original item if the item is stored in its original form, and None otherwise.
+    pub const fn original(&self) -> Option<&I> {
+        match self {
+            Self::Original(item) => Some(item),
+            Self::Compressed(_) => None,
+        }
+    }
+
+    /// Returns a reference to the compressed representation of the item if the item is stored in its compressed form, and None otherwise.
+    pub const fn compressed(&self) -> Option<&I::Compressed> {
+        match self {
+            Self::Original(_) => None,
+            Self::Compressed(compressed) => Some(compressed),
+        }
+    }
+
+    /// Returns the number of bytes required to store the item.
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Original(item) => item.original_size(),
+            Self::Compressed(compressed) => I::compressed_size(compressed),
         }
     }
 }
