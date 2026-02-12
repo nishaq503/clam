@@ -32,58 +32,38 @@ where
         let mut hits = Vec::new();
 
         let mut frontier = vec![(d_root, root)];
-        while !frontier.is_empty() {
-            let (new_frontier, new_hits) = frontier
-                .into_iter()
-                .map(|(d, cluster)| {
-                    if d <= self.0 + cluster.radius() {
-                        // Overlapping volume
+        while let Some((d, cluster)) = frontier.pop() {
+            if self.0 + cluster.radius() < d {
+                continue; // No overlap
+            }
+            // We have some overlap, so we need to check this cluster
 
-                        let mut local_hits = Vec::new();
+            if d <= self.0 {
+                // Center is within query radius
+                hits.push((cluster.center_index(), d));
+            }
 
-                        if d <= self.0 {
-                            // Center is within query radius
-                            local_hits.push((cluster.center_index(), d));
-                        }
-
-                        if self.0 >= d + cluster.radius() {
-                            // Fully subsumed cluster
-                            for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
-                                local_hits.push((i, (tree.metric)(query, item)));
-                            }
-                            (Vec::new(), local_hits)
-                        } else if let Some(children) = tree.children_of(cluster) {
-                            let mut new_frontier = Vec::new();
-                            for child in children {
-                                let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
-                                // Check children for overlap
-                                if d_child <= self.0 + child.radius() {
-                                    new_frontier.push((d_child, child));
-                                }
-                            }
-                            (new_frontier, local_hits)
-                        } else {
-                            // Leaf cluster and not fully subsumed
-                            for (i, d) in cluster
-                                .subtree_indices()
-                                .zip(&tree.items[cluster.subtree_indices()])
-                                .filter_map(|(i, (_, item))| {
-                                    let dist = (tree.metric)(query, item);
-                                    if dist <= self.0 { Some((i, dist)) } else { None }
-                                })
-                            {
-                                local_hits.push((i, d));
-                            }
-                            (Vec::new(), local_hits)
-                        }
-                    } else {
-                        (Vec::new(), Vec::new())
+            if d + cluster.radius() <= self.0 {
+                // Fully subsumed cluster, so we can add all items in this subtree
+                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
+                    hits.push((i, (tree.metric)(query, item)));
+                }
+            } else if let Some(children) = tree.children_of(cluster) {
+                // Parent cluster is partially overlapping, so we need to check children for overlap and add them to the frontier
+                let overlapping_children = children.into_iter().filter_map(|child| {
+                    let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
+                    if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
+                });
+                frontier.extend(overlapping_children);
+            } else {
+                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
+                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
+                    let dist = (tree.metric)(query, item);
+                    if dist <= self.0 {
+                        hits.push((i, dist));
                     }
-                })
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            frontier = new_frontier.into_iter().flatten().collect();
-            hits.extend(new_hits.into_iter().flatten());
+                }
+            }
         }
 
         hits
@@ -109,65 +89,51 @@ where
         let mut hits = Vec::new();
 
         let mut frontier = vec![(d_root, root)];
-        while !frontier.is_empty() {
-            let (new_frontier, new_hits) = frontier
-                .into_par_iter()
-                .map(|(d, cluster)| {
-                    if d <= self.0 + cluster.radius() {
-                        // Overlapping volume
+        while let Some((d, cluster)) = frontier.pop() {
+            if self.0 + cluster.radius() < d {
+                continue; // No overlap
+            }
+            // We have some overlap, so we need to check this cluster
 
-                        let mut local_hits = Vec::new();
+            if d <= self.0 {
+                // Center is within query radius
+                hits.push((cluster.center_index(), d));
+            }
 
-                        if d <= self.0 {
-                            // Center is within query radius
-                            local_hits.push((cluster.center_index(), d));
-                        }
-
-                        if self.0 >= d + cluster.radius() {
-                            // Fully subsumed cluster
-                            for (i, (_, item)) in cluster
-                                .subtree_indices()
-                                .into_par_iter()
-                                .zip(&tree.items[cluster.subtree_indices()])
-                                .collect::<Vec<_>>()
-                            {
-                                local_hits.push((i, (tree.metric)(query, item)));
-                            }
-                            (Vec::new(), local_hits)
-                        } else if let Some(children) = tree.children_of(cluster) {
-                            let mut new_frontier = Vec::new();
-                            for child in children {
-                                let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
-                                // Check children for overlap
-                                if d_child <= self.0 + child.radius() {
-                                    new_frontier.push((d_child, child));
-                                }
-                            }
-                            (new_frontier, local_hits)
-                        } else {
-                            // Leaf cluster and not fully subsumed
-                            for (i, d) in cluster
-                                .subtree_indices()
-                                .into_par_iter()
-                                .zip(&tree.items[cluster.subtree_indices()])
-                                .filter_map(|(i, (_, item))| {
-                                    let dist = (tree.metric)(query, item);
-                                    if dist <= self.0 { Some((i, dist)) } else { None }
-                                })
-                                .collect::<Vec<_>>()
-                            {
-                                local_hits.push((i, d));
-                            }
-                            (Vec::new(), local_hits)
-                        }
-                    } else {
-                        (Vec::new(), Vec::new())
+            if d + cluster.radius() <= self.0 {
+                // Fully subsumed cluster, so we can add all items in this subtree
+                for (i, (_, item)) in cluster
+                    .subtree_indices()
+                    .into_par_iter()
+                    .zip(&tree.items[cluster.subtree_indices()])
+                    .collect::<Vec<_>>()
+                {
+                    hits.push((i, (tree.metric)(query, item)));
+                }
+            } else if let Some(children) = tree.children_of(cluster) {
+                // Parent cluster is partially overlapping, so we need to check children for overlap and add them to the frontier
+                let overlapping_children = children
+                    .into_par_iter()
+                    .filter_map(|child| {
+                        let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
+                        if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
+                    })
+                    .collect::<Vec<_>>();
+                frontier.extend(overlapping_children);
+            } else {
+                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
+                for (i, (_, item)) in cluster
+                    .subtree_indices()
+                    .into_par_iter()
+                    .zip(&tree.items[cluster.subtree_indices()])
+                    .collect::<Vec<_>>()
+                {
+                    let dist = (tree.metric)(query, item);
+                    if dist <= self.0 {
+                        hits.push((i, dist));
                     }
-                })
-                .unzip::<_, _, Vec<_>, Vec<_>>();
-
-            frontier = new_frontier.into_iter().flatten().collect();
-            hits.extend(new_hits.into_iter().flatten());
+                }
+            }
         }
 
         hits

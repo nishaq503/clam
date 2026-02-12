@@ -1,5 +1,7 @@
 //! K-Nearest Neighbors (KNN) search using the Breadth-First Sieve algorithm.
 
+use rayon::prelude::*;
+
 use crate::{
     Cluster, DistanceValue, Tree,
     cakes::{ParSearch, Search, d_max},
@@ -57,11 +59,14 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                     }
                 } else {
                     profi::prof!("KnnBfs::process_parent");
-                    for child in tree.children_of(cluster).unwrap_or_else(|| unreachable!("Cluster is a parent")) {
-                        let ci = child.center_index();
-                        let d = (tree.metric)(query, &tree.items[ci].1);
-                        hits.push((ci, d));
-                        next_candidates.push((child, d_max(child, d)));
+                    if let Some(children) = tree.children_of(cluster) {
+                        for (child, d) in children
+                            .into_iter()
+                            .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                        {
+                            hits.push((child.center_index(), d));
+                            next_candidates.push((child, d_max(child, d)));
+                        }
                     }
                 }
             }
@@ -82,8 +87,70 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
-        // For now, just call the single-threaded search.
-        self.search(tree, query)
+        let root = tree.root();
+
+        if self.0 > tree.cardinality() {
+            // If k is greater than the number of points in the tree, return all items with their distances.
+            return tree
+                .items
+                .par_iter()
+                .enumerate()
+                .map(|(i, (_, item))| (i, (tree.metric())(query, item)))
+                .collect();
+        }
+
+        let mut candidates = Vec::new();
+        let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
+
+        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
+        hits.push((root.center_index(), d));
+        candidates.push((root, d_max(root, d)));
+
+        while !candidates.is_empty() {
+            let mut next_candidates = Vec::new();
+            candidates = filter_candidates(candidates, self.0);
+
+            for (cluster, d) in candidates {
+                if (
+                    next_candidates.len() <= self.0  // We still need more points to satisfy k, AND
+                    && (cluster.cardinality() < (self.0 - next_candidates.len()))  // The cluster cannot provide enough points to get to k
+                )  // OR
+                || cluster.is_leaf()
+                {
+                    profi::prof!("KnnBfs::par_process_leaf");
+                    // The cluster is a leaf, so we have to look at its points
+                    if cluster.is_singleton() {
+                        // It's a singleton, so just add non-center items with the precomputed distance
+                        hits.extend(cluster.items_indices().skip(1).map(|i| (i, d)));
+                    } else {
+                        // Not a singleton, so compute distances to all non-center items and add them to hits
+                        let distances = cluster
+                            .subtree_indices()
+                            .into_par_iter()
+                            .zip(tree.items[cluster.subtree_indices()].par_iter())
+                            .map(|(i, (_, item))| (i, (tree.metric)(query, item)))
+                            .collect::<Vec<_>>();
+                        hits.extend(distances);
+                    }
+                } else {
+                    profi::prof!("KnnBfs::par_process_parent");
+                    if let Some(children) = tree.children_of(cluster) {
+                        for (child, d) in children
+                            .into_par_iter()
+                            .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
+                            .collect::<Vec<_>>()
+                        {
+                            hits.push((child.center_index(), d));
+                            next_candidates.push((child, d_max(child, d)));
+                        }
+                    }
+                }
+            }
+
+            candidates = next_candidates;
+        }
+
+        hits.take_items().collect()
     }
 }
 

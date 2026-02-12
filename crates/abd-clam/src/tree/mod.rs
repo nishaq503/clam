@@ -154,16 +154,9 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
 
     /// Returns references to the children of the given cluster, if any.
     pub fn children_of(&self, cluster: &Cluster<T, A>) -> Option<Vec<&Cluster<T, A>>> {
-        cluster.child_center_indices().map(|center_indices| {
-            center_indices
-                .iter()
-                .map(|&ci| {
-                    self.cluster_map
-                        .get(&ci)
-                        .unwrap_or_else(|| unreachable!("Invalid center index {ci} from parent {}", cluster.center_index()))
-                })
-                .collect()
-        })
+        cluster
+            .child_center_indices()
+            .map(|center_indices| center_indices.iter().filter_map(|&ci| self.cluster_map.get(&ci)).collect())
     }
 }
 

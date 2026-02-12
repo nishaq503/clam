@@ -48,7 +48,6 @@ where
         M: Send + Sync,
     {
         let distances = tree.items.par_iter().enumerate().map(|(i, (_, item))| (i, (tree.metric)(query, item)));
-
         let mut heap = SizedHeap::new(Some(self.0));
         heap.extend(distances.collect::<Vec<_>>());
         heap.take_items().collect()

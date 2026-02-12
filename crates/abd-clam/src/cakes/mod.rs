@@ -8,15 +8,13 @@ pub mod approximate;
 mod exact;
 pub mod selection;
 
-pub use exact::{KnnBfs, KnnBranch, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
+pub use exact::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
 pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
 
 /// CAKES algorithms.
 pub enum Cakes<T: DistanceValue> {
     /// K-Nearest Neighbors Breadth-First Sieve.
     KnnBfs(KnnBfs),
-    /// K-Nearest Neighbors Repeated RNN along a greedy branch.
-    KnnBranch(KnnBranch),
     /// K-Nearest Neighbors Depth-First Sieve.
     KnnDfs(KnnDfs),
     /// K-Nearest Neighbors Linear Search.
@@ -36,13 +34,12 @@ impl<T: DistanceValue> Cakes<T> {
     pub fn name(&self) -> String {
         match self {
             Self::KnnBfs(KnnBfs(k)) => format!("KnnBfs(k={k})"),
-            Self::KnnBranch(KnnBranch(k)) => format!("KnnBranch(k={k})"),
             Self::KnnDfs(KnnDfs(k)) => format!("KnnDfs(k={k})"),
             Self::KnnLinear(KnnLinear(k)) => format!("KnnLinear(k={k})"),
             Self::KnnRrnn(KnnRrnn(k)) => format!("KnnRrnn(k={k})"),
             Self::RnnChess(RnnChess(r)) => format!("RnnChess(r={r})"),
             Self::RnnLinear(RnnLinear(r)) => format!("RnnLinear(r={r})"),
-            Self::ApproxKnnDfs(approximate::KnnDfs(k, d, l)) => format!("ApproxKnnDfs(k={k}, d={d}, l={l})"),
+            Self::ApproxKnnDfs(alg) => format!("{alg}"),
         }
     }
 }
@@ -98,7 +95,6 @@ where
     fn name(&self) -> String {
         match self {
             Self::KnnBfs(alg) => <KnnBfs as Search<Id, I, T, A, M>>::name(alg),
-            Self::KnnBranch(alg) => <KnnBranch as Search<Id, I, T, A, M>>::name(alg),
             Self::KnnDfs(alg) => <KnnDfs as Search<Id, I, T, A, M>>::name(alg),
             Self::KnnLinear(alg) => <KnnLinear as Search<Id, I, T, A, M>>::name(alg),
             Self::KnnRrnn(alg) => <KnnRrnn as Search<Id, I, T, A, M>>::name(alg),
@@ -111,7 +107,6 @@ where
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         match self {
             Self::KnnBfs(alg) => alg.search(tree, query),
-            Self::KnnBranch(alg) => alg.search(tree, query),
             Self::KnnDfs(alg) => alg.search(tree, query),
             Self::KnnLinear(alg) => alg.search(tree, query),
             Self::KnnRrnn(alg) => alg.search(tree, query),
@@ -133,7 +128,6 @@ where
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         match self {
             Self::KnnBfs(alg) => alg.par_search(tree, query),
-            Self::KnnBranch(alg) => alg.par_search(tree, query),
             Self::KnnDfs(alg) => alg.par_search(tree, query),
             Self::KnnLinear(alg) => alg.par_search(tree, query),
             Self::KnnRrnn(alg) => alg.par_search(tree, query),
