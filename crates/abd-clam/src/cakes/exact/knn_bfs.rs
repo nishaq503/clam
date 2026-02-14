@@ -2,11 +2,9 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    Cluster, DistanceValue, Tree,
-    cakes::{ParSearch, Search, d_max},
-    utils::SizedHeap,
-};
+use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+
+use super::super::{ParSearch, Search, d_max};
 
 /// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
 ///

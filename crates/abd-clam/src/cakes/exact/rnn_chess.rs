@@ -2,10 +2,9 @@
 
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    cakes::{ParSearch, Search},
-};
+use crate::{DistanceValue, Tree};
+
+use super::super::{ParSearch, Search};
 
 /// Ranged Nearest Neighbors search using the CHESS algorithm.
 ///

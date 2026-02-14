@@ -2,11 +2,9 @@
 
 use core::cmp::Reverse;
 
-use crate::{
-    Cluster, DistanceValue, Tree,
-    cakes::{ParSearch, Search, d_max, d_min, leaf_into_hits, pop_till_leaf},
-    utils::SizedHeap,
-};
+use crate::{Cluster, DistanceValue, Tree, utils::SizedHeap};
+
+use super::super::{ParSearch, Search, d_max, d_min, leaf_into_hits, pop_till_leaf};
 
 /// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
 ///

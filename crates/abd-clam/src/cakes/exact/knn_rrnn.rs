@@ -4,11 +4,9 @@ use std::cmp::Reverse;
 
 use rayon::prelude::*;
 
-use crate::{
-    DistanceValue, Tree,
-    cakes::{ParSearch, RnnChess, Search, d_max, d_min},
-    utils::SizedHeap,
-};
+use crate::{DistanceValue, Tree, utils::SizedHeap};
+
+use super::super::{ParSearch, RnnChess, Search, d_max, d_min};
 
 /// K-nearest neighbors (KNN) search using the Repeated Ranged Nearest Neighbor (RRNN) algorithm.
 ///
