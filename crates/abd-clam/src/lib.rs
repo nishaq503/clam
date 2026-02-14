@@ -8,7 +8,7 @@
 //! - [`cakes`]: Search (k-NN, p-NN) algorithms.
 //! - [`musals`]: Multiple sequence alignment of genomic and protein sequences. Use the `musals` feature to enable this module.
 //! - `chaoda`: Anomaly detection algorithms using clustering trees and graphs. Use the `chaoda` feature to enable this module. WIP.
-//! - `codec`: Compression and compressive search algorithms. Use the `codec` feature to enable this module. WIP.
+//! - `pancakes`: Compression and compressive search algorithms. Use the `pancakes` feature to enable this module. WIP.
 //! - `mbed`: Dimension reduction algorithms. Use the `mbed` feature to enable this module. WIP.
 //!
 //! ## Features
@@ -30,7 +30,7 @@ pub use utils::{DistanceValue, FloatDistanceValue};
 pub mod musals;
 
 #[cfg(feature = "codec")]
-pub mod compress;
+pub mod pancakes;
 
 // #[cfg(feature = "mbed")]
 // pub mod mbed;

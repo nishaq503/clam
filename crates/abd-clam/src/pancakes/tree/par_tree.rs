@@ -1,43 +1,29 @@
-//! Compression and decompression of trees with items implementing the `Codec` trait.
+//! Parallel compression and decompression of trees with items implementing the `Codec` trait.
 
 use std::collections::HashMap;
 
+use rayon::prelude::*;
+
 use crate::{Cluster, DistanceValue, Tree};
 
-use super::{Codec, MaybeCompressed};
-
-mod par_tree;
-
-/// A cluster in the frontier of the compression algorithm, containing compressed items and waiting for its siblings and parent to be compressed.
-#[derive(Debug)]
-pub struct FrontierCluster<I, T, A>
-where
-    I: Codec,
-{
-    /// The index of the center of this cluster in the items vector.
-    pub id: usize,
-    /// The index of the center of the parent cluster in the items vector, if the cluster is not the root.
-    pub pid: Option<usize>,
-    /// The cost of unitary/recursive compression of this cluster.
-    pub cost: usize,
-    /// The cluster itself, annotated with the compressed items and the old annotation.
-    pub cluster: Cluster<T, (usize, Vec<I::Compressed>, A)>,
-    /// Whether this cluster is recursively compressed or not.
-    pub is_recursive: bool,
-}
+use super::{Codec, FrontierCluster, MaybeCompressed};
 
 impl<I, T, A> FrontierCluster<I, T, A>
 where
-    I: Codec,
+    I: Codec + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: Send + Sync,
+    A: Send + Sync,
 {
     /// Creates a new frontier cluster using unitary compression.
-    fn unitary<Id>(mut cluster: Cluster<T, A>, items: &[(Id, I)]) -> Self
+    fn par_unitary<Id>(mut cluster: Cluster<T, A>, items: &[(Id, I)]) -> Self
     where
+        Id: Send + Sync,
         T: DistanceValue,
     {
         let id = cluster.center_index;
         let pid = cluster.parent_center_index;
-        let (cost, compressed_items) = unitary_annotator(&cluster, items);
+        let (cost, compressed_items) = par_unitary_annotator(&cluster, items);
 
         // SAFETY: We own the cluster and will replace its annotation before we return. This trick allows us to avoid requiring `A: Default` as a trait bound.
         #[expect(unsafe_code, clippy::mem_replace_with_uninit)]
@@ -54,14 +40,15 @@ where
     }
 
     /// Creates a new frontier cluster using recursive compression.
-    fn recursive<Id>(&self, items: &[(Id, I)], children: &[Self]) -> (usize, Vec<I::Compressed>)
+    fn par_recursive<Id>(&self, items: &[(Id, I)], children: &[Self]) -> (usize, Vec<I::Compressed>)
     where
+        Id: Send + Sync,
         T: DistanceValue,
     {
         // Compress the center of each child cluster in terms of the center of the current cluster.
         let center = &items[self.id].1;
         let (child_costs, child_centers): (Vec<_>, Vec<_>) = children
-            .iter()
+            .par_iter()
             .map(|child| {
                 let child_center = center.compress(&items[child.id].1);
                 let child_cost = child.cluster.annotation().0 + I::compressed_size(&child_center);
@@ -75,14 +62,17 @@ where
 }
 
 /// Applies unitary compression to the items in the cluster, and returns the cost of compression and the compressed items.
-fn unitary_annotator<Id, I, T, A>(cluster: &Cluster<T, A>, items: &[(Id, I)]) -> (usize, Vec<I::Compressed>)
+fn par_unitary_annotator<Id, I, T, A>(cluster: &Cluster<T, A>, items: &[(Id, I)]) -> (usize, Vec<I::Compressed>)
 where
-    I: Codec,
-    T: DistanceValue,
+    Id: Send + Sync,
+    I: Codec + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
 {
     let center = &items[cluster.center_index].1;
     let (costs, items): (Vec<_>, Vec<_>) = items[cluster.subtree_indices()]
-        .iter()
+        .par_iter()
         .map(|(_, item)| {
             let item = center.compress(item);
             let cost = I::compressed_size(&item);
@@ -95,11 +85,15 @@ where
 
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
-    I: Codec,
+    Id: Send + Sync,
+    I: Codec + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: Send + Sync,
+    A: Send + Sync,
 {
     /// Returns the tree with compressed items.
     #[expect(clippy::missing_panics_doc)]
-    pub fn compress_all(self, min_depth: usize) -> Tree<Id, MaybeCompressed<I>, T, A, M>
+    pub fn par_compress_all(self, min_depth: usize) -> Tree<Id, MaybeCompressed<I>, T, A, M>
     where
         T: DistanceValue,
     {
@@ -109,8 +103,8 @@ where
         // Apply unitary compression to all clusters, annotating them with their compressed items, and partition them into the frontier (leaf clusters) and the
         // parents (non-leaf clusters).
         let (mut frontier, parents): (Vec<_>, Vec<_>) = cluster_map
-            .into_values()
-            .map(|cluster| FrontierCluster::unitary(cluster, &items))
+            .into_par_iter()
+            .map(|(_, cluster)| FrontierCluster::par_unitary(cluster, &items))
             .partition(|cluster| cluster.cluster.is_leaf());
 
         // Map of parent clusters waiting for their children to be compressed.
@@ -155,12 +149,12 @@ where
             // Apply recursive compression to the full parents and add them to the next frontier.
             let old_frontier: Vec<_>;
             (old_frontier, frontier) = full_parents
-                .into_values()
-                .map(|(_, mut children, mut parent)| {
+                .into_par_iter()
+                .map(|(_, (_, mut children, mut parent))| {
                     // Sort the children by their center indices to have them in the same order as the children are stored in the cluster.
                     children.sort_by_key(|child| child.id);
                     // Calculate the recursive compression of the children in terms of the parent.
-                    let (rec_cost, child_centers) = parent.recursive(&items, &children);
+                    let (rec_cost, child_centers) = parent.par_recursive(&items, &children);
                     // If the parent is too shallow, or recursive compression is cheaper, then we keep the recursive compression. Otherwise, we keep the unitary
                     // compression.
                     if parent.cluster.depth() <= min_depth || rec_cost < parent.cost {
@@ -242,71 +236,76 @@ where
 
 impl<Id, I, T, A, M> Tree<Id, MaybeCompressed<I>, T, A, M>
 where
-    I: Codec,
+    Id: Send + Sync,
+    I: Codec + Send + Sync,
+    I::Compressed: Send + Sync,
+    T: Send + Sync,
+    A: Send + Sync,
+    M: Send + Sync,
 {
-    /// Returns the tree with decompressed items.
-    pub fn decompress_all(self) -> Tree<Id, I, T, A, M> {
-        let (mut items, cluster_map, metric) = self.into_parts();
+    /// Parallel version of [`Self::decompress_all`]
+    pub fn par_decompress_all(mut self) -> Tree<Id, I, T, A, M> {
+        self.par_decompress_subtree(0)
+            .unwrap_or_else(|_| unreachable!("The center of the root cluster is never compressed."));
+        self.par_apply_to_items(&|id, item| {
+            let item = item
+                .take_original()
+                .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
+            (id, item)
+        })
+    }
 
-        let mut frontier = vec![
-            cluster_map
-                .get(&0)
-                .unwrap_or_else(|| unreachable!("The root cluster with index 0 should be in the clusters map")),
-        ];
+    /// Parallel version of [`Self::decompress_child_centers`]
+    pub(crate) fn par_decompress_child_centers(&mut self, id: usize) -> Result<Option<&[usize]>, String> {
+        let cluster = self.cluster_map.get(&id).ok_or_else(|| format!("No cluster as {id} as its center"))?;
+        if let Some(targets) = cluster.child_center_indices() {
+            let items = self.par_decompressed_items(id, targets)?;
+            for (&i, item) in targets.iter().zip(items) {
+                if let Some(item) = item {
+                    self.items[i].1 = MaybeCompressed::Original(item);
+                }
+            }
+            Ok(Some(targets))
+        } else {
+            Ok(None)
+        }
+    }
 
-        while let Some(cluster) = frontier.pop() {
-            let center = items[cluster.center_index].1.original().unwrap_or_else(|| {
-                unreachable!(
-                    "The center item of cluster with index {} should be in its original form by the time it gets into the frontier",
-                    cluster.center_index
-                )
-            });
-
-            let (indices, decompressed_items): (Vec<_>, Vec<_>) = cluster.child_center_indices().map_or_else(
-                || {
-                    // This is a unitarily compressed cluster, so we need to decompress all the non-center items that are compressed.
-                    cluster
-                        .subtree_indices()
-                        .filter_map(|i| items[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
-                        .unzip()
-                },
-                |child_indices| {
-                    // Add the children of the cluster to the frontier because they may also be recursively compressed.
-                    for i in child_indices {
-                        let child = cluster_map.get(i).unwrap_or_else(|| {
-                            unreachable!(
-                                "Child cluster with index {i} should be in the clusters map when processing its parent cluster with index {}",
-                                cluster.center_index
-                            )
-                        });
-                        frontier.push(child);
+    /// Parallel version of [`Self::decompress_subtree`]
+    pub(crate) fn par_decompress_subtree(&mut self, id: usize) -> Result<(), String> {
+        let mut frontier = vec![id];
+        while let Some(id) = frontier.pop() {
+            if let Some(child_centers) = self.par_decompress_child_centers(id)? {
+                // Add the children of the cluster to the frontier because they may also be recursively compressed.
+                frontier.extend(child_centers);
+            } else {
+                // This is a unitarily compressed cluster, so we need to decompress all the non-center items that are compressed.
+                let leaf = self
+                    .cluster_map
+                    .get(&id)
+                    .ok_or_else(|| format!("Item with index {id} is not the center of any cluster."))?;
+                let targets = leaf.subtree_indices().collect::<Vec<_>>();
+                let dec_items = self.par_decompressed_items(id, &targets)?;
+                for (&i, maybe_dec) in targets.iter().zip(dec_items) {
+                    if let Some(item) = maybe_dec {
+                        self.items[i].1 = MaybeCompressed::Original(item);
                     }
-
-                    // Decompress the compressed centers of the child clusters.
-                    child_indices
-                        .iter()
-                        .filter_map(|&i| items[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
-                        .unzip()
-                },
-            );
-
-            // Update the items in the tree with the decompressed items.
-            for (i, decompressed_item) in indices.into_iter().zip(decompressed_items) {
-                items[i].1 = MaybeCompressed::Original(decompressed_item);
+                }
             }
         }
 
-        // All items should be in their original form by the time the frontier is empty.
-        let items = items
-            .into_iter()
-            .map(|(id, item)| {
-                let item = item
-                    .take_original()
-                    .unwrap_or_else(|| unreachable!("All items should be in their original form by the time the frontier is empty"));
-                (id, item)
-            })
-            .collect();
+        Ok(())
+    }
 
-        Tree::from_parts(items, cluster_map, metric)
+    /// Parallel version of [`Self::decompressed_items`]
+    pub(crate) fn par_decompressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<I>>, String> {
+        let center = self.items[center]
+            .1
+            .original()
+            .ok_or_else(|| format!("Center item at index {center} was compressed"))?;
+        Ok(targets
+            .par_iter()
+            .map(|&i| self.items[i].1.compressed().map(|compressed| center.decompress(compressed)))
+            .collect())
     }
 }

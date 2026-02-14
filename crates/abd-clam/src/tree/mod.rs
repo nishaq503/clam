@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use rayon::prelude::*;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -136,15 +138,6 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.metric
     }
 
-    /// Changes the metric used in the tree to the provided one.
-    pub fn with_metric<N>(self, metric: N) -> Tree<Id, I, T, A, N> {
-        Tree {
-            items: self.items,
-            cluster_map: self.cluster_map,
-            metric,
-        }
-    }
-
     /// Returns a reference to the root cluster of the tree.
     pub fn root(&self) -> &Cluster<T, A> {
         self.cluster_map
@@ -157,6 +150,42 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         cluster
             .child_center_indices()
             .map(|center_indices| center_indices.iter().filter_map(|&ci| self.cluster_map.get(&ci)).collect())
+    }
+}
+
+/// Various setters for `Tree`.
+impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
+    /// Changes the metric used in the tree to the provided one.
+    pub fn with_metric<NewM>(self, metric: NewM) -> Tree<Id, I, T, A, NewM> {
+        Tree {
+            items: self.items,
+            cluster_map: self.cluster_map,
+            metric,
+        }
+    }
+
+    /// Applies the given closure to every item and identifier.
+    pub fn apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
+    where
+        F: Fn(Id, I) -> (NewId, NewI),
+    {
+        let (items, cluster_map, metric) = self.into_parts();
+        let items = items.into_iter().map(|(id, item)| f(id, item)).collect();
+        Tree { items, cluster_map, metric }
+    }
+
+    /// Parallel version of [`Self::apply_to_items`]
+    pub fn par_apply_to_items<F, NewId, NewI>(self, f: &F) -> Tree<NewId, NewI, T, A, M>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        F: Fn(Id, I) -> (NewId, NewI) + Send + Sync,
+        NewId: Send + Sync,
+        NewI: Send + Sync,
+    {
+        let (items, cluster_map, metric) = self.into_parts();
+        let items = items.into_par_iter().map(|(id, item)| f(id, item)).collect();
+        Tree { items, cluster_map, metric }
     }
 }
 

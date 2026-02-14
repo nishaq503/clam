@@ -6,7 +6,7 @@ use rand::prelude::*;
 
 use abd_clam::{
     Tree,
-    compress::{Codec, MaybeCompressed},
+    pancakes::{Codec, MaybeCompressed},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
