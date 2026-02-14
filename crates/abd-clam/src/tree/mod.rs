@@ -116,6 +116,17 @@ impl<Id, I, T, A, M> Tree<Id, I, T, A, M> {
         &self.cluster_map
     }
 
+    /// Returns a reference to a cluster in the tree given its center index, if it exists.
+    ///
+    /// # Errors
+    ///
+    /// If no cluster with the given center index exists in the tree.
+    pub fn get_cluster(&self, id: usize) -> Result<&Cluster<T, A>, String> {
+        self.cluster_map
+            .get(&id)
+            .ok_or_else(|| format!("No cluster with center index {id} found in the tree."))
+    }
+
     /// Returns the number of clusters in the tree.
     pub fn n_clusters(&self) -> usize {
         self.cluster_map.len()

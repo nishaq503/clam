@@ -39,7 +39,7 @@ impl<T: DistanceValue> PanCakes<T> {
     }
 }
 
-/// A Nearest Neighbor Search algorithm in compressed space.
+/// A Nearest Neighbor Search algorithm in compressed space, decompressing items as needed.
 pub trait CompressiveSearch<Id, I, T, A, M>
 where
     I: Codec,
@@ -51,8 +51,12 @@ where
     /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm.
     fn name(&self) -> String;
 
-    /// Searches for nearest neighbors of `query` in the given `tree` and returns a vector of `(index, distance)` pairs into the `items` of the `tree`.
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)>;
+    /// Same as [`Search::search`](crate::cakes::Search::search) but operates on a compressed tree and will decompress items as needed.
+    ///
+    /// # Errors
+    ///
+    /// - If the root center has been compressed.
+    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String>;
 }
 
 /// Parallel version of [`CompressiveSearch`].
@@ -66,7 +70,11 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     /// Parallel version of [`CompressiveSearch::search`].
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)>;
+    ///
+    /// # Errors
+    ///
+    /// See [`CompressiveSearch::search`] for error conditions.
+    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String>;
 }
 
 impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for PanCakes<T>
@@ -85,7 +93,7 @@ where
         }
     }
 
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         match self {
             // Self::KnnBfs(alg) => alg.search(tree, query),
             // Self::KnnDfs(alg) => alg.search(tree, query),
@@ -105,7 +113,7 @@ where
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         match self {
             // Self::KnnBfs(alg) => alg.par_search(tree, query),
             // Self::KnnDfs(alg) => alg.par_search(tree, query),
@@ -128,7 +136,7 @@ where
         (**self).name()
     }
 
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).search(tree, query)
     }
 }
@@ -144,7 +152,7 @@ where
         (**self).name()
     }
 
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).search(tree, query)
     }
 }
@@ -160,7 +168,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
     Alg: ParCompressiveSearch<Id, I, T, A, M>,
 {
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).par_search(tree, query)
     }
 }
@@ -175,7 +183,7 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
     Alg: ParCompressiveSearch<Id, I, T, A, M>,
 {
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
+    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).par_search(tree, query)
     }
 }

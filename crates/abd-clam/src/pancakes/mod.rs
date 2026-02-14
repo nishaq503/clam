@@ -63,11 +63,23 @@ impl<I: Codec> MaybeCompressed<I> {
         }
     }
 
-    /// Returns the distance from the query to this item if it is in its original form, and None otherwise.
-    pub fn distance_to_query<T, M>(&self, query: &I, metric: &M) -> Option<T>
+    /// Returns the distance from the query to this item if it is in its original form, and an error otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The query to compute the distance to.
+    /// * `metric` - The metric to use to compute the distance.
+    ///
+    /// # Errors
+    ///
+    /// If the item is in its compressed form.
+    pub fn distance_to_query<T, M>(&self, query: &I, metric: &M) -> Result<T, String>
     where
         M: Fn(&I, &I) -> T,
     {
-        self.original().map(|item| metric(item, query))
+        self.original().map_or_else(
+            || Err("Tried to compute distance on a compressed item.".to_string()),
+            |item| Ok(metric(item, query)),
+        )
     }
 }
