@@ -2,7 +2,10 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, Tree, pancakes::{Codec, MaybeCompressed}};
+use crate::{
+    Cluster, DistanceValue, Tree,
+    pancakes::{Codec, MaybeCompressed},
+};
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
 
@@ -23,7 +26,10 @@ where
 
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = tree.items[0].1.distance_to_query(query, &tree.metric).unwrap_or_else(|| unreachable!("The root center is never compressed."));
+        let d_root = tree.items[0]
+            .1
+            .distance_to_query(query, &tree.metric)
+            .unwrap_or_else(|| unreachable!("The root center is never compressed."));
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -31,38 +37,82 @@ where
 
         let mut hits = Vec::new();
 
-        let mut frontier = vec![(d_root, root)];
-        while let Some((d, cluster)) = frontier.pop() {
-            if self.0 + cluster.radius() < d {
+        let mut frontier = vec![(d_root, 0, root.radius())]; // (distance to cluster center, cluster index, cluster radius)
+        while let Some((d, id, radius)) = frontier.pop() {
+            if self.0 + radius < d {
                 continue; // No overlap
             }
             // We have some overlap, so we need to check this cluster
 
             if d <= self.0 {
                 // Center is within query radius
-                hits.push((cluster.center_index(), d));
+                hits.push((id, d));
             }
 
-            if d + cluster.radius() <= self.0 {
-                // Fully subsumed cluster, so we can add all items in this subtree
-                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
-                    hits.push((i, (tree.metric)(query, item)));
+            if d + radius <= self.0 {
+                // Fully subsumed cluster, so we will decompress the subtree and add all items in this subtree to the hits
+                tree.decompress_subtree(id)
+                    .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"));
+                if let Some(indices) = tree.cluster_map.get(&id).map(Cluster::subtree_indices) {
+                    let distances = indices
+                        .into_iter()
+                        .map(|i| {
+                            tree.items[i]
+                                .1
+                                .distance_to_query(query, &tree.metric)
+                                .map(|d| (i, d))
+                                .ok_or_else(|| "Decompressed items should never fail to compute distance.".to_string())
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_else(|_| unreachable!("Decompressed items should never fail to compute distance."));
+                    hits.extend(distances);
                 }
-            } else if let Some(children) = tree.children_of(cluster) {
+            } else if let Some(child_centers) = tree
+                .decompress_child_centers(id)
+                .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"))
+            {
                 // Parent cluster is partially overlapping, so we need to check children for overlap and add them to the frontier
-                let overlapping_children = children.into_iter().filter_map(|child| {
-                    let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
-                    if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
-                });
-                frontier.extend(overlapping_children);
-            } else {
-                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
-                for (i, (_, item)) in cluster.subtree_indices().zip(&tree.items[cluster.subtree_indices()]) {
-                    let dist = (tree.metric)(query, item);
-                    if dist <= self.0 {
-                        hits.push((i, dist));
+                let distances = child_centers
+                    .iter()
+                    .map(|&cid| {
+                        let d_child = tree.items[cid]
+                            .1
+                            .distance_to_query(query, &tree.metric)
+                            .unwrap_or_else(|| unreachable!("Decompressed items should never fail to compute distance."));
+                        let radius = tree
+                            .cluster_map
+                            .get(&cid)
+                            .unwrap_or_else(|| unreachable!("Child cluster should always be in the cluster map."))
+                            .radius;
+                        (cid, d_child, radius)
+                    })
+                    .collect::<Vec<_>>();
+                for &(cid, d_child, radius) in &distances {
+                    if d_child <= self.0 + radius {
+                        // This child cluster overlaps with the query ball, so we add it to the frontier
+                        frontier.push((d_child, cid, radius));
                     }
                 }
+            } else {
+                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
+                tree.decompress_subtree(id)
+                    .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"));
+                let indices = tree
+                    .cluster_map
+                    .get(&id)
+                    .map_or_else(|| unreachable!("Cluster should always be in the cluster map."), Cluster::subtree_indices)
+                    .collect::<Vec<_>>();
+                let distances = indices
+                    .iter()
+                    .map(|&i| {
+                        let item = &tree.items[i].1;
+                        let dist = item
+                            .distance_to_query(query, &tree.metric)
+                            .unwrap_or_else(|| unreachable!("Decompressed items should never fail to compute distance."));
+                        (i, dist)
+                    })
+                    .collect::<Vec<_>>();
+                hits.extend(distances);
             }
         }
 
@@ -81,7 +131,10 @@ where
 {
     fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
-        let d_root = (tree.metric)(query, &tree.items[0].1); // root center index is always 0
+        let d_root = tree.items[0]
+            .1
+            .distance_to_query(query, &tree.metric)
+            .unwrap_or_else(|| unreachable!("The root center is never compressed."));
         // Check to see if there is any overlap with the root
         if d_root > self.0 + root.radius() {
             return Vec::new(); // No overlap
@@ -89,51 +142,82 @@ where
 
         let mut hits = Vec::new();
 
-        let mut frontier = vec![(d_root, root)];
-        while let Some((d, cluster)) = frontier.pop() {
-            if self.0 + cluster.radius() < d {
+        let mut frontier = vec![(d_root, 0, root.radius())]; // (distance to cluster center, cluster index, cluster radius)
+        while let Some((d, id, radius)) = frontier.pop() {
+            if self.0 + radius < d {
                 continue; // No overlap
             }
             // We have some overlap, so we need to check this cluster
 
             if d <= self.0 {
                 // Center is within query radius
-                hits.push((cluster.center_index(), d));
+                hits.push((id, d));
             }
 
-            if d + cluster.radius() <= self.0 {
-                // Fully subsumed cluster, so we can add all items in this subtree
-                for (i, (_, item)) in cluster
-                    .subtree_indices()
-                    .into_par_iter()
-                    .zip(&tree.items[cluster.subtree_indices()])
-                    .collect::<Vec<_>>()
-                {
-                    hits.push((i, (tree.metric)(query, item)));
+            if d + radius <= self.0 {
+                // Fully subsumed cluster, so we will decompress the subtree and add all items in this subtree to the hits
+                tree.par_decompress_subtree(id)
+                    .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"));
+                if let Some(indices) = tree.cluster_map.get(&id).map(Cluster::subtree_indices) {
+                    let distances = indices
+                        .into_par_iter()
+                        .map(|i| {
+                            tree.items[i]
+                                .1
+                                .distance_to_query(query, &tree.metric)
+                                .map(|d| (i, d))
+                                .ok_or_else(|| "Decompressed items should never fail to compute distance.".to_string())
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap_or_else(|_| unreachable!("Decompressed items should never fail to compute distance."));
+                    hits.extend(distances);
                 }
-            } else if let Some(children) = tree.children_of(cluster) {
+            } else if let Some(child_centers) = tree
+                .par_decompress_child_centers(id)
+                .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"))
+            {
                 // Parent cluster is partially overlapping, so we need to check children for overlap and add them to the frontier
-                let overlapping_children = children
-                    .into_par_iter()
-                    .filter_map(|child| {
-                        let d_child = (tree.metric)(query, &tree.items[child.center_index()].1);
-                        if d_child <= self.0 + child.radius() { Some((d_child, child)) } else { None }
+                let distances = child_centers
+                    .par_iter()
+                    .map(|&cid| {
+                        let d_child = tree.items[cid]
+                            .1
+                            .distance_to_query(query, &tree.metric)
+                            .unwrap_or_else(|| unreachable!("Decompressed items should never fail to compute distance."));
+                        let radius = tree
+                            .cluster_map
+                            .get(&cid)
+                            .unwrap_or_else(|| unreachable!("Child cluster should always be in the cluster map."))
+                            .radius;
+                        (cid, d_child, radius)
                     })
                     .collect::<Vec<_>>();
-                frontier.extend(overlapping_children);
-            } else {
-                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
-                for (i, (_, item)) in cluster
-                    .subtree_indices()
-                    .into_par_iter()
-                    .zip(&tree.items[cluster.subtree_indices()])
-                    .collect::<Vec<_>>()
-                {
-                    let dist = (tree.metric)(query, item);
-                    if dist <= self.0 {
-                        hits.push((i, dist));
+                for &(cid, d_child, radius) in &distances {
+                    if d_child <= self.0 + radius {
+                        // This child cluster overlaps with the query ball, so we add it to the frontier
+                        frontier.push((d_child, cid, radius));
                     }
                 }
+            } else {
+                // Leaf cluster and not fully subsumed, so we need to check all items in this cluster
+                tree.par_decompress_subtree(id)
+                    .unwrap_or_else(|err| unreachable!("Decompression should never fail during search: {err}"));
+                let indices = tree
+                    .cluster_map
+                    .get(&id)
+                    .map_or_else(|| unreachable!("Cluster should always be in the cluster map."), Cluster::subtree_indices)
+                    .collect::<Vec<_>>();
+                let distances = indices
+                    .par_iter()
+                    .map(|&i| {
+                        let item = &tree.items[i].1;
+                        let dist = item
+                            .distance_to_query(query, &tree.metric)
+                            .unwrap_or_else(|| unreachable!("Decompressed items should never fail to compute distance."));
+                        (i, dist)
+                    })
+                    .collect::<Vec<_>>();
+                hits.extend(distances);
             }
         }
 

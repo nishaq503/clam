@@ -1,6 +1,6 @@
 //! Compression and compressive search algorithms. Use the `codec` feature to enable this module.
 
-// mod search;
+pub mod search;
 mod tree;
 
 /// How an item can be encoded into and decoded from a compressed representation that consumes less memory than the original item.

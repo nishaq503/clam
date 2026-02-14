@@ -270,7 +270,7 @@ where
     ///
     /// - If the `id` is not the center of any cluster.
     /// - If the cluster center is compressed.
-    pub(crate) fn decompress_child_centers(&mut self, id: usize) -> Result<Option<&[usize]>, String> {
+    pub(crate) fn decompress_child_centers(&mut self, id: usize) -> Result<Option<Vec<usize>>, String> {
         let cluster = self.cluster_map.get(&id).ok_or_else(|| format!("No cluster as {id} as its center"))?;
         if let Some(targets) = cluster.child_center_indices() {
             let items = self.decompressed_items(id, targets)?;
@@ -279,7 +279,7 @@ where
                     self.items[i].1 = MaybeCompressed::Original(item);
                 }
             }
-            Ok(Some(targets))
+            Ok(Some(targets.to_vec()))
         } else {
             Ok(None)
         }
