@@ -9,7 +9,7 @@ mod exact;
 pub mod selection;
 
 pub use exact::{KnnBfs, KnnDfs, KnnLinear, KnnRrnn, RnnChess, RnnLinear};
-pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
+pub(crate) use exact::{leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
 /// CAKES algorithms.
 pub enum Cakes<T: DistanceValue> {
