@@ -6,17 +6,12 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{d_max, d_min},
+    cakes::{KnnRrnn, d_max, d_min},
     pancakes::{Codec, MaybeCompressed},
     utils::SizedHeap,
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch, RnnChess};
-
-/// K-nearest neighbors (KNN) search using the Repeated Ranged Nearest Neighbor (RRNN) algorithm.
-///
-/// The field is the number of nearest neighbors to find (k).
-pub struct KnnRrnn(pub usize);
 
 impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnRrnn
 where
@@ -24,10 +19,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("KnnRrnn(k={})", self.0)
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.

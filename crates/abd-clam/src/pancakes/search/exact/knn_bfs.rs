@@ -4,17 +4,12 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::d_max,
+    cakes::{KnnBfs, d_max},
     pancakes::{Codec, MaybeCompressed},
     utils::SizedHeap,
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
-
-/// K-Nearest Neighbor (KNN) search using the Breadth-First Sieve algorithm.
-///
-/// The field is the number of nearest neighbors to find (k).
-pub struct KnnBfs(pub usize);
 
 impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnBfs
 where
@@ -22,10 +17,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("KnnBfs(k={})", self.0)
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.

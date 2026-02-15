@@ -20,11 +20,11 @@ use super::super::{ParSearch, Search, d_max, d_min, leaf_into_hits, par_leaf_int
 #[must_use]
 pub struct KnnDfs {
     /// The number of nearest neighbors to find.
-    k: usize,
+    pub(crate) k: usize,
     /// The maximum number of leaf clusters to visit (`usize::MAX` for no limit).
-    max_leaves: usize,
+    pub(crate) max_leaves: usize,
     /// The maximum number of distance computations to perform (`usize::MAX` for no limit).
-    max_dist_comps: usize,
+    pub(crate) max_dist_comps: usize,
 }
 
 impl KnnDfs {
@@ -40,7 +40,7 @@ impl KnnDfs {
     }
 
     /// Checks whether we should continue the search.
-    const fn should_continue(&self, leaves_visited: usize, distance_computations: usize) -> bool {
+    pub(crate) const fn should_continue(&self, leaves_visited: usize, distance_computations: usize) -> bool {
         leaves_visited < self.max_leaves && distance_computations < self.max_dist_comps
     }
 }

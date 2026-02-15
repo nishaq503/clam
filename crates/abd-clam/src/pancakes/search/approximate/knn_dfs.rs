@@ -6,63 +6,12 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{d_max, d_min},
+    cakes::{approximate::KnnDfs, d_max, d_min},
     pancakes::{Codec, MaybeCompressed},
     utils::SizedHeap,
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch, leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
-
-/// K-Nearest Neighbor (KNN) search using the Depth-First Sieve algorithm.
-///
-/// The fields are:
-///   1. `k`: The number of nearest neighbors to find.
-///   2. `max_leaves`: The maximum number of leaf clusters to visit (`usize::MAX` for no limit).
-///   3. `max_dist_comps`: The maximum number of distance computations to perform (`usize::MAX` for no limit).
-///
-/// If both `max_leaves` and `max_dist_comps` are set to `usize::MAX`, the search is exact and will have the same asymptotic behavior as the
-/// [`exact variant`](crate::cakes::KnnDfs) of this algorithm.
-#[must_use]
-pub struct KnnDfs {
-    /// The number of nearest neighbors to find.
-    k: usize,
-    /// The maximum number of leaf clusters to visit (`usize::MAX` for no limit).
-    max_leaves: usize,
-    /// The maximum number of distance computations to perform (`usize::MAX` for no limit).
-    max_dist_comps: usize,
-}
-
-impl KnnDfs {
-    /// Creates a new `KnnDfs` search object with the specified parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `k` - The number of nearest neighbors to find.
-    /// * `max_leaves` - The maximum number of leaf clusters to visit (`usize::MAX` for no limit).
-    /// * `max_dist_comps` - The maximum number of distance computations to perform (`usize::MAX` for no limit).
-    pub const fn new(k: usize, max_leaves: usize, max_dist_comps: usize) -> Self {
-        Self { k, max_leaves, max_dist_comps }
-    }
-
-    /// Checks whether we should continue the search.
-    const fn should_continue(&self, leaves_visited: usize, distance_computations: usize) -> bool {
-        leaves_visited < self.max_leaves && distance_computations < self.max_dist_comps
-    }
-}
-
-impl core::fmt::Display for KnnDfs {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.max_leaves == usize::MAX && self.max_dist_comps == usize::MAX {
-            write!(f, "KnnDfs(k={})", self.k)
-        } else if self.max_dist_comps == usize::MAX {
-            write!(f, "ApproxKnnDfs(k={},leaves<{})", self.k, self.max_leaves)
-        } else if self.max_leaves == usize::MAX {
-            write!(f, "ApproxKnnDfs(k={},dist_comps<{})", self.k, self.max_dist_comps)
-        } else {
-            write!(f, "ApproxKnnDfs(k={},leaves<{},dist_comps<{})", self.k, self.max_leaves, self.max_dist_comps)
-        }
-    }
-}
 
 impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnDfs
 where
@@ -70,10 +19,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("{self}")
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.k > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.

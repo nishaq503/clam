@@ -1,6 +1,9 @@
 //! Compressive search algorithms.
 
-use crate::{DistanceValue, Tree};
+use crate::{
+    DistanceValue, Tree,
+    cakes::{KnnBfs, KnnDfs, KnnRrnn, RnnChess, approximate::KnnDfs as ApproxKnnDfs},
+};
 
 use super::{Codec, MaybeCompressed};
 
@@ -8,7 +11,6 @@ mod approximate;
 mod exact;
 // mod selection;
 
-pub use exact::{KnnBfs, KnnDfs, KnnRrnn, RnnChess};
 pub(crate) use exact::{leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
 /// `PanCakes` algorithms.
@@ -22,7 +24,7 @@ pub enum PanCakes<T: DistanceValue> {
     /// Ranged Nearest Neighbors Chess Search.
     RnnChess(RnnChess<T>),
     /// Approximate K-Nearest Neighbors Depth-First Sieve.
-    ApproxKnnDfs(approximate::KnnDfs),
+    ApproxKnnDfs(ApproxKnnDfs),
 }
 
 impl<T: DistanceValue> PanCakes<T> {
@@ -45,11 +47,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    /// Returns a name for the search algorithm.
-    ///
-    /// This is intended for diagnostic use. Ideally, it should include information about the parameters of the algorithm.
-    fn name(&self) -> String;
-
     /// Same as [`Search::search`](crate::cakes::Search::search) but operates on a compressed tree and will decompress items as needed.
     ///
     /// # Errors
@@ -82,16 +79,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        match self {
-            Self::KnnBfs(alg) => <KnnBfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-            Self::KnnDfs(alg) => <KnnDfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-            Self::KnnRrnn(alg) => <KnnRrnn as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-            Self::RnnChess(alg) => <RnnChess<T> as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-            Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-        }
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         match self {
             Self::KnnBfs(alg) => alg.search(tree, query),
@@ -131,10 +118,6 @@ where
     M: Fn(&I, &I) -> T,
     Alg: CompressiveSearch<Id, I, T, A, M>,
 {
-    fn name(&self) -> String {
-        (**self).name()
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).search(tree, query)
     }
@@ -147,10 +130,6 @@ where
     M: Fn(&I, &I) -> T,
     Alg: CompressiveSearch<Id, I, T, A, M>,
 {
-    fn name(&self) -> String {
-        (**self).name()
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         (**self).search(tree, query)
     }

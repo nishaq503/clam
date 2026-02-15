@@ -4,15 +4,11 @@ use rayon::prelude::*;
 
 use crate::{
     DistanceValue, Tree,
+    cakes::RnnChess,
     pancakes::{Codec, MaybeCompressed},
 };
 
 use super::super::{CompressiveSearch, ParCompressiveSearch};
-
-/// Ranged Nearest Neighbors search using the CHESS algorithm.
-///
-/// The field is the radius of the query ball to search within.
-pub struct RnnChess<T: DistanceValue>(pub T);
 
 impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for RnnChess<T>
 where
@@ -20,10 +16,6 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn name(&self) -> String {
-        format!("RnnChess(radius={})", self.0)
-    }
-
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         let root_radius = tree.root().radius();
         let d_root = tree.items[0].1.distance_to_query(query, &tree.metric)?;
