@@ -6,14 +6,15 @@
 //! ## Algorithm Families and Applications
 //!
 //! - [`cakes`]: Search (k-NN, p-NN) algorithms.
+//! - [`pancakes`]: Compression and compressive search algorithms. Use the `pancakes` feature to enable this module. WIP.
 //! - [`musals`]: Multiple sequence alignment of genomic and protein sequences. Use the `musals` feature to enable this module.
 //! - `chaoda`: Anomaly detection algorithms using clustering trees and graphs. Use the `chaoda` feature to enable this module. WIP.
-//! - `pancakes`: Compression and compressive search algorithms. Use the `pancakes` feature to enable this module. WIP.
 //! - `mbed`: Dimension reduction algorithms. Use the `mbed` feature to enable this module. WIP.
 //!
 //! ## Features
 //!
 //! - `serde`: Enables serialization and deserialization of clustering trees and related data structures using the [`serde`] and [`databuf`] crates.
+//! - `pancakes`: Enables the `pancakes` module for compression and compressive search.
 //! - `musals`: Enables the `musals` module for multiple sequence alignment.
 //! - `all`: Enables the `serde` and `musals` features.
 //! - `profile`: Enables profiling using the [`profi`] crate.
@@ -26,11 +27,11 @@ pub use tree::{Cluster, PartitionStrategy, Tree, partition_strategy};
 
 pub use utils::{DistanceValue, FloatDistanceValue};
 
+#[cfg(feature = "pancakes")]
+pub mod pancakes;
+
 #[cfg(feature = "musals")]
 pub mod musals;
-
-#[cfg(feature = "codec")]
-pub mod pancakes;
 
 // #[cfg(feature = "mbed")]
 // pub mod mbed;

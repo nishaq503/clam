@@ -199,13 +199,13 @@ where
 }
 
 /// The minimum possible distance from the query to any item in the cluster.
-pub(crate) fn d_min<T: DistanceValue, A>(cluster: &super::Cluster<T, A>, d: T) -> T {
-    if d < cluster.radius() { T::zero() } else { d - cluster.radius() }
+pub(crate) fn d_min<T: DistanceValue>(radius: T, d: T) -> T {
+    if d < radius { T::zero() } else { d - radius }
 }
 
 /// Returns the theoretical maximum distance from the query to a point in the cluster.
-pub(crate) fn d_max<T: DistanceValue, A>(cluster: &super::Cluster<T, A>, d: T) -> T {
-    cluster.radius() + d
+pub(crate) fn d_max<T: DistanceValue>(radius: T, d: T) -> T {
+    radius + d
 }
 
 /// Computes summary statistics about the quality of approximate nearest neighbor search results.

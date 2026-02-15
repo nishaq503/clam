@@ -18,6 +18,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -27,9 +28,9 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, d_max(root, d)));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, d_max(radius, d)));
 
         while !candidates.is_empty() {
             let mut next_candidates = Vec::new();
@@ -62,8 +63,9 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
                             .into_iter()
                             .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
                         {
+                            let radius = child.radius();
                             hits.push((child.center_index(), d));
-                            next_candidates.push((child, d_max(child, d)));
+                            next_candidates.push((child, d_max(radius, d)));
                         }
                     }
                 }
@@ -86,6 +88,7 @@ where
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -100,9 +103,9 @@ where
         let mut candidates = Vec::new();
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, d_max(root, d)));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, d_max(radius, d)));
 
         while !candidates.is_empty() {
             let mut next_candidates = Vec::new();
@@ -138,8 +141,9 @@ where
                             .map(|child| (child, (tree.metric)(query, &tree.items[child.center_index()].1)))
                             .collect::<Vec<_>>()
                         {
+                            let radius = child.radius();
                             hits.push((child.center_index(), d));
-                            next_candidates.push((child, d_max(child, d)));
+                            next_candidates.push((child, d_max(radius, d)));
                         }
                     }
                 }

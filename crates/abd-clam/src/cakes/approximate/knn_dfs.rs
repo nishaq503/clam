@@ -66,6 +66,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.k > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -75,9 +76,9 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         let mut leaves_visited = 0;
         let mut distance_computations = 1;
@@ -115,6 +116,7 @@ where
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.k > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -129,9 +131,9 @@ where
 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.k));
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         let mut leaves_visited = 0;
         let mut distance_computations = 1;

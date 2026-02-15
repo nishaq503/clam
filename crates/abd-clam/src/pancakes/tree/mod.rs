@@ -271,15 +271,12 @@ where
     /// - If the `id` is not the center of any cluster.
     /// - If the cluster center is compressed.
     pub(crate) fn decompress_child_centers(&mut self, id: usize) -> Result<Option<Vec<usize>>, String> {
-        let cluster = self.cluster_map.get(&id).ok_or_else(|| format!("No cluster as {id} as its center"))?;
-        if let Some(targets) = cluster.child_center_indices() {
-            let items = self.decompressed_items(id, targets)?;
-            for (&i, item) in targets.iter().zip(items) {
-                if let Some(item) = item {
-                    self.items[i].1 = MaybeCompressed::Original(item);
-                }
+        if let Some(targets) = self.get_cluster(id)?.child_center_indices().map(<[_]>::to_vec) {
+            let items = self.decompressed_items(id, &targets)?;
+            for (i, item) in items.into_iter().flatten() {
+                self.items[i].1 = MaybeCompressed::Original(item);
             }
-            Ok(Some(targets.to_vec()))
+            Ok(Some(targets))
         } else {
             Ok(None)
         }
@@ -294,16 +291,10 @@ where
                 frontier.extend(child_centers);
             } else {
                 // This is a unitarily compressed cluster, so we need to decompress all the non-center items that are compressed.
-                let leaf = self
-                    .cluster_map
-                    .get(&id)
-                    .ok_or_else(|| format!("Item with index {id} is not the center of any cluster."))?;
-                let targets = leaf.subtree_indices().collect::<Vec<_>>();
+                let targets = self.get_cluster(id)?.subtree_indices().collect::<Vec<_>>();
                 let dec_items = self.decompressed_items(id, &targets)?;
-                for (&i, maybe_dec) in targets.iter().zip(dec_items) {
-                    if let Some(item) = maybe_dec {
-                        self.items[i].1 = MaybeCompressed::Original(item);
-                    }
+                for (i, item) in dec_items.into_iter().flatten() {
+                    self.items[i].1 = MaybeCompressed::Original(item);
                 }
             }
         }
@@ -320,20 +311,20 @@ where
     ///
     /// # Returns
     ///
-    /// Decompressed versions of the indexed items. If any of the targets was already decompressed, places None instead.
+    /// A vector of the same length as `targets`, where each element is `Some((index, item))` if the corresponding target was successfully decompressed, and
+    /// `None` if the corresponding target was already decompressed.
     ///
     /// # Errors
     ///
     /// - If the indexed center is compressed.
-    /// - If any of the indexed targets are decompressed.
-    pub(crate) fn decompressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<I>>, String> {
+    pub(crate) fn decompressed_items(&self, center: usize, targets: &[usize]) -> Result<Vec<Option<(usize, I)>>, String> {
         let center = self.items[center]
             .1
             .original()
             .ok_or_else(|| format!("Center item at index {center} was compressed"))?;
         Ok(targets
             .iter()
-            .map(|&i| self.items[i].1.compressed().map(|compressed| center.decompress(compressed)))
+            .map(|&i| self.items[i].1.compressed().map(|compressed| (i, center.decompress(compressed))))
             .collect())
     }
 }

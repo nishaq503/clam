@@ -24,6 +24,7 @@ where
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -32,11 +33,11 @@ where
 
         let mut candidate_radii = SizedHeap::<usize, Reverse<T>>::new(None);
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
+        let d = (tree.metric)(query, &tree.items[0].1);
         let car = tree.cardinality();
-        candidate_radii.push((1, Reverse(d_min(root, d))));
+        candidate_radii.push((1, Reverse(d_min(radius, d))));
         candidate_radii.push((car.half() + 1, Reverse(d)));
-        candidate_radii.push((car, Reverse(d_max(root, d))));
+        candidate_radii.push((car, Reverse(d_max(radius, d))));
 
         let mut latest = root;
         while !latest.is_leaf() {
@@ -47,9 +48,10 @@ where
                     .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
             }) {
                 let car = child.cardinality();
-                candidate_radii.push((1, Reverse(d_min(child, d))));
+                let radius = child.radius();
+                candidate_radii.push((1, Reverse(d_min(radius, d))));
                 candidate_radii.push((car.half() + 1, Reverse(d)));
-                candidate_radii.push((car, Reverse(d_max(child, d))));
+                candidate_radii.push((car, Reverse(d_max(radius, d))));
 
                 latest = child;
             }
@@ -107,6 +109,7 @@ where
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -122,9 +125,9 @@ where
 
         let d = (tree.metric)(query, &tree.items[root.center_index()].1);
         let car = tree.cardinality();
-        candidate_radii.push((1, Reverse(d_min(root, d))));
+        candidate_radii.push((1, Reverse(d_min(radius, d))));
         candidate_radii.push((car.half() + 1, Reverse(d)));
-        candidate_radii.push((car, Reverse(d_max(root, d))));
+        candidate_radii.push((car, Reverse(d_max(radius, d))));
 
         let mut latest = root;
         while !latest.is_leaf() {
@@ -135,9 +138,10 @@ where
                     .min_by_key(|&(_, d)| crate::utils::MinItem((), d))
             }) {
                 let car = child.cardinality();
-                candidate_radii.push((1, Reverse(d_min(child, d))));
+                let radius = child.radius();
+                candidate_radii.push((1, Reverse(d_min(radius, d))));
                 candidate_radii.push((car.half() + 1, Reverse(d)));
-                candidate_radii.push((car, Reverse(d_max(child, d))));
+                candidate_radii.push((car, Reverse(d_max(radius, d))));
 
                 latest = child;
             }

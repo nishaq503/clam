@@ -20,6 +20,7 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
 
     fn search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -29,9 +30,9 @@ impl<Id, I, T: DistanceValue, A, M: Fn(&I, &I) -> T> Search<Id, I, T, A, M> for 
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
@@ -63,6 +64,7 @@ where
 {
     fn par_search(&self, tree: &Tree<Id, I, T, A, M>, query: &I) -> Vec<(usize, T)> {
         let root = tree.root();
+        let radius = root.radius();
 
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
@@ -77,9 +79,9 @@ where
         let mut candidates = SizedHeap::<&Cluster<T, A>, Reverse<(T, T, T)>>::new(None);
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
-        let d = (tree.metric)(query, &tree.items[root.center_index()].1);
-        hits.push((root.center_index(), d));
-        candidates.push((root, Reverse((d_min(root, d), d_max(root, d), d))));
+        let d = (tree.metric)(query, &tree.items[0].1);
+        hits.push((0, d));
+        candidates.push((root, Reverse((d_min(radius, d), d_max(radius, d), d))));
 
         while !candidates.is_empty() {
             // Find the next leaf to process.
@@ -125,8 +127,9 @@ where
             for child in children {
                 let ci = child.center_index();
                 let d = (tree.metric)(query, &tree.items[ci].1);
+                let radius = child.radius();
                 hits.push((ci, d));
-                candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
+                candidates.push((child, Reverse((d_min(radius, d), d_max(radius, d), d))));
             }
         }
     }
@@ -195,8 +198,9 @@ where
                 .collect::<Vec<_>>()
             {
                 let ci = child.center_index();
+                let radius = child.radius();
                 hits.push((ci, d));
-                candidates.push((child, Reverse((d_min(child, d), d_max(child, d), d))));
+                candidates.push((child, Reverse((d_min(radius, d), d_max(radius, d), d))));
             }
         }
     }
