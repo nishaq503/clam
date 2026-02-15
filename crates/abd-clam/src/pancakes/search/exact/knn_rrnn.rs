@@ -19,7 +19,7 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
@@ -67,7 +67,7 @@ where
                 continue;
             }
 
-            hits = RnnChess(d).search(tree, query)?;
+            hits = RnnChess(d).compressive_search(tree, query)?;
             if hits.len() >= self.0 {
                 hits.sort_by_key(|&(_, d)| crate::utils::MinItem((), d));
                 hits.truncate(self.0);
@@ -87,7 +87,7 @@ where
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.par_decompress_subtree(0)?;
@@ -135,7 +135,7 @@ where
                 continue;
             }
 
-            hits = RnnChess(d).par_search(tree, query)?;
+            hits = RnnChess(d).par_compressive_search(tree, query)?;
             if hits.len() >= self.0 {
                 hits.sort_by_key(|&(_, d)| crate::utils::MinItem((), d));
                 hits.truncate(self.0);

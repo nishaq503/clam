@@ -16,7 +16,7 @@ where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
 {
-    fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         let root_radius = tree.root().radius();
         let d_root = tree.items[0].1.distance_to_query(query, &tree.metric)?;
         // Check to see if there is any overlap with the root
@@ -86,7 +86,7 @@ where
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
 {
-    fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
+    fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
         let root_radius = tree.root().radius();
         let d_root = tree.items[0].1.distance_to_query(query, &tree.metric)?;
         // Check to see if there is any overlap with the root
