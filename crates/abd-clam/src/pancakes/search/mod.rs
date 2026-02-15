@@ -4,12 +4,12 @@ use crate::{DistanceValue, Tree};
 
 use super::{Codec, MaybeCompressed};
 
-// mod approximate;
+mod approximate;
 mod exact;
 // mod selection;
 
 pub use exact::{KnnBfs, KnnDfs, KnnRrnn, RnnChess};
-// pub(crate) use exact::{leaf_into_hits, pop_till_leaf};
+pub(crate) use exact::{leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
 /// `PanCakes` algorithms.
 pub enum PanCakes<T: DistanceValue> {
@@ -21,8 +21,8 @@ pub enum PanCakes<T: DistanceValue> {
     KnnRrnn(KnnRrnn),
     /// Ranged Nearest Neighbors Chess Search.
     RnnChess(RnnChess<T>),
-    // /// Approximate K-Nearest Neighbors Depth-First Sieve.
-    // ApproxKnnDfs(approximate::KnnDfs),
+    /// Approximate K-Nearest Neighbors Depth-First Sieve.
+    ApproxKnnDfs(approximate::KnnDfs),
 }
 
 impl<T: DistanceValue> PanCakes<T> {
@@ -33,7 +33,7 @@ impl<T: DistanceValue> PanCakes<T> {
             Self::KnnDfs(KnnDfs(k)) => format!("KnnDfs(k={k})"),
             Self::KnnRrnn(KnnRrnn(k)) => format!("KnnRrnn(k={k})"),
             Self::RnnChess(RnnChess(r)) => format!("RnnChess(r={r})"),
-            // Self::ApproxKnnDfs(alg) => format!("{alg}"),
+            Self::ApproxKnnDfs(alg) => format!("{alg}"),
         }
     }
 }
@@ -88,7 +88,7 @@ where
             Self::KnnDfs(alg) => <KnnDfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
             Self::KnnRrnn(alg) => <KnnRrnn as CompressiveSearch<Id, I, T, A, M>>::name(alg),
             Self::RnnChess(alg) => <RnnChess<T> as CompressiveSearch<Id, I, T, A, M>>::name(alg),
-            // Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
+            Self::ApproxKnnDfs(alg) => <approximate::KnnDfs as CompressiveSearch<Id, I, T, A, M>>::name(alg),
         }
     }
 
@@ -98,7 +98,7 @@ where
             Self::KnnDfs(alg) => alg.search(tree, query),
             Self::KnnRrnn(alg) => alg.search(tree, query),
             Self::RnnChess(alg) => alg.search(tree, query),
-            // Self::ApproxKnnDfs(alg) => alg.search(tree, query),
+            Self::ApproxKnnDfs(alg) => alg.search(tree, query),
         }
     }
 }
@@ -118,7 +118,7 @@ where
             Self::KnnDfs(alg) => alg.par_search(tree, query),
             Self::KnnRrnn(alg) => alg.par_search(tree, query),
             Self::RnnChess(alg) => alg.par_search(tree, query),
-            // Self::ApproxKnnDfs(alg) => alg.par_search(tree, query),
+            Self::ApproxKnnDfs(alg) => alg.par_search(tree, query),
         }
     }
 }
