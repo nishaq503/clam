@@ -18,14 +18,17 @@ use super::super::{CompressiveSearch, ParCompressiveSearch};
 /// The field is the number of nearest neighbors to find (k).
 pub struct KnnDfs(pub usize);
 
-impl<Id, I: Codec, T: DistanceValue, A, M: Fn(&I, &I) -> T> CompressiveSearch<Id, I, T, A, M> for KnnDfs {
+impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for KnnDfs
+where
+    I: Codec,
+    T: DistanceValue,
+    M: Fn(&I, &I) -> T,
+{
     fn name(&self) -> String {
         format!("KnnDfs(k={})", self.0)
     }
 
     fn search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        let radius = tree.root().radius();
-
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
@@ -37,6 +40,7 @@ impl<Id, I: Codec, T: DistanceValue, A, M: Fn(&I, &I) -> T> CompressiveSearch<Id
                 .collect();
         }
 
+        let radius = tree.root().radius();
         let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
@@ -72,8 +76,6 @@ where
     M: Fn(&I, &I) -> T + Send + Sync,
 {
     fn par_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String> {
-        let radius = tree.root().radius();
-
         if self.0 > tree.cardinality() {
             // If k is greater than the number of points in the tree, return all items with their distances.
             tree.decompress_subtree(0)?;
@@ -85,6 +87,7 @@ where
                 .collect();
         }
 
+        let radius = tree.root().radius();
         let mut candidates = SizedHeap::<usize, Reverse<(T, T, T)>>::new(None); // (cluster_id, Reverse((d_min, d_max, d)))
         let mut hits = SizedHeap::<usize, T>::new(Some(self.0));
 
