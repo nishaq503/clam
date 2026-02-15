@@ -2,7 +2,7 @@
 
 use crate::{
     DistanceValue, Tree,
-    cakes::{KnnBfs, KnnDfs, KnnRrnn, RnnChess, approximate::KnnDfs as ApproxKnnDfs},
+    cakes::{Cakes, ParSearch, RnnChess, Search},
 };
 
 use super::{Codec, MaybeCompressed};
@@ -13,35 +13,8 @@ mod exact;
 
 pub(crate) use exact::{leaf_into_hits, par_leaf_into_hits, par_pop_till_leaf, pop_till_leaf};
 
-/// `PanCakes` algorithms.
-pub enum PanCakes<T: DistanceValue> {
-    /// K-Nearest Neighbors Breadth-First Sieve.
-    KnnBfs(KnnBfs),
-    /// K-Nearest Neighbors Depth-First Sieve.
-    KnnDfs(KnnDfs),
-    /// K-Nearest Neighbors Repeated RNN.
-    KnnRrnn(KnnRrnn),
-    /// Ranged Nearest Neighbors Chess Search.
-    RnnChess(RnnChess<T>),
-    /// Approximate K-Nearest Neighbors Depth-First Sieve.
-    ApproxKnnDfs(ApproxKnnDfs),
-}
-
-impl<T: DistanceValue> PanCakes<T> {
-    /// Returns the name of the algorithm.
-    pub fn name(&self) -> String {
-        match self {
-            Self::KnnBfs(KnnBfs(k)) => format!("KnnBfs(k={k})"),
-            Self::KnnDfs(KnnDfs(k)) => format!("KnnDfs(k={k})"),
-            Self::KnnRrnn(KnnRrnn(k)) => format!("KnnRrnn(k={k})"),
-            Self::RnnChess(RnnChess(r)) => format!("RnnChess(r={r})"),
-            Self::ApproxKnnDfs(alg) => format!("{alg}"),
-        }
-    }
-}
-
 /// A Nearest Neighbor Search algorithm in compressed space, decompressing items as needed.
-pub trait CompressiveSearch<Id, I, T, A, M>
+pub trait CompressiveSearch<Id, I, T, A, M>: Search<Id, I, T, A, M>
 where
     I: Codec,
     T: DistanceValue,
@@ -56,7 +29,7 @@ where
 }
 
 /// Parallel version of [`CompressiveSearch`].
-pub trait ParCompressiveSearch<Id, I, T, A, M>: CompressiveSearch<Id, I, T, A, M> + Send + Sync
+pub trait ParCompressiveSearch<Id, I, T, A, M>: CompressiveSearch<Id, I, T, A, M> + ParSearch<Id, I, T, A, M>
 where
     Id: Send + Sync,
     I: Codec + Send + Sync,
@@ -73,7 +46,7 @@ where
     fn par_compressive_search(&self, tree: &mut Tree<Id, MaybeCompressed<I>, T, A, M>, query: &I) -> Result<Vec<(usize, T)>, String>;
 }
 
-impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for PanCakes<T>
+impl<Id, I, T, A, M> CompressiveSearch<Id, I, T, A, M> for Cakes<T>
 where
     I: Codec,
     T: DistanceValue,
@@ -83,14 +56,16 @@ where
         match self {
             Self::KnnBfs(alg) => alg.compressive_search(tree, query),
             Self::KnnDfs(alg) => alg.compressive_search(tree, query),
+            Self::KnnLinear(alg) => alg.compressive_search(tree, query),
             Self::KnnRrnn(alg) => alg.compressive_search(tree, query),
             Self::RnnChess(alg) => alg.compressive_search(tree, query),
+            Self::RnnLinear(alg) => alg.compressive_search(tree, query),
             Self::ApproxKnnDfs(alg) => alg.compressive_search(tree, query),
         }
     }
 }
 
-impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for PanCakes<T>
+impl<Id, I, T, A, M> ParCompressiveSearch<Id, I, T, A, M> for Cakes<T>
 where
     Id: Send + Sync,
     I: Codec + Send + Sync,
@@ -103,8 +78,10 @@ where
         match self {
             Self::KnnBfs(alg) => alg.par_compressive_search(tree, query),
             Self::KnnDfs(alg) => alg.par_compressive_search(tree, query),
+            Self::KnnLinear(alg) => alg.par_compressive_search(tree, query),
             Self::KnnRrnn(alg) => alg.par_compressive_search(tree, query),
             Self::RnnChess(alg) => alg.par_compressive_search(tree, query),
+            Self::RnnLinear(alg) => alg.par_compressive_search(tree, query),
             Self::ApproxKnnDfs(alg) => alg.par_compressive_search(tree, query),
         }
     }
