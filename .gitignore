@@ -10,7 +10,7 @@ logs
 .vscode/settings.json
 .ruff_cache
 *.svg
-*.png
+# *.png
 # uv.lock
 */**/msa_benchmarks.py
 dhat-heap.json

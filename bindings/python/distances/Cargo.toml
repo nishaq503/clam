@@ -17,4 +17,4 @@ crate-type = ["cdylib"]
 distances = { workspace = true }
 ndarray = { workspace = true, features = ["rayon"] }
 numpy = { workspace = true }
-pyo3 = { workspace = true, features = ["abi3"] }
+pyo3 = { workspace = true }

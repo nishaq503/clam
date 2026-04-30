@@ -85,13 +85,13 @@ To reproduce benchmarks, clone the repo and run the following:
 ```shell
 cargo build --release --workspace
 uv sync --all-packages
-uv run richbench --markdown pypi/distances/benches
+uv run richbench --markdown bindings/python/distances/benches
 ```
 
 To reproduce the plots,
 
 ```shell
-cd pypi/distances
+cd bindings/python/distances
 python -m plots
 ```
 
@@ -133,7 +133,6 @@ All individual distances were computed for 20x20 vectors of 500 dimensions, and 
 |        sqeuclidean | 0.275   | 0.295   | 0.286   | 0.049 (5.6x)    | 0.052 (5.7x)    | 0.050 (5.8x)    |
 |             cosine | 0.559   | 0.571   | 0.565   | 0.059 (9.5x)    | 0.062 (9.2x)    | 0.060 (9.4x)    |
 
-
 <table>
 <tr>
 <th> f32 </th>
@@ -142,16 +141,16 @@ All individual distances were computed for 20x20 vectors of 500 dimensions, and 
 <tr>
 <td>
 
-![Euclidean f32](images/SIMD-Euclidean_f32.png)
-![Squared Euclidean f32](images/SIMD-Squared-Euclidean_f32.png)
-![Cosine f32](images/SIMD-Cosine_f32.png)
+![Euclidean f32](./images/SIMD-Euclidean_f32.png)
+![Squared Euclidean f32](./images/SIMD-Squared-Euclidean_f32.png)
+![Cosine f32](./images/SIMD-Cosine_f32.png)
 
 </td>
 <td>
 
-![Euclidean f64](images/SIMD-Euclidean_f64.png)
-![Squared Euclidean f64](images/SIMD-Squared-Euclidean_f64.png)
-![Cosine f64](images/SIMD-Cosine_f64.png)
+![Euclidean f64](./images/SIMD-Euclidean_f64.png)
+![Squared Euclidean f64](./images/SIMD-Squared-Euclidean_f64.png)
+![Cosine f64](./images/SIMD-Cosine_f64.png)
 
 </td>
 </tr>
@@ -221,7 +220,6 @@ These benchmarks were run using the `richbench` package.
 |   pdist, cityblock | 1.000   | 1.011   | 1.006   | 0.623 (1.6x)    | 0.718 (1.4x)    | 0.654 (1.5x)    |
 |      pdist, cosine | 0.762   | 0.771   | 0.765   | 1.898 (-2.5x)   | 1.969 (-2.6x)   | 1.938 (-2.5x)   |
 
-
 <table>
 <tr>
 <th> F32 </th>
@@ -230,22 +228,22 @@ These benchmarks were run using the `richbench` package.
 <tr>
 <td>
 
-![Chebyshev f32](images/Chebyshev_f32.png)
-![Euclidean f32](images/Euclidean_f32.png)
-![Squared Euclidean f32](images/Squared-Euclidean_f32.png)
-![Manhattan f32](images/Manhattan_f32.png)
-![Canberra f32](images/Canberra_f32.png)
-![Cosine f32](images/Cosine_f32.png)
+![Chebyshev f32](./images/Chebyshev_f32.png)
+![Euclidean f32](./images/Euclidean_f32.png)
+![Squared Euclidean f32](./images/Squared-Euclidean_f32.png)
+![Manhattan f32](./images/Manhattan_f32.png)
+![Canberra f32](./images/Canberra_f32.png)
+![Cosine f32](./images/Cosine_f32.png)
 
 </td>
 <td>
 
-![Chebyshev f64](images/Chebyshev_f64.png)
-![Euclidean f64](images/Euclidean_f64.png)
-![Squared Euclidean f64](images/Squared-Euclidean_f64.png)
-![Manhattan f64](images/Manhattan_f64.png)
-![Canberra f64](images/Canberra_f64.png)
-![Cosine f64](images/Cosine_f64.png)
+![Chebyshev f64](./images/Chebyshev_f64.png)
+![Euclidean f64](./images/Euclidean_f64.png)
+![Squared Euclidean f64](./images/Squared-Euclidean_f64.png)
+![Manhattan f64](./images/Manhattan_f64.png)
+![Canberra f64](./images/Canberra_f64.png)
+![Cosine f64](./images/Cosine_f64.png)
 
 </td>
 </tr>
@@ -259,12 +257,12 @@ These benchmarks were run using the `richbench` package.
 <tr>
 <td>
 
-![Bray-Curtis u32](images/Bray-Curtis_u32.png)
+![Bray-Curtis u32](./images/Bray-Curtis_u32.png)
 
 </td>
 <td>
 
-![Bray-Curtis u64](images/Bray-Curtis_u64.png)
+![Bray-Curtis u64](./images/Bray-Curtis_u64.png)
 
 </td>
 </tr>
@@ -282,9 +280,9 @@ All string distances were computed 100 times each, among different pairs of stri
 <tr>
 <td>
 
-![Hamming](images/Hamming_str.png)
-![Levenshtein](images/Levenshtein_str.png)
-![Needleman-Wunsch](images/Needleman-Wunsch_str.png)
+![Hamming](./images/Hamming_str.png)
+![Levenshtein](./images/Levenshtein_str.png)
+![Needleman-Wunsch](./images/Needleman-Wunsch_str.png)
 
 </td>
 </tr>

@@ -260,6 +260,7 @@ clam-shell musals align --help
 The `align` subcommand has the following additional parameters:
 
 - `-c, --cost-matrix <COST_MATRIX>`: The cost matrix to use for multiple sequence alignment.
+- `--write-fasta`: Whether to also write a FASTA file of the aligned sequences. If not provided, will default to false.
 
 Here is an example command to perform multiple sequence alignment on the previously built tree from the Pfam dataset using the `affine` cost matrix:
 
@@ -271,7 +272,8 @@ clam-shell \
     --log-name musals_align_pfam_10k \
     musals \
     align \
-    --cost-matrix affine
+    --cost-matrix affine \
+    --write-fasta
 ```
 
 #### Evaluate

@@ -12,7 +12,7 @@ mod utils;
 use commands::Commands;
 
 /// The arguments for the CLAM Shell.
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, serde::Serialize, serde::Deserialize)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// The path to the input file or directory, depending on the subcommand used.
@@ -38,8 +38,6 @@ struct Args {
 
 /// The main function for the CLAM Shell.
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("Welcome to the CLAM Shell!");
-
     let args = Args::parse();
     println!("Parsed arguments: {args:?}");
 

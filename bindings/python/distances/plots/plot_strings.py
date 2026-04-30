@@ -7,6 +7,7 @@ import typing
 
 import abd_distances.strings as string_distances
 import editdistance
+import Levenshtein as rapidfuzz_levenshtein
 import tqdm
 
 from . import utils
@@ -18,7 +19,8 @@ Functions = tuple[
 
 FUNCTIONS: dict[str, Functions] = {
     "Hamming": (string_distances.hamming, (None, None)),
-    "Levenshtein": (string_distances.levenshtein, ("roy-ht", editdistance.eval)),
+    "Levenshtein-RoyHt": (string_distances.levenshtein, ("roy-ht", editdistance.eval)),
+    "Levenshtein-RapidFuzz": (string_distances.levenshtein, ("rapidfuzz", rapidfuzz_levenshtein.distance)),
     "Needleman-Wunsch": (string_distances.needleman_wunsch, (None, None)),
 }
 

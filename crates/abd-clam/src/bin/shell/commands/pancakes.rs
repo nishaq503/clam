@@ -3,7 +3,7 @@
 use clap::Subcommand;
 
 /// Compress a pre-built tree, and search compressed trees.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Action {
     /// Compress a pre-built tree.
     Compress {

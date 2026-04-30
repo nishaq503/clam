@@ -3,7 +3,7 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "pypi/distances",
+    "bindings/python/distances",
 ]
 resolver = "2"
 
@@ -52,25 +52,24 @@ num-integer = "0.1"
 rust-blas = "0.2"
 clap = "4.5"
 ftlog = "0.2"
-numpy = "0.26"
-pyo3 = "0.26"
+numpy = "0.28"
+pyo3 = "0.28"
 num = "0.4"
-bio = "3.0"
+seq_io = "0.3"
 lazy-regex = "3.6.0"
 serde-jsonlines = "0.7.0"
 serde_json = "1.0"
 yaml_serde = "0.10"
-ndarray = "0.16"
-ndarray-npy = "0.9"
+ndarray = "0.17"
+ndarray-npy = "0.10"
 tqdm = "0.8.0"
 deepsize = "0.2.0"
-
-# Dev dependencies.
 test-case = "3.2.1"
 criterion = "0.8"
 stringzilla = "4.2"
 float_eq = "1.0"
 ordered-float = "5.1"
+rapidfuzz = "0.5.0"
 
 [profile.test]
 opt-level = 3

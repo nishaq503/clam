@@ -16,7 +16,7 @@ mod musals;
 mod pancakes;
 
 /// The top-level commands for the CLAM shell.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum Commands {
     /// Build a CLAM tree from a dataset.

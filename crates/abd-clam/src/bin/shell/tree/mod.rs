@@ -18,7 +18,7 @@ pub mod euclidean;
 pub mod levenshtein;
 
 /// The available metrics for the Shell CLI.
-#[derive(clap::ValueEnum, Debug, Clone)]
+#[derive(clap::ValueEnum, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum ShellMetric {
     /// The Levenshtein edit distance between two strings.

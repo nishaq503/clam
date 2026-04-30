@@ -6,11 +6,7 @@ authors = [
     { name = "Najib Ishaq", email = "najib_ishaq@zoho.com" },
     { name = "Tom Howard", email = "info@tomhoward.codes" },
 ]
-dependencies = [
-    "faiss-cpu>=1.12.0",
-    "ipykernel>=6.30.1",
-    "pydantic>=2.12.5",
-]
+dependencies = []
 readme = "README.md"
 requires-python = ">= 3.13"
 
@@ -19,26 +15,13 @@ managed = true
 package = false
 
 [dependency-groups]
-dev = [
-    "pre-commit>=4.2.0",
-    "pytest>=8.2.2",
-    "pytest-xdist>=3.6.1",
-    "pytest-sugar>=1.0.0",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.11.8",
-    "mypy>=1.15.0",
-    "pip>=25.1.1",
-]
+dev = ["pre-commit>=4.6.0", "pytest>=9.0.3"]
 
 [tool.uv.workspace]
-members = [
-    "pypi/distances",
-]
+members = ["bindings/python/distances"]
 
 [tool.uv.sources]
 abd-distances = { workspace = true }
-py-mbed = { workspace = true }
-paper-cakes = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

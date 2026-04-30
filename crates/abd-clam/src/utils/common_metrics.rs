@@ -81,14 +81,16 @@ where
 /// The levenshtein edit distance between two strings.
 #[cfg(feature = "musals")]
 pub fn levenshtein_strings<S: AsRef<str>>(a: S, b: S) -> usize {
-    levenshtein_chars(a.as_ref().chars(), b.as_ref().chars())
+    rapidfuzz::distance::levenshtein::distance(a.as_ref().chars(), b.as_ref().chars())
 }
 
 /// The levenshtein edit distance between two aligned sequences.
 #[cfg(feature = "musals")]
 #[must_use]
 pub fn levenshtein_aligned(a: &crate::musals::AlignedSequence, b: &crate::musals::AlignedSequence) -> usize {
-    levenshtein_chars(a.iter(), b.iter())
+    let a = a.to_string();
+    let b = b.to_string();
+    rapidfuzz::distance::levenshtein::distance(a.chars(), b.chars())
 }
 
 /// The levenshtein edit distance between two iterators over `char`s.
