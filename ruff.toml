@@ -2,12 +2,12 @@ target-version = "py313" # Assume Python 3.13.
 line-length = 160
 
 [lint]
-select = [ "ALL" ]
+select = ["ALL"]
 ignore = [
-  "G004",  # f-string used in logging function call.
+  "G004",   # f-string used in logging function call.
   "ICN001", # Alias `numpy` import as `np`.
-  "EM101", # string literal in exception.
-  "EM102", # f-string in exception.
+  "EM101",  # string literal in exception.
+  "EM102",  # f-string in exception.
   "TRY003", # Long messages outside exception class.
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
@@ -23,18 +23,15 @@ force-single-line = true
 convention = "google"
 
 [lint.per-file-ignores]
-"pypi/**/*.pyi" = [
-  "PYI021", # Doc-strings in stub files.
-]
-"pypi/**/tests/**" = [
-  "S101", # Use of `assert`.
+"bindings/python/**/tests/**" = [
+  "S101",    # Use of `assert`.
   "PLR2004", # Magic number used in tests.
 ]
 "**/notebooks/*.ipynb" = [ # Ignore more lints in Jupyter notebooks.
-  "B905", # use of `zip()` without `strict=`
-  "C408", # Unnecessary `dict()` call
-  "S101", # Use of `assert`.
+  "B905",    # use of `zip()` without `strict=`
+  "C408",    # Unnecessary `dict()` call
+  "S101",    # Use of `assert`.
   "PLR2004", # Magic number used in tests.
-  "FBT001", # boolean-typed positional argument in function definition
-  "FBT003", # boolean-typed positional value in function call
+  "FBT001",  # boolean-typed positional argument in function definition
+  "FBT003",  # boolean-typed positional value in function call
 ]

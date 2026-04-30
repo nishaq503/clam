@@ -15,3 +15,9 @@ fn abd_distances(m: &Bound<'_, PyModule>) -> PyResult<()> {
     vectors::register(m)?;
     Ok(())
 }
+
+/*
+Might need to export a library path for the package to work on MacOS:
+
+export DYLD_LIBRARY_PATH=/opt/homebrew/Cellar/gcc/15.2.0_1/lib/gcc/current:$DYLD_LIBRARY_PATH
+*/

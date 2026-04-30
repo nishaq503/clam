@@ -5,31 +5,15 @@ use std::convert::Infallible;
 use distances::{Number, vectors};
 use ndarray::{Array1, Array2, parallel::prelude::*};
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, ndarray::Axis};
-use pyo3::{
-    exceptions::{PyTypeError, PyValueError},
-    prelude::*,
-    types::PyFloat,
-};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyFloat};
 
 /// The types of scalar data we support.
+#[derive(FromPyObject)]
 pub enum Scalar {
     /// The data is a single f32 value.
     F32(f32),
     /// The data is a single f64 value.
     F64(f64),
-}
-
-impl<'a> FromPyObject<'a> for Scalar {
-    #[expect(clippy::option_if_let_else)] // It's just cleaner this way.
-    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
-        if let Ok(a) = ob.extract::<f32>() {
-            Ok(Self::F32(a))
-        } else if let Ok(a) = ob.extract::<f64>() {
-            Ok(Self::F64(a))
-        } else {
-            Err(PyTypeError::new_err("Invalid type"))
-        }
-    }
 }
 
 impl<'py> IntoPyObject<'py> for Scalar {
@@ -48,6 +32,7 @@ impl<'py> IntoPyObject<'py> for Scalar {
 }
 
 /// The types of 1D data we support.
+#[derive(FromPyObject)]
 pub enum Vector1<'py> {
     /// The data is a 1D array of f32.
     F32(PyReadonlyArray1<'py, f32>),
@@ -89,36 +74,8 @@ impl Vector1<'_> {
     }
 }
 
-impl<'a> FromPyObject<'a> for Vector1<'a> {
-    #[expect(clippy::option_if_let_else)] // It's just cleaner this way.
-    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
-        if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f32>>() {
-            Ok(Vector1::F32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, f64>>() {
-            Ok(Vector1::F64(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u8>>() {
-            Ok(Vector1::U8(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u16>>() {
-            Ok(Vector1::U16(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u32>>() {
-            Ok(Vector1::U32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, u64>>() {
-            Ok(Vector1::U64(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i8>>() {
-            Ok(Vector1::I8(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i16>>() {
-            Ok(Vector1::I16(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i32>>() {
-            Ok(Vector1::I32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray1<'_, i64>>() {
-            Ok(Vector1::I64(a))
-        } else {
-            Err(PyTypeError::new_err("Invalid type"))
-        }
-    }
-}
-
 /// The types of 2D data we support.
+#[derive(FromPyObject)]
 pub enum Vector2<'py> {
     /// The data is a 2D array of f32.
     F32(PyReadonlyArray2<'py, f32>),
@@ -156,35 +113,6 @@ impl Vector2<'_> {
             Vector2::I16(a) => a.as_array().mapv(T::from),
             Vector2::I32(a) => a.as_array().mapv(T::from),
             Vector2::I64(a) => a.as_array().mapv(T::from),
-        }
-    }
-}
-
-impl<'a> FromPyObject<'a> for Vector2<'a> {
-    #[expect(clippy::option_if_let_else)] // It's just cleaner this way.
-    fn extract_bound(ob: &Bound<'a, PyAny>) -> PyResult<Self> {
-        if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f32>>() {
-            Ok(Vector2::F32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, f64>>() {
-            Ok(Vector2::F64(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u8>>() {
-            Ok(Vector2::U8(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u16>>() {
-            Ok(Vector2::U16(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u32>>() {
-            Ok(Vector2::U32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, u64>>() {
-            Ok(Vector2::U64(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i8>>() {
-            Ok(Vector2::I8(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i16>>() {
-            Ok(Vector2::I16(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i32>>() {
-            Ok(Vector2::I32(a))
-        } else if let Ok(a) = ob.extract::<PyReadonlyArray2<'_, i64>>() {
-            Ok(Vector2::I64(a))
-        } else {
-            Err(PyTypeError::new_err("Invalid type"))
         }
     }
 }

@@ -3,7 +3,7 @@ members = [
     "crates/abd-clam",
     "crates/distances",
     "crates/symagen",
-    "pypi/distances",
+    "bindings/python/distances",
 ]
 resolver = "2"
 
@@ -52,8 +52,8 @@ num-integer = "0.1"
 rust-blas = "0.2"
 clap = "4.5"
 ftlog = "0.2"
-numpy = "0.26"
-pyo3 = "0.26"
+numpy = "0.28"
+pyo3 = "0.28"
 num = "0.4"
 bio = "3.0"
 lazy-regex = "3.6.0"
