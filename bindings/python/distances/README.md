@@ -85,13 +85,13 @@ To reproduce benchmarks, clone the repo and run the following:
 ```shell
 cargo build --release --workspace
 uv sync --all-packages
-uv run richbench --markdown pypi/distances/benches
+uv run richbench --markdown bindings/python/distances/benches
 ```
 
 To reproduce the plots,
 
 ```shell
-cd pypi/distances
+cd bindings/python/distances
 python -m plots
 ```
 
@@ -132,7 +132,6 @@ All individual distances were computed for 20x20 vectors of 500 dimensions, and 
 |          euclidean | 0.379   | 0.424   | 0.403   | 0.050 (7.6x)    | 0.053 (7.9x)    | 0.052 (7.8x)    |
 |        sqeuclidean | 0.275   | 0.295   | 0.286   | 0.049 (5.6x)    | 0.052 (5.7x)    | 0.050 (5.8x)    |
 |             cosine | 0.559   | 0.571   | 0.565   | 0.059 (9.5x)    | 0.062 (9.2x)    | 0.060 (9.4x)    |
-
 
 <table>
 <tr>
@@ -220,7 +219,6 @@ These benchmarks were run using the `richbench` package.
 | pdist, sqeuclidean | 0.971   | 1.000   | 0.985   | 0.669 (1.5x)    | 0.741 (1.3x)    | 0.690 (1.4x)    |
 |   pdist, cityblock | 1.000   | 1.011   | 1.006   | 0.623 (1.6x)    | 0.718 (1.4x)    | 0.654 (1.5x)    |
 |      pdist, cosine | 0.762   | 0.771   | 0.765   | 1.898 (-2.5x)   | 1.969 (-2.6x)   | 1.938 (-2.5x)   |
-
 
 <table>
 <tr>
