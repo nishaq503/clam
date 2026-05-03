@@ -39,6 +39,7 @@ shell = [
     "dep:serde_json",
     "dep:yaml_serde",
     "dep:bio",
+    "dep:rapidfuzz",
 ]
 profile = ["profi/enable"]
 
@@ -67,6 +68,7 @@ bio = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
 tqdm = { workspace = true }
 deepsize = { workspace = true, features = ["derive"], optional = true }
+rapidfuzz = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-case = { workspace = true }

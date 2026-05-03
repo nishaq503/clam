@@ -32,6 +32,7 @@ symagen = { workspace = true }
 criterion = { workspace = true, features = ["html_reports"] }
 test-case = { workspace = true }
 stringzilla = { workspace = true, features = ["cpus"] }
+rapidfuzz = { workspace = true }
 
 [[bench]]
 name = "big-lp"

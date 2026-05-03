@@ -9,6 +9,7 @@ ignore = [
   "EM101",  # string literal in exception.
   "EM102",  # f-string in exception.
   "TRY003", # Long messages outside exception class.
+  "N813",   # CamelCase imported as lowercase.
 ]
 unfixable = ["B"] # Avoid trying to fix flake8-bugbear violations.
 

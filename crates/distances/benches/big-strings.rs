@@ -17,6 +17,8 @@ fn big_levenshtein(c: &mut Criterion) {
     }
     let sz_lev = sz_lev_builder();
 
+    let rf_lev = |x: &str, y: &str| rapidfuzz::distance::levenshtein::distance(x.chars(), y.chars()) as u16;
+
     let mut group = c.benchmark_group("Levenshtein");
     for d in 2..=4 {
         let len = 10_usize.pow(d);
@@ -29,6 +31,9 @@ fn big_levenshtein(c: &mut Criterion) {
 
         let id = BenchmarkId::new("StringZilla", len);
         group.bench_with_input(id, &len, |b, _| b.iter(|| black_box(sz_lev(x, y))));
+
+        let id = BenchmarkId::new("RapidFuzz", len);
+        group.bench_with_input(id, &len, |b, _| b.iter(|| black_box(rf_lev(x, y))));
     }
     group.finish();
 }

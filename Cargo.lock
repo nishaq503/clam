@@ -18,6 +18,7 @@ dependencies = [
  "num-traits",
  "profi",
  "rand 0.10.0",
+ "rapidfuzz",
  "rayon",
  "serde",
  "serde_json",
@@ -722,6 +723,7 @@ dependencies = [
  "libm",
  "num-integer",
  "rand 0.10.0",
+ "rapidfuzz",
  "rust-blas",
  "serde",
  "stringzilla",
@@ -1710,6 +1712,12 @@ dependencies = [
  "num-traits",
  "rand 0.8.5",
 ]
+
+[[package]]
+name = "rapidfuzz"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "270e04e5ea61d40841942bb15e451c29ee1618637bcf97fc7ede5dd4a9b1601b"
 
 [[package]]
 name = "rawpointer"
