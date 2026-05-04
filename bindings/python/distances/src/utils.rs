@@ -146,7 +146,7 @@ pub fn manhattan_generic<T: Number, U: Number>(a: &[T], b: &[T]) -> U {
 
 /// Computes the pairwise distances between rows of two 2D arrays using a
 /// generic metric function, returning a 2D array of distances.
-#[expect(clippy::expect_used)]
+#[expect(clippy::expect_used, clippy::needless_pass_by_value)]
 pub fn cdist_generic<'py, T, U, F>(py: Python<'py>, a: ndarray::ArrayView2<T>, b: ndarray::ArrayView2<T>, metric: F) -> Bound<'py, PyArray2<U>>
 where
     T: Number + numpy::Element,
@@ -173,7 +173,7 @@ where
 /// Computes the pairwise distances between rows of a 2D array using a generic
 /// metric function, returning a flattened 1D array of distances from the lower
 /// triangular part of the distance matrix.
-#[expect(clippy::expect_used)]
+#[expect(clippy::expect_used, clippy::needless_pass_by_value)]
 pub fn pdist_generic<'py, T, U, F>(py: Python<'py>, a: ndarray::ArrayView2<T>, metric: F) -> Bound<'py, PyArray1<U>>
 where
     T: Number + numpy::Element,

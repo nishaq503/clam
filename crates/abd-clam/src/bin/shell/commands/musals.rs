@@ -19,6 +19,9 @@ pub enum Action {
         /// The cost matrix to use for the alignment. If not provided, will use the `Simple` cost matrix.
         #[arg(short('c'), long)]
         cost_matrix: Option<ShellCostMatrix>,
+        /// Whether to also write a fasta file of the aligned sequences. If not provided, will default to false.
+        #[arg(long, default_value_t = false)]
+        write_fasta: bool,
     },
     /// Evaluate the quality of an MSA using the given quality metrics.
     Evaluate {
@@ -73,7 +76,7 @@ impl Action {
         rng: &mut R,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match self {
-            Self::Align { cost_matrix } => {
+            Self::Align { cost_matrix, write_fasta } => {
                 let cost_matrix = cost_matrix.unwrap_or_default();
                 ftlog::info!("Using cost matrix: {cost_matrix}");
                 let cost_matrix_name = format!("{cost_matrix}");
@@ -95,10 +98,22 @@ impl Action {
 
                 ftlog::info!("Aligning tree using Musals...");
                 let cost_matrix = cost_matrix.to_musals_cost_matrix();
-                let metric = common_metrics::levenshtein_aligned;
-                let tree = ShellTree::Levenshtein(LevenshteinTree::Aligned(tree.par_align(cost_matrix, metric)));
+                let metric: fn(&_, &_) -> usize = common_metrics::levenshtein_aligned;
+                let aligned_tree = tree.par_align(cost_matrix, metric);
+
+                if *write_fasta {
+                    let fasta_out_path = out_path.with_extension("fasta");
+                    if fasta_out_path.exists() {
+                        ftlog::warn!("Output aligned fasta file already exists: {fasta_out_path:?}. It will be overwritten.");
+                    }
+                    ftlog::info!("Writing aligned sequences to {fasta_out_path:?}...");
+                    let sequence_pairs = aligned_tree.iter_items().map(|(id, seq, _)| (id.clone(), seq.to_string()));
+
+                    super::super::tree::data::fasta::write(&fasta_out_path, sequence_pairs)?;
+                }
 
                 ftlog::info!("Writing aligned tree to {out_path:?}...");
+                let tree = ShellTree::Levenshtein(LevenshteinTree::Aligned(aligned_tree));
                 tree.write(&out_path)
             }
             Self::Evaluate {

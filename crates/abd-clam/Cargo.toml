@@ -38,7 +38,7 @@ shell = [
     "dep:ndarray-npy",
     "dep:serde_json",
     "dep:yaml_serde",
-    "dep:bio",
+    "dep:seq_io",
     "dep:rapidfuzz",
 ]
 profile = ["profi/enable"]
@@ -64,7 +64,7 @@ ndarray = { workspace = true, optional = true }
 ndarray-npy = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 yaml_serde = { workspace = true, optional = true }
-bio = { workspace = true, optional = true }
+seq_io = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
 tqdm = { workspace = true }
 deepsize = { workspace = true, features = ["derive"], optional = true }
