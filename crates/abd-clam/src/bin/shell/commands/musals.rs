@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// The specific action to perform with Musals.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum Action {
     /// Create an MSA using the given cost matrix.
@@ -38,7 +38,7 @@ pub enum Action {
 }
 
 /// The different cost matrices available for use in the Align action.
-#[derive(Debug, Clone, Copy, clap::ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum, Default, serde::Serialize, serde::Deserialize)]
 pub enum ShellCostMatrix {
     /// A simple cost matrix for nucleotide and protein sequences, where matches have a cost of 0, mismatches have a cost of 1, and gaps have a cost of 1.
     #[clap(name = "simple")]

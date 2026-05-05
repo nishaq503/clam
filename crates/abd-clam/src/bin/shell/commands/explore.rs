@@ -3,5 +3,5 @@
 use clap::Subcommand;
 
 /// Explore various properties of datasets and algorithms
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Action {}

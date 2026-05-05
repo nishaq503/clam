@@ -8,7 +8,7 @@ use clap::Subcommand;
 use crate::{tree::ShellTree, utils::ReportFormat};
 
 /// The specific action to perform with CAKES.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum Action {
     /// Perform a search using the provided CAKES algorithm.

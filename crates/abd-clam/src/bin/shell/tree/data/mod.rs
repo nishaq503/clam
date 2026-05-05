@@ -6,7 +6,7 @@ pub mod fasta;
 pub mod npy;
 
 /// Supported types of datasets in the CLAM Shell.
-#[derive(clap::ValueEnum, Debug, Clone)]
+#[derive(clap::ValueEnum, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum ShellDataType {
     /// `String` data for sequence datasets, read from a `fasta` file.
