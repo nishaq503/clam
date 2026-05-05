@@ -38,8 +38,6 @@ struct Args {
 
 /// The main function for the CLAM Shell.
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("Welcome to the CLAM Shell!");
-
     let args = Args::parse();
     println!("Parsed arguments: {args:?}");
 

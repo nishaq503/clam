@@ -157,7 +157,10 @@ impl Action {
                     .collect::<Vec<_>>();
 
                 ftlog::info!("Writing alignment quality report to {out_path:?}...");
-                out_fmt.write_report(&measurements, &out_path, true)
+                out_fmt.write_report(&measurements, &out_path, true)?;
+
+                println!("Wrote alignment quality report to {out_path:?}");
+                Ok(())
             }
         }
     }
