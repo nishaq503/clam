@@ -2,7 +2,7 @@
 
 # This script performs multiple sequence alignment using the CLAM Shell tool on the Pfam dataset.
 
-# Usage: musals-pfam.sh <DATA_DIR> <DATA_SIZE> <SEED> <COST_MATRIX> <NUM_SAMPLES>
+# Usage: musals-pfam.sh <DATA_DIR> <DATA_SIZE> <SEED> <COST_MATRIX> <NUM_SAMPLES> <WRITE_FASTA>
 #
 # Required arguments:
 #   DATA_DIR        Path to directory containing input FASTA files
@@ -10,9 +10,10 @@
 #   SEED            Random seed for reproducibility
 #   COST_MATRIX     Cost matrix type for alignment (e.g., affine, blosum62)
 #   NUM_SAMPLES     Number of samples for evaluation
+#   WRITE_FASTA     Boolean flag to write output to FASTA file (true/false)
 #
 # Example usage:
-#   ./scripts/musals-pfam.sh ../data/string-data/pfam-a 10k 42 affine 100
+#   ./scripts/musals-pfam.sh ../data/string-data/pfam-a 10k 42 affine 100 true
 
 # Set up arguments from command line
 DATA_DIR="${1:?DATA_DIR is required}"
@@ -20,6 +21,7 @@ DATA_SIZE="${2:?DATA_SIZE is required}"
 SEED="${3:?SEED is required}"
 COST_MATRIX="${4:?COST_MATRIX is required}"
 NUM_SAMPLES="${5:?NUM_SAMPLES is required}"
+WRITE_FASTA="${6:?WRITE_FASTA is required}"
 
 # Derive other variables from the arguments
 LOG_SUFFIX="pfam_${DATA_SIZE}"
@@ -55,7 +57,7 @@ clam-shell \
     musals \
     align \
     --cost-matrix "${COST_MATRIX}" \
-    --write-fasta
+    $( [ "${WRITE_FASTA}" = "true" ] && echo "--write-fasta" )
 echo "Sequences aligned successfully."
 
 # Evaluate the alignment
