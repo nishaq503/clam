@@ -2,7 +2,7 @@
 
 use rayon::prelude::*;
 
-use crate::{DistanceValue, NamedAlgorithm, Tree};
+use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
 use super::{AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
 
@@ -17,8 +17,8 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for StationaryProbabilities
 where
     T: DistanceValue,
 {
-    fn raw_anomaly_scores(&self, graph: &Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let mut scores = graph
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+        Ok(graph
             .iter_components()
             .flat_map(|c| {
                 let (mut matrix, nodes) = c.transition_probability_matrix();
@@ -32,15 +32,14 @@ where
                 // Sum up the rows of the matrix to get the stationary probability for each node.
                 let row_sums = matrix.outer_iter().map(|row| row.sum()).collect::<Vec<_>>();
 
-                // Join the nodes with their stationary probabilities and convert to anomaly scores.
-                nodes.into_iter().zip(row_sums).flat_map(|(node, stationary_prob)| {
-                    // A node is less anomalous if it has a higher stationary probability, thus the negative sign.
-                    node.iter_items().map(move |i| (i, -stationary_prob))
-                })
+                // Join the nodes with their stationary probabilities and sort by stationary probability.
+                let mut scores = nodes.into_iter().zip(row_sums).collect::<Vec<_>>();
+                scores.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+                // Convert the sorted scores into ranks.
+                scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>();
-        scores.sort_by_key(|(i, _)| *i);
-        Ok(scores.into_iter().map(|(_, score)| score).collect())
+            .collect::<Vec<_>>())
     }
 }
 
@@ -52,8 +51,8 @@ where
     A: Send + Sync,
     M: Send + Sync,
 {
-    fn par_raw_anomaly_scores(&self, graph: &Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let mut scores = graph
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+        Ok(graph
             .par_iter_components()
             .flat_map(|c| {
                 let (mut matrix, nodes) = c.transition_probability_matrix();
@@ -67,15 +66,13 @@ where
                 // Sum up the rows of the matrix to get the stationary probability for each node.
                 let row_sums = matrix.outer_iter().map(|row| row.sum()).collect::<Vec<_>>();
 
-                // Join the nodes with their stationary probabilities and convert to anomaly scores.
-                nodes.into_par_iter().zip(row_sums).flat_map(|(node, stationary_prob)| {
-                    // A node is less anomalous if it has a higher stationary probability, thus the negative sign.
-                    node.par_iter_items().map(move |i| (i, -stationary_prob))
-                })
-            })
-            .collect::<Vec<_>>();
+                // Join the nodes with their stationary probabilities and sort by stationary probability.
+                let mut scores = nodes.into_iter().zip(row_sums).collect::<Vec<_>>();
+                scores.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-        scores.sort_by_key(|(i, _)| *i);
-        Ok(scores.into_iter().map(|(_, score)| score).collect())
+                // Convert the sorted scores into ranks.
+                scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>())
     }
 }

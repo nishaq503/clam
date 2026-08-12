@@ -90,9 +90,11 @@ pub fn gen_training_sample_single<I, T, A, M>(
 where
     T: DistanceValue,
 {
+    let ranks_pred = algorithm.rank_items(graph, tree)?;
+    let y_pred = ChaodaAlgorithm::anomaly_scores(&ranks_pred);
+
     let y_true = tree.items.iter().map(|(a, _, _)| *a);
-    algorithm
-        .anomaly_scores(graph, tree)
-        .and_then(|y_pred| roc_auc_score(y_true, &y_pred))
-        .map(|score| (graph.mean_anomaly_features(tree), score))
+    let auc = roc_auc_score(y_true, &y_pred)?;
+
+    Ok((graph.mean_anomaly_features(tree), auc))
 }

@@ -19,18 +19,14 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for RelativeComponentCardina
 where
     T: DistanceValue,
 {
-    #[expect(clippy::cast_precision_loss)]
-    fn raw_anomaly_scores(&self, graph: &Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let mut scores = graph
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+        Ok(graph
             .iter_components()
             .flat_map(|c| {
-                // The more items in the component, the less anomalous its nodes are, thus the negative sign.
-                let score = -(c.iter_nodes().map(Node::num_items).sum::<usize>() as f64);
-                c.iter_nodes().flat_map(move |n| n.iter_items().map(move |i| (i, score)))
+                let score = c.iter_nodes().map(Node::num_items).sum::<usize>();
+                c.iter_nodes().map(move |n| (n, score))
             })
-            .collect::<Vec<_>>();
-        scores.sort_by_key(|(i, _)| *i);
-        Ok(scores.into_iter().map(|(_, score)| score).collect())
+            .collect::<Vec<_>>())
     }
 }
 

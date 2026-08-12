@@ -1,8 +1,8 @@
 //! Anomaly detection algorithms using CLAM.
 
-use rayon::prelude::*;
+#![expect(dead_code)]
 
-use crate::{DistanceValue, NamedAlgorithm, Tree};
+use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
 use super::{AnomalyFeatures, Graph};
 
@@ -23,6 +23,7 @@ use stationary_probabilities::StationaryProbabilities;
 /// All anomaly detection algorithms provided with CHAODA.
 #[derive(Debug, Clone)]
 #[must_use]
+#[non_exhaustive]
 pub enum ChaodaAlgorithm {
     /// A `Node` is more anomalous if it comes from a cluster whose accumulated cardinality ratio is low.
     AccumulatedCardinalityRatios(AccumulatedCardinalityRatios),
@@ -94,10 +95,7 @@ impl NamedAlgorithm for ChaodaAlgorithm {
 }
 
 impl ChaodaAlgorithm {
-    /// Compute anomaly scores for all items from the tree used to create the graph.
-    ///
-    /// High scores indicate more anomalous nodes, and low scores indicate less anomalous nodes. The scores are normalized to the range [0, 1] using gaussian
-    /// error function normalization.
+    /// Rank the items in the graph based on how anomalous they are, with `1` being the lowest rank and lower ranks indicating more anomalous items.
     ///
     /// # Arguments
     ///
@@ -108,41 +106,49 @@ impl ChaodaAlgorithm {
     ///
     /// - If any of the `Cluster`s selected for creating the `Graph` was not found in the `Tree`.
     /// - If the underlying algorithm fails to compute a score for each item in the tree.
-    pub fn anomaly_scores<Id, I, T, A, M>(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String>
+    pub fn rank_items<Id, I, T, A, M>(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<usize>, String>
     where
         T: DistanceValue,
     {
         match self {
-            Self::AccumulatedCardinalityRatios(alg) => alg.anomaly_scores(graph, tree),
-            Self::GraphNeighborhoodSize(alg) => alg.anomaly_scores(graph, tree),
-            Self::RelativeClusterCardinality(alg) => alg.anomaly_scores(graph, tree),
-            Self::RelativeComponentCardinality(alg) => alg.anomaly_scores(graph, tree),
-            Self::RelativeVertexDegree(alg) => alg.anomaly_scores(graph, tree),
-            Self::StationaryProbabilities(alg) => alg.anomaly_scores(graph, tree),
+            Self::AccumulatedCardinalityRatios(alg) => alg.rank_items(graph, tree),
+            Self::GraphNeighborhoodSize(alg) => alg.rank_items(graph, tree),
+            Self::RelativeClusterCardinality(alg) => alg.rank_items(graph, tree),
+            Self::RelativeComponentCardinality(alg) => alg.rank_items(graph, tree),
+            Self::RelativeVertexDegree(alg) => alg.rank_items(graph, tree),
+            Self::StationaryProbabilities(alg) => alg.rank_items(graph, tree),
         }
     }
 
-    /// Parallel version of [`Self::anomaly_scores`].
+    /// Parallel version of [`Self::rank_items`].
     ///
     /// # Errors
     ///
-    /// See [`Self::anomaly_scores`] for more details on possible errors.
-    pub fn par_anomaly_scores<Id, I, T, A, M>(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String>
+    /// - See [`Self::rank_items`] for error conditions.
+    fn par_rank_items<Id, I, T, A, M>(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<usize>, String>
     where
         Id: Send + Sync,
         I: Send + Sync,
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
-        M: Fn(&I, &I) -> T + Send + Sync,
+        M: Send + Sync,
     {
         match self {
-            Self::AccumulatedCardinalityRatios(alg) => alg.par_anomaly_scores(graph, tree),
-            Self::GraphNeighborhoodSize(alg) => alg.par_anomaly_scores(graph, tree),
-            Self::RelativeClusterCardinality(alg) => alg.par_anomaly_scores(graph, tree),
-            Self::RelativeComponentCardinality(alg) => alg.par_anomaly_scores(graph, tree),
-            Self::RelativeVertexDegree(alg) => alg.par_anomaly_scores(graph, tree),
-            Self::StationaryProbabilities(alg) => alg.par_anomaly_scores(graph, tree),
+            Self::AccumulatedCardinalityRatios(alg) => alg.par_rank_items(graph, tree),
+            Self::GraphNeighborhoodSize(alg) => alg.par_rank_items(graph, tree),
+            Self::RelativeClusterCardinality(alg) => alg.par_rank_items(graph, tree),
+            Self::RelativeComponentCardinality(alg) => alg.par_rank_items(graph, tree),
+            Self::RelativeVertexDegree(alg) => alg.par_rank_items(graph, tree),
+            Self::StationaryProbabilities(alg) => alg.par_rank_items(graph, tree),
         }
+    }
+
+    /// Convert the ranks of items to anomaly scores in the range [0, 1] with higher scores indicating more anomalous items.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn anomaly_scores(ranks: &[usize]) -> Vec<f64> {
+        let n = ranks.len();
+        ranks.iter().map(|&rank| 1.0 - (rank as f64 / n as f64)).collect()
     }
 }
 
@@ -154,30 +160,31 @@ trait GraphAlgorithm<Id, I, T, A, M>: NamedAlgorithm
 where
     T: DistanceValue,
 {
-    /// Compute anomaly scores for all items from the tree used to create the graph.
-    ///
-    /// High scores indicate more anomalous nodes, and low scores indicate less anomalous nodes. The scores are not normalized, so they can take any value. They
-    /// will be normalized by other methods provided with this trait.
-    ///
-    /// The returned vector should have the same length as the number of items in the tree and the order of the scores should correspond to the order of the
-    /// items in the tree.
-    fn raw_anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String>;
+    /// Rank the nodes in the graph based on how anomalous they are, with `1` being the lowest rank and lower ranks indicating more anomalous nodes.
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String>;
 
-    /// Compute anomaly scores for all items from the tree used to create the graph, normalized to the range [0, 1] using gaussian error function normalization.
-    #[expect(clippy::cast_precision_loss)]
-    fn anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let raw_scores = self.raw_anomaly_scores(graph, tree)?;
-        let mean_score = raw_scores.iter().copied().sum::<f64>() / raw_scores.len() as f64;
-        let std_dev_score = (raw_scores.iter().map(|s| (s - mean_score).powi(2)).sum::<f64>() / raw_scores.len() as f64).sqrt();
-        Ok(raw_scores
-            .into_iter()
-            // Standardize the scores to have mean 0 and standard deviation 1.
-            .map(|s| (s - mean_score) / std_dev_score)
-            // Apply the gaussian error function to the standardized scores to the [-1, 1] range.
-            .map(libm::erf)
-            // Scale the scores to the [0, 1] range.
-            .map(|s| f64::midpoint(s, 1.0))
-            .collect())
+    /// Use the rankings of nodes to assign ranks to the items.
+    fn rank_items(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<usize>, String> {
+        // TODO(Najib): Test this function to see if it correctly handles ties.
+
+        let node_ranks = {
+            let mut node_ranks = self.rank_nodes(graph, tree)?;
+            node_ranks.sort_unstable_by_key(|(_, rank)| *rank);
+            node_ranks
+        };
+        let mut ranks = vec![0; tree.cardinality()];
+        let mut current_rank = 1;
+        let mut previous_rank = 0;
+        for (node, rank) in node_ranks {
+            if rank != previous_rank {
+                previous_rank = current_rank;
+                current_rank = rank;
+            }
+            for item_id in node.iter_items() {
+                ranks[item_id] = previous_rank;
+            }
+        }
+        Ok(ranks)
     }
 }
 
@@ -190,25 +197,30 @@ where
     A: Send + Sync,
     M: Send + Sync,
 {
-    /// Parallel version of [`GraphAlgorithm::raw_anomaly_scores`], with the default implementation offering no parallelism.
-    fn par_raw_anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        self.raw_anomaly_scores(graph, tree)
+    /// Parallel version of [`GraphAlgorithm::rank_nodes`], with the default implementation offering no parallelism.
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+        self.rank_nodes(graph, tree)
     }
 
-    /// Parallel version of [`GraphAlgorithm::anomaly_scores`].
-    #[expect(clippy::cast_precision_loss)]
-    fn par_anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let raw_scores = self.par_raw_anomaly_scores(graph, tree)?;
-        let mean_score = raw_scores.par_iter().copied().sum::<f64>() / raw_scores.len() as f64;
-        let std_dev_score = (raw_scores.par_iter().map(|s| (s - mean_score).powi(2)).sum::<f64>() / raw_scores.len() as f64).sqrt();
-        Ok(raw_scores
-            .into_par_iter()
-            // Standardize the scores to have mean 0 and standard deviation 1.
-            .map(|s| (s - mean_score) / std_dev_score)
-            // Apply the gaussian error function to the standardized scores to the [-1, 1] range.
-            .map(libm::erf)
-            // Scale the scores to the [0, 1] range.
-            .map(|s| f64::midpoint(s, 1.0))
-            .collect())
+    /// Parallel version of [`GraphAlgorithm::rank_items`].
+    fn par_rank_items(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<usize>, String> {
+        let node_ranks = {
+            let mut node_ranks = self.par_rank_nodes(graph, tree)?;
+            node_ranks.sort_unstable_by_key(|(_, rank)| *rank);
+            node_ranks
+        };
+        let mut ranks = vec![0; tree.cardinality()];
+        let mut current_rank = 1;
+        let mut previous_rank = 0;
+        for (node, rank) in node_ranks {
+            if rank != previous_rank {
+                previous_rank = current_rank;
+                current_rank = rank;
+            }
+            for item_id in node.iter_items() {
+                ranks[item_id] = previous_rank;
+            }
+        }
+        Ok(ranks)
     }
 }

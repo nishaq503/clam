@@ -1,6 +1,6 @@
 //! A `Node` is more anomalous if it comes from a cluster whose accumulated cardinality ratio is low.
 
-use crate::{DistanceValue, NamedAlgorithm, Tree};
+use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
 use super::{AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
 
@@ -19,19 +19,13 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for AccumulatedCardinalityRa
 where
     T: DistanceValue,
 {
-    fn raw_anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<f64>, String> {
-        let clusters = graph
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+        let mut scores = graph
             .iter_nodes()
-            .map(|n| tree.get_cluster_unchecked(n.direct_center_index()))
-            .map(|c| (c, c.annotation.1.cardinality_ratio))
+            .map(|n| (n, tree.get_cluster_unchecked(n.direct_center_index()).annotation.1.cardinality_ratio))
             .collect::<Vec<_>>();
-
-        let mut scores = clusters
-            .into_iter()
-            .flat_map(|(c, score)| c.items_range().map(move |i| (i, score)))
-            .collect::<Vec<_>>();
-        scores.sort_by_key(|(i, _)| *i);
-        Ok(scores.into_iter().map(|(_, score)| score).collect())
+        scores.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect())
     }
 }
 
