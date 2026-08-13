@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{DistanceValue, Tree, tree::ClusterLocation, utils::SizedHeap};
 
-use super::{AnomalyFeatures, MetaMlModel, learning::normalize_features};
+use super::{AnomalyFeatures, meta_ml::MetaMlPredictor, normalize_features};
 
 mod par_tree;
 
@@ -96,13 +96,16 @@ impl<Id, I, T, A, M> Tree<Id, I, T, (A, AnomalyFeatures), M> {
     /// # Errors
     ///
     /// - If the `predictor` fails to assign a score to any cluster.
-    pub fn select_chaoda_clusters(&self, predictor: &MetaMlModel, min_depth: usize) -> Result<(Vec<usize>, Vec<usize>), String> {
+    pub fn select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> Result<(Vec<usize>, Vec<usize>), String>
+    where
+        P: MetaMlPredictor<T, A>,
+    {
         // Rank clusters by their score according to the `predictor`, filtering out clusters that are too shallow.
         let mut rankings = self
             .iter_clusters()
             .filter(|c| c.depth >= min_depth)
-            .map(|c| predictor.predict(c).map(|score| (c, score)))
-            .collect::<Result<SizedHeap<_, _>, _>>()?;
+            .map(|c| (c, predictor.predict(c)))
+            .collect::<SizedHeap<_, _>>();
 
         // Greedily select clusters in order of their rank, ignoring ancestors and descendants of previously selected clusters, until there are no more clusters
         // to select.

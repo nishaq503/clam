@@ -2,11 +2,7 @@
 
 use crate::{DistanceValue, Tree};
 
-use super::super::{
-    super::{Graph, algorithms},
-    AnomalyFeatures,
-    metrics::roc_auc_score,
-};
+use super::super::{AnomalyFeatures, Graph, algorithms, roc_auc_score};
 
 /// Generates training samples from all `Chaoda` algorithms and all `Graph`s for a given `Tree`.
 ///

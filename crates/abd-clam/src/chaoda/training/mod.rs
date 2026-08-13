@@ -6,37 +6,24 @@ use ndarray::prelude::*;
 
 use crate::{DistanceValue, PartitionStrategy, Tree};
 
-use super::{MetaMlModel, prediction::ChaodaPredictor};
+use super::meta_ml::{Layer, MetaMlPredictor, MetaMlTrainer};
 
 mod gen_samples;
 
 pub use gen_samples::{gen_training_sample_single, gen_training_samples_chaoda, gen_training_samples_graphs};
 
-/// A type alias for a metric function that takes two items of type `I` and returns a distance value of type `T`.
-type MetricFn<I, T> = Box<dyn Fn(&I, &I) -> T>;
-
-/// A Meta-ML model that can be trained to predict the quality of `Cluster`s for ranking before creating `Graph`s.
-pub trait ChaodaTrainer<Params>: ChaodaPredictor {
-    /// Train the model on the given training data.
-    ///
-    /// # Arguments
-    ///
-    /// - `features`: Anomaly features for `Graph`s or `Cluster`s, where each row corresponds to a sample and each column corresponds to a feature.
-    /// - `roc_scores`: The ROC AUC scores for the corresponding samples, which serve as the target variable for training.
-    /// - `parameters`: Hyper-parameters for training the model.
-    fn fit(&mut self, features: &ArrayView2<f64>, roc_scores: &ArrayView1<f64>, parameters: Params) -> Result<(), String>;
-}
-
 /// Trains Meta-ML models.
-pub fn train_models<I, T>(items: &[(bool, I)], metrics: Vec<MetricFn<I, T>>) -> Result<Vec<MetaMlModel>, String>
+pub fn train_models<I, T, Metric, MetaMlAlg>(items: &[(bool, I)], metrics: Vec<Metric>) -> Result<Vec<MetaMlAlg>, String>
 where
     T: DistanceValue,
+    Metric: AsRef<dyn Fn(&I, &I) -> T>,
+    MetaMlAlg: AsRef<dyn MetaMlTrainer<T, ()>>,
 {
     let items_by_ref = items.iter().map(|(b, item)| (*b, item)).collect::<Vec<_>>();
 
     let trees = metrics
         .into_iter()
-        .map(|metric| Box::new(move |a: &&I, b: &&I| metric(a, b)))
+        .map(|metric| Box::new(move |a: &&I, b: &&I| (metric.as_ref())(a, b)))
         .map(|metric| {
             Tree::new(items_by_ref.clone(), metric, &|_| (), &|c: &_| c.cardinality > 2, &PartitionStrategy::default()).map(Tree::annotate_anomaly_features)
         })
@@ -61,8 +48,8 @@ where
 }
 
 /// Generates a set of `MetaMlModel::Layer` models for each depth up to the maximum depth of the trees in the training data.
-fn layer_models(max_depth: usize) -> Vec<MetaMlModel> {
+fn layer_models(max_depth: usize) -> Vec<Layer> {
     // TODO(Najib): Tune the step size based on the distribution of tree depths in the training data.
     let step_size = 5;
-    (0..=max_depth).step_by(step_size).map(MetaMlModel::Layer).collect()
+    (0..=max_depth).step_by(step_size).map(Layer::new).collect()
 }

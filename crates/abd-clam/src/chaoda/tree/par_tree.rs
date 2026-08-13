@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use crate::{DistanceValue, Tree, tree::ClusterLocation, utils::SizedHeap};
 
-use super::super::{AnomalyFeatures, MetaMlModel, learning::normalize_features};
+use super::super::{AnomalyFeatures, meta_ml::MetaMlPredictor, normalize_features};
 
 impl<Id, I, T, A, M> Tree<Id, I, T, A, M>
 where
@@ -90,7 +90,10 @@ where
     M: Send + Sync,
 {
     /// Parallel version of [`Self::select_chaoda_clusters`].
-    pub fn par_select_chaoda_clusters(&self, predictor: &MetaMlModel, min_depth: usize) -> (Vec<usize>, Vec<usize>) {
+    pub fn par_select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> (Vec<usize>, Vec<usize>)
+    where
+        P: MetaMlPredictor<T, A> + Send + Sync,
+    {
         // Rank clusters by their score according to the `predictor`, filtering out clusters that are too shallow.
         let mut rankings = self
             .items
