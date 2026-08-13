@@ -17,7 +17,7 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for GraphNeighborhoodSize
 where
     T: DistanceValue,
 {
-    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         let neighborhood_sizes = graph
             .iter_components()
             .flat_map(|component| {
@@ -35,7 +35,7 @@ where
         let max_steps = diameter / 4;
 
         // For each node, we will calculate the cumulative neighborhood size up to `max_steps`.
-        Ok(neighborhood_sizes
+        neighborhood_sizes
             .into_iter()
             .flat_map(|(node, sizes)| {
                 sizes
@@ -48,7 +48,7 @@ where
                     // A larger cumulative neighborhood size indicates that the node is more central, and thus less anomalous.
                     .map(move |score| (node, score))
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -60,7 +60,7 @@ where
     A: Send + Sync,
     M: Send + Sync,
 {
-    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         let neighborhood_sizes = graph
             .par_iter_components()
             .flat_map(|component| {
@@ -78,7 +78,7 @@ where
         let max_steps = diameter / 4;
 
         // For each node, we will calculate the cumulative neighborhood size up to `max_steps`.
-        Ok(neighborhood_sizes
+        neighborhood_sizes
             .into_par_iter()
             .flat_map(|(node, sizes)| {
                 sizes
@@ -92,6 +92,6 @@ where
                     .map(move |score| (node, score))
                     .collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }

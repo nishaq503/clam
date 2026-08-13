@@ -17,8 +17,8 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for StationaryProbabilities
 where
     T: DistanceValue,
 {
-    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
-        Ok(graph
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
+        graph
             .iter_components()
             .flat_map(|c| {
                 let (mut matrix, nodes) = c.transition_probability_matrix();
@@ -39,7 +39,7 @@ where
                 // Convert the sorted scores into ranks.
                 scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -51,8 +51,8 @@ where
     A: Send + Sync,
     M: Send + Sync,
 {
-    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
-        Ok(graph
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
+        graph
             .par_iter_components()
             .flat_map(|c| {
                 let (mut matrix, nodes) = c.transition_probability_matrix();
@@ -73,6 +73,6 @@ where
                 // Convert the sorted scores into ranks.
                 scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }

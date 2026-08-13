@@ -3,7 +3,7 @@
 use crate::{DistanceValue, Tree};
 
 use super::super::{
-    super::{ChaodaAlgorithm, Graph},
+    super::{Graph, algorithms},
     AnomalyFeatures,
     metrics::roc_auc_score,
 };
@@ -23,13 +23,14 @@ use super::super::{
 /// # Errors
 ///
 /// - If any training sample generation fails. See [`gen_training_samples_chaoda`] for more details on possible errors.
-pub fn gen_training_samples_graphs<I, T, A, M>(
+pub fn gen_training_samples_graphs<I, T, A, M, Alg>(
     tree: &Tree<bool, I, T, (A, AnomalyFeatures), M>,
     graphs: &[Graph<T>],
-    algorithms: &[ChaodaAlgorithm],
+    algorithms: &[Alg],
 ) -> Result<Vec<Vec<(AnomalyFeatures, f64)>>, String>
 where
     T: DistanceValue,
+    Alg: AsRef<dyn algorithms::GraphAlgorithm<bool, I, T, A, M>>,
 {
     graphs.iter().map(|graph| gen_training_samples_chaoda(tree, graph, algorithms)).collect()
 }
@@ -49,13 +50,14 @@ where
 /// # Errors
 ///
 /// - If any training sample generation fails. See [`gen_training_sample_single`] for more details on possible errors.
-pub fn gen_training_samples_chaoda<I, T, A, M>(
+pub fn gen_training_samples_chaoda<I, T, A, M, Alg>(
     tree: &Tree<bool, I, T, (A, AnomalyFeatures), M>,
     graph: &Graph<T>,
-    algorithms: &[ChaodaAlgorithm],
+    algorithms: &[Alg],
 ) -> Result<Vec<(AnomalyFeatures, f64)>, String>
 where
     T: DistanceValue,
+    Alg: AsRef<dyn algorithms::GraphAlgorithm<bool, I, T, A, M>>,
 {
     algorithms.iter().map(|algorithm| gen_training_sample_single(tree, graph, algorithm)).collect()
 }
@@ -82,16 +84,16 @@ where
 ///
 /// - If the `algorithm` fails to compute anomaly scores for the `tree` and `graph`. See [`Chaoda::anomaly_scores`] for more details on possible errors.
 /// - If the ROC AUC score cannot be computed from the true labels and predicted scores. See [`roc_auc_score`] for more details on possible errors.
-pub fn gen_training_sample_single<I, T, A, M>(
+pub fn gen_training_sample_single<I, T, A, M, Alg>(
     tree: &Tree<bool, I, T, (A, AnomalyFeatures), M>,
     graph: &Graph<T>,
-    algorithm: &ChaodaAlgorithm,
+    algorithm: &Alg,
 ) -> Result<(AnomalyFeatures, f64), String>
 where
     T: DistanceValue,
+    Alg: AsRef<dyn algorithms::GraphAlgorithm<bool, I, T, A, M>>,
 {
-    let ranks_pred = algorithm.rank_items(graph, tree)?;
-    let y_pred = ChaodaAlgorithm::anomaly_scores(&ranks_pred);
+    let y_pred = algorithm.as_ref().anomaly_scores(graph, tree);
 
     let y_true = tree.items.iter().map(|(a, _, _)| *a);
     let auc = roc_auc_score(y_true, &y_pred)?;

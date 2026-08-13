@@ -19,14 +19,14 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for RelativeComponentCardina
 where
     T: DistanceValue,
 {
-    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
-        Ok(graph
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
+        graph
             .iter_components()
             .flat_map(|c| {
                 let score = c.iter_nodes().map(Node::num_items).sum::<usize>();
                 c.iter_nodes().map(move |n| (n, score))
             })
-            .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 }
 

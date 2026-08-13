@@ -15,9 +15,9 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for RelativeVertexDegree
 where
     T: DistanceValue,
 {
-    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         // The more edges a node has, the less anomalous it is, the higher the rank.
-        Ok(graph.iter_nodes().map(|n| (n, n.num_edges())).collect())
+        graph.iter_nodes().map(|n| (n, n.num_edges())).collect()
     }
 }
 

@@ -19,13 +19,13 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for AccumulatedCardinalityRa
 where
     T: DistanceValue,
 {
-    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Vec<(&'a Node<T>, usize)>, String> {
+    fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         let mut scores = graph
             .iter_nodes()
             .map(|n| (n, tree.get_cluster_unchecked(n.direct_center_index()).annotation.1.cardinality_ratio))
             .collect::<Vec<_>>();
         scores.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect())
+        scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect()
     }
 }
 
