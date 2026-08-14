@@ -16,6 +16,7 @@ pub mod algorithms;
 
 pub use features::{AnomalyFeatures, normalize_features};
 pub use graph::{Component, Graph, Node};
+pub use training::train_models;
 
 /// Compute the ROC AUC score for binary classification.
 ///
@@ -31,11 +32,8 @@ pub use graph::{Component, Graph, Node};
 /// # Errors
 ///
 /// - If the lengths of `y_true` and `y_pred` do not match.
-pub fn roc_auc_score<Ids>(y_true: Ids, y_pred: &Vec<f64>) -> Result<f64, String>
-where
-    Ids: Iterator<Item = bool>,
-{
-    let y_true = y_true.map(|b| if b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
+pub fn roc_auc_score(y_true: &[bool], y_pred: &Vec<f64>) -> Result<f64, String> {
+    let y_true = y_true.iter().map(|b| if *b { 1.0 } else { 0.0 }).collect::<Vec<_>>();
     if y_true.len() == y_pred.len() {
         Ok(smartcore::metrics::roc_auc_score(&y_true, y_pred))
     } else {

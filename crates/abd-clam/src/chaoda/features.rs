@@ -71,6 +71,18 @@ impl AnomalyFeatures {
         self.lfd_ratio = libm::erf((self.lfd_ratio - mean.lfd_ratio) / std_dev.lfd_ratio);
         self.ema_lfd_ratio = libm::erf((self.ema_lfd_ratio - mean.ema_lfd_ratio) / std_dev.ema_lfd_ratio);
     }
+
+    /// Returns the features as a vector of f64 values.
+    pub(crate) fn as_vec(&self) -> Vec<f64> {
+        vec![
+            self.cardinality_ratio,
+            self.ema_cardinality_ratio,
+            self.radius_ratio,
+            self.ema_radius_ratio,
+            self.lfd_ratio,
+            self.ema_lfd_ratio,
+        ]
+    }
 }
 
 /// Applies gaussian error function normalization to all features in the collection.
