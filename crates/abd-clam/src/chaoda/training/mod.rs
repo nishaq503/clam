@@ -1,6 +1,6 @@
 //! Functions and traits for training meta-ML prediction algorithms for ranking `Cluster`s before creating `Graph`s.
 
-use crate::{DistanceValue, Tree};
+use crate::{DistanceValue, Tree, chaoda::meta_ml::MetaMlTrainer};
 
 use super::{
     Graph, algorithms,
@@ -37,7 +37,6 @@ pub type TrainedModels<T, A> = Vec<Vec<Box<dyn MetaMlPredictor<T, A>>>>;
 /// - If the ROC scores fail to compute.
 /// - Training any model fails.
 #[expect(clippy::type_complexity)]
-#[expect(unused_variables, unused_mut)]
 pub fn train_models<Id, I, T, A, M, Alg, Oracle>(
     tree: Tree<Id, I, T, A, M>,
     algorithms: &[Alg],
@@ -79,28 +78,43 @@ where
         .collect::<Result<Vec<_>, _>>()?;
 
     // Initialize the meta-ml models for each graph algorithm. These models will be trained over the epochs.
-    let mut models_in_training = algorithms
-        .iter()
-        .map(|_| {
-            vec![
-                Box::new(LinearRegression::new()) as Box<dyn MetaMlPredictor<T, A>>,
-                Box::new(DecisionTree) as Box<dyn MetaMlPredictor<T, A>>,
-            ]
-        })
-        .collect::<Vec<_>>();
+    let mut models_in_training = algorithms.iter().map(|_| vec![]).collect::<Vec<_>>();
 
     let max_epochs = 10; // TODO(Najib): Tune this based on convergence of the training process.
     for epoch in 0..max_epochs {
-        for (alg, alg_models) in algorithms.iter().zip(models_in_training.iter_mut()) {
-            for model in alg_models.iter_mut() {
+        let mut roc_scores = vec![];
+
+        for ((alg, alg_models), alg_data) in algorithms.iter().zip(&mut models_in_training).zip(&mut training_data) {
+            // For each algorithm, train new models using the data we have so far.
+            let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(alg_data)?;
+            let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(alg_data)?;
+            *alg_models = vec![
+                Box::new(lr_model) as Box<dyn MetaMlPredictor<T, A>>,
+                Box::new(dt_model) as Box<dyn MetaMlPredictor<T, A>>,
+            ];
+
+            for model in alg_models {
+                // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
                 let (directly_selected, ancestors) = chaoda_tree.select_chaoda_clusters(model, min_depth);
                 let graph = Graph::from_tree(&chaoda_tree, &directly_selected, &ancestors);
-                todo!()
+                let new_sample = gen_training_sample(&chaoda_tree, &graph, alg, oracle)?;
+
+                roc_scores.push(new_sample.1);
+
+                alg_data.push(new_sample);
             }
         }
+
+        #[expect(clippy::cast_precision_loss)]
+        let mean_score = roc_scores.iter().sum::<f64>() / (roc_scores.len() as f64);
+        #[expect(clippy::cast_precision_loss)]
+        let std_score = roc_scores.iter().map(|&s| s - mean_score).map(|s| s * s).sum::<f64>().sqrt() / (roc_scores.len() as f64);
+
+        ftlog::info!("Epoch {}/{max_epochs}: roc_scores: {mean_score:.2e} +/- {std_score:.2e}", epoch + 1);
     }
 
     // Restore the original tree.
     let (tree, _) = chaoda_tree.decompound_annotations();
+
     Ok((tree, models_in_training))
 }
