@@ -1,6 +1,9 @@
 //! Functions and traits for training meta-ML prediction algorithms for ranking `Cluster`s before creating `Graph`s.
 
-use crate::{DistanceValue, Tree, chaoda::meta_ml::MetaMlTrainer};
+use crate::{
+    DistanceValue, Tree,
+    chaoda::{AnomalyFeatures, meta_ml::MetaMlTrainer},
+};
 
 use super::{
     Graph, algorithms,
@@ -36,33 +39,29 @@ pub type TrainedModels<T, A> = Vec<Vec<Box<dyn MetaMlPredictor<T, A>>>>;
 ///
 /// - If the ROC scores fail to compute.
 /// - Training any model fails.
-#[expect(clippy::type_complexity)]
 pub fn train_models<Id, I, T, A, M, Alg, Oracle>(
-    tree: Tree<Id, I, T, A, M>,
+    tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>,
     algorithms: &[Alg],
     oracle: &Oracle,
-    initial_layer_depths: [usize; 3],
-) -> Result<(Tree<Id, I, T, A, M>, TrainedModels<T, A>), String>
+) -> Result<TrainedModels<T, A>, String>
 where
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
     Alg: AsRef<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
     Oracle: Fn(&Id) -> bool,
 {
-    let chaoda_tree = tree.annotate_anomaly_features();
-    let tree_depth = chaoda_tree.max_depth();
-
-    let [min_depth, max_depth, step_size] = initial_layer_depths;
-    let max_depth = max_depth.min(tree_depth);
+    let min_depth = 4;
+    let step_size = 4;
+    let tree_depth = tree.max_depth();
 
     // Use layer graphs to bootstrap training.
-    let layer_graphs = (min_depth..=max_depth)
+    let layer_graphs = (min_depth..=tree_depth)
         .step_by(step_size)
         .map(Layer::new)
         .map(|m| Box::new(m) as Box<dyn MetaMlPredictor<T, A>>)
         .map(|predictor| {
-            let (directly_selected, ancestors) = chaoda_tree.select_chaoda_clusters(&predictor, min_depth);
-            Graph::from_tree(&chaoda_tree, &directly_selected, &ancestors)
+            let (directly_selected, ancestors) = tree.select_chaoda_clusters(&predictor, min_depth);
+            Graph::from_tree(tree, &directly_selected, &ancestors)
         })
         .collect::<Vec<_>>();
 
@@ -72,7 +71,7 @@ where
         .map(|alg| {
             layer_graphs
                 .iter()
-                .map(|graph| gen_training_sample(&chaoda_tree, graph, alg, oracle))
+                .map(|graph| gen_training_sample(tree, graph, alg, oracle))
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -95,9 +94,9 @@ where
 
             for model in alg_models {
                 // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
-                let (directly_selected, ancestors) = chaoda_tree.select_chaoda_clusters(model, min_depth);
-                let graph = Graph::from_tree(&chaoda_tree, &directly_selected, &ancestors);
-                let new_sample = gen_training_sample(&chaoda_tree, &graph, alg, oracle)?;
+                let (directly_selected, ancestors) = tree.select_chaoda_clusters(model, min_depth);
+                let graph = Graph::from_tree(tree, &directly_selected, &ancestors);
+                let new_sample = gen_training_sample(tree, &graph, alg, oracle)?;
 
                 roc_scores.push(new_sample.1);
 
@@ -113,8 +112,5 @@ where
         ftlog::info!("Epoch {}/{max_epochs}: roc_scores: {mean_score:.2e} +/- {std_score:.2e}", epoch + 1);
     }
 
-    // Restore the original tree.
-    let (tree, _) = chaoda_tree.decompound_annotations();
-
-    Ok((tree, models_in_training))
+    Ok(models_in_training)
 }

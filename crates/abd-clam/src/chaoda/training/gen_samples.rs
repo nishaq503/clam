@@ -26,6 +26,7 @@ use super::super::{AnomalyFeatures, Graph, algorithms, roc_auc_score};
 ///
 /// - If the `algorithm` fails to compute anomaly scores for the `tree` and `graph`. See [`Chaoda::anomaly_scores`] for more details on possible errors.
 /// - If the ROC AUC score cannot be computed from the true labels and predicted scores. See [`roc_auc_score`] for more details on possible errors.
+#[expect(clippy::cast_precision_loss)]
 pub fn gen_training_sample<Id, I, T, A, M, Alg, Oracle>(
     tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>,
     graph: &Graph<T>,
@@ -37,7 +38,9 @@ where
     Alg: AsRef<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
     Oracle: Fn(&Id) -> bool,
 {
-    let y_pred = algorithm.as_ref().anomaly_scores(graph, tree);
+    let ranks = algorithm.as_ref().rank_items(graph, tree);
+    let n = tree.cardinality() as f64;
+    let y_pred = ranks.iter().map(|&rank| 1.0 - (rank as f64 / n)).collect::<Vec<_>>();
 
     let y_true = tree.items.iter().map(|(a, _, _)| oracle(a)).collect::<Vec<_>>();
     let auc = roc_auc_score(&y_true, &y_pred)?;

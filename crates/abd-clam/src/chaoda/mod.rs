@@ -16,7 +16,86 @@ pub mod algorithms;
 
 pub use features::{AnomalyFeatures, normalize_features};
 pub use graph::{Component, Graph, Node};
-pub use training::train_models;
+
+use crate::{
+    DistanceValue, Tree,
+    chaoda::{algorithms::GraphAlgorithm, meta_ml::MetaMlPredictor},
+};
+
+/// The meta-ml algorithms associated with a single graph algorithm.
+type PerGraphModels<T, A> = Vec<Box<dyn MetaMlPredictor<T, A>>>;
+
+/// A graph algorithm and its associated meta-ml algorithms.
+type GraphAndMetaMl<Id, I, T, A, M> = (Box<dyn GraphAlgorithm<Id, I, T, A, M>>, PerGraphModels<T, A>);
+
+/// Unsupervised anomaly detection with CHAODA.
+pub struct Chaoda<Id, I, T, A, M> {
+    /// The suite of graph algorithms and associated meta-ml models to use for anomaly detection.
+    model_suite: Vec<GraphAndMetaMl<Id, I, T, A, M>>,
+}
+
+impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
+    /// Train a Chaoda ensemble with the given tree.
+    ///
+    /// # Errors
+    ///
+    /// - Any roc-scores fail to be computed.
+    /// - Any of the meta-ml models fails to train.
+    pub fn train<Oracle>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, oracle: &Oracle) -> Result<Self, String>
+    where
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+        Oracle: Fn(&Id) -> bool,
+    {
+        let algorithms = vec![
+            Box::new(algorithms::AccumulatedCardinalityRatios) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::GraphNeighborhoodSize) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeClusterCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeComponentCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeVertexDegree) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::StationaryProbabilities) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+        ];
+        let models = training::train_models(tree, &algorithms, &oracle)?;
+        let model_suite = algorithms.into_iter().zip(models).collect();
+        Ok(Self { model_suite })
+    }
+
+    /// Predict anomaly rankings for the items in the given tree.
+    ///
+    /// After computing all rankings, use the [`fuse_rankings`] function to combine the rankings into a single ranking.
+    pub fn predict(&self, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<Vec<usize>>
+    where
+        T: DistanceValue,
+        M: Fn(&I, &I) -> T,
+    {
+        let mut rankings = Vec::new();
+
+        for (alg, models) in &self.model_suite {
+            for model in models {
+                let (directly_selected, ancestors) = tree.select_chaoda_clusters(model, 4);
+                let graph = Graph::from_tree(tree, &directly_selected, &ancestors);
+                rankings.push(alg.rank_items(&graph, tree));
+            }
+        }
+
+        rankings
+    }
+}
+
+/// Apply reciprocal rank fusion to the rankings produced by the CHAODA ensemble.
+///
+/// DOI: 10.1145/1571941.1572114
+#[must_use]
+pub fn fuse_rankings(rankings: &[Vec<usize>]) -> Vec<f64> {
+    let mut fused_rankings = vec![0_f64; rankings[0].len()];
+    for ranks in rankings {
+        #[expect(clippy::cast_precision_loss)]
+        for (f, r) in fused_rankings.iter_mut().zip(ranks) {
+            *f += ((r + 60) as f64).recip();
+        }
+    }
+    fused_rankings
+}
 
 /// Compute the ROC AUC score for binary classification.
 ///

@@ -51,14 +51,6 @@ where
         }
         ranks
     }
-
-    /// Rank the items as in `rank_items` and then convert the ranks to anomaly scores in the range [0, 1] with higher scores indicating more anomalous items.
-    #[expect(clippy::cast_precision_loss)]
-    fn anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<f64> {
-        let ranks = self.rank_items(graph, tree);
-        let n = ranks.len();
-        ranks.iter().map(|&rank| 1.0 - (rank as f64 / n as f64)).collect()
-    }
 }
 
 /// Parallel extension of the [`GraphAlgorithm`] trait.
@@ -95,13 +87,5 @@ where
             }
         }
         ranks
-    }
-
-    /// Parallel version of [`GraphAlgorithm::anomaly_scores`].
-    #[expect(clippy::cast_precision_loss)]
-    fn par_anomaly_scores(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<f64> {
-        let ranks = self.par_rank_items(graph, tree);
-        let n = ranks.len();
-        ranks.iter().map(|&rank| 1.0 - (rank as f64 / n as f64)).collect()
     }
 }

@@ -43,8 +43,5 @@ pub mod musals;
 #[cfg(feature = "pancakes")]
 pub mod pancakes;
 
-// #[cfg(feature = "chaoda")]
-// pub mod chaoda;
-
 // #[cfg(feature = "mbed")]
 // pub mod mbed;
