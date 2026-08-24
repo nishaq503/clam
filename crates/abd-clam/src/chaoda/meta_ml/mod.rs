@@ -13,7 +13,7 @@ pub use linear_regression::LinearRegression;
 /// A trait for models that can predict the quality of a `Cluster` for use in a `Graph` based on its anomaly features.
 ///
 /// Higher scores indicate that the `Cluster` should be used in the `Graph`, while lower scores indicate that it should not be used.
-pub trait MetaMlPredictor<T, A> {
+pub trait MetaMlPredictor<T, A>: Send + Sync {
     /// Predict the quality of a `Cluster` for use in a `Graph` based on its anomaly features.
     ///
     /// # Errors

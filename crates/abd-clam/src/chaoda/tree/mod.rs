@@ -92,7 +92,7 @@ impl<Id, I, T, A, M> Tree<Id, I, T, (A, AnomalyFeatures), M> {
     /// * A vector of indices of the centers of clusters that were selected directly. These are in non-ascending order of their rank according to the `predictor`.
     /// * A vector of indices of items that are not covered by any selected cluster. These are the centers of the ancestors of the selected clusters that were
     ///   not themselves selected.
-    pub fn select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> (Vec<usize>, Vec<usize>)
+    pub(crate) fn select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> (Vec<usize>, Vec<usize>)
     where
         P: AsRef<dyn MetaMlPredictor<T, A>>,
     {

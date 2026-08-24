@@ -2,7 +2,7 @@
 
 use crate::{DistanceValue, NamedAlgorithm, Tree};
 
-use super::{super::Node, AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
+use super::{super::Node, AnomalyFeatures, Graph, GraphAlgorithm};
 
 /// A `Node` is more anomalous if it is in a `Component` whose nodes collectively have fewer items than the other `Components` in the graph.
 #[derive(Debug, Clone)]
@@ -28,14 +28,4 @@ where
             })
             .collect::<Vec<_>>()
     }
-}
-
-impl<Id, I, T, A, M> ParGraphAlgorithm<Id, I, T, A, M> for RelativeComponentCardinality
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Send + Sync,
-{
 }

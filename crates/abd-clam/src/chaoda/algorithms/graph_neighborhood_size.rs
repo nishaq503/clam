@@ -4,7 +4,7 @@ use rayon::prelude::*;
 
 use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
-use super::{AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
+use super::{AnomalyFeatures, Graph, GraphAlgorithm};
 
 /// A `Node` is more anomalous if it can reach fewer other nodes in the graph within the same number of steps as compared to other nodes in the graph.
 #[derive(Debug, Clone)]
@@ -50,17 +50,15 @@ where
             })
             .collect::<Vec<_>>()
     }
-}
 
-impl<Id, I, T, A, M> ParGraphAlgorithm<Id, I, T, A, M> for GraphNeighborhoodSize
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Send + Sync,
-{
-    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
         let neighborhood_sizes = graph
             .par_iter_components()
             .flat_map(|component| {

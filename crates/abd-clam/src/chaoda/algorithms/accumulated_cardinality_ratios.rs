@@ -2,7 +2,7 @@
 
 use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
-use super::{AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
+use super::{AnomalyFeatures, Graph, GraphAlgorithm};
 
 /// Assign anomaly scores to nodes based on the accumulated cardinality ratios of their clusters.
 #[derive(Debug, Clone)]
@@ -27,14 +27,4 @@ where
         scores.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         scores.into_iter().enumerate().map(|(rank, (node, _))| (node, rank)).collect()
     }
-}
-
-impl<Id, I, T, A, M> ParGraphAlgorithm<Id, I, T, A, M> for AccumulatedCardinalityRatios
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Send + Sync,
-{
 }

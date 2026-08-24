@@ -21,7 +21,7 @@ pub use stationary_probabilities::StationaryProbabilities;
 ///
 /// Implementors of this trait should provide the [`Self::raw_anomaly_scores`] method and users should use the [`Self::anomaly_scores`] method to get normalized
 /// anomaly scores in the range [0, 1] with higher scores indicating more anomalous items.
-pub trait GraphAlgorithm<Id, I, T, A, M>
+pub trait GraphAlgorithm<Id, I, T, A, M>: Send + Sync
 where
     T: DistanceValue,
 {
@@ -51,24 +51,28 @@ where
         }
         ranks
     }
-}
 
-/// Parallel extension of the [`GraphAlgorithm`] trait.
-pub trait ParGraphAlgorithm<Id, I, T, A, M>: GraphAlgorithm<Id, I, T, A, M>
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Send + Sync,
-{
     /// Parallel version of [`GraphAlgorithm::rank_nodes`], with the default implementation offering no parallelism.
-    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
+    fn par_rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
         self.rank_nodes(graph, tree)
     }
 
     /// Parallel version of [`GraphAlgorithm::rank_items`].
-    fn par_rank_items(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<usize> {
+    fn par_rank_items(&self, graph: &Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<usize>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Send + Sync,
+    {
         let node_ranks = {
             let mut node_ranks = self.par_rank_nodes(graph, tree);
             node_ranks.sort_unstable_by_key(|(_, rank)| *rank);

@@ -6,6 +6,13 @@
 //! For trees, this enables the [`Tree::annotate_anomaly_features`](crate::Tree::annotate_anomaly_features) method (along with its parallel version). These
 //! features can then be used for creating CHAODA graphs. The graphs can, in turn, be used for anomaly detection using the algorithms we provide...
 
+use rayon::prelude::*;
+
+use crate::{
+    DistanceValue, Tree,
+    chaoda::{algorithms::GraphAlgorithm, meta_ml::MetaMlPredictor},
+};
+
 mod features;
 mod graph;
 pub mod meta_ml;
@@ -17,21 +24,16 @@ pub mod algorithms;
 pub use features::{AnomalyFeatures, normalize_features};
 pub use graph::{Component, Graph, Node};
 
-use crate::{
-    DistanceValue, Tree,
-    chaoda::{algorithms::GraphAlgorithm, meta_ml::MetaMlPredictor},
-};
-
 /// The meta-ml algorithms associated with a single graph algorithm.
-type PerGraphModels<T, A> = Vec<Box<dyn MetaMlPredictor<T, A>>>;
+type PerGraphMetaMl<T, A> = Vec<Box<dyn MetaMlPredictor<T, A>>>;
 
 /// A graph algorithm and its associated meta-ml algorithms.
-type GraphAndMetaMl<Id, I, T, A, M> = (Box<dyn GraphAlgorithm<Id, I, T, A, M>>, PerGraphModels<T, A>);
+pub(crate) type GraphEnsemble<Id, I, T, A, M> = (Box<dyn GraphAlgorithm<Id, I, T, A, M>>, PerGraphMetaMl<T, A>);
 
 /// Unsupervised anomaly detection with CHAODA.
 pub struct Chaoda<Id, I, T, A, M> {
     /// The suite of graph algorithms and associated meta-ml models to use for anomaly detection.
-    model_suite: Vec<GraphAndMetaMl<Id, I, T, A, M>>,
+    model_suite: Vec<GraphEnsemble<Id, I, T, A, M>>,
 }
 
 impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
@@ -47,7 +49,7 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
         M: Fn(&I, &I) -> T,
         Oracle: Fn(&Id) -> bool,
     {
-        let algorithms = vec![
+        let algs = vec![
             Box::new(algorithms::AccumulatedCardinalityRatios) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
             Box::new(algorithms::GraphNeighborhoodSize) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
             Box::new(algorithms::RelativeClusterCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
@@ -55,8 +57,7 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
             Box::new(algorithms::RelativeVertexDegree) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
             Box::new(algorithms::StationaryProbabilities) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
         ];
-        let models = training::train_models(tree, &algorithms, &oracle)?;
-        let model_suite = algorithms.into_iter().zip(models).collect();
+        let model_suite = training::train_models(tree, algs, &oracle)?;
         Ok(Self { model_suite })
     }
 
@@ -76,6 +77,59 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
                 let graph = Graph::from_tree(tree, &directly_selected, &ancestors);
                 rankings.push(alg.rank_items(&graph, tree));
             }
+        }
+
+        rankings
+    }
+
+    /// Parallel version of [`train`](Self::train).
+    ///
+    /// # Errors
+    ///
+    /// - See [`train`](Self::train) for error conditions.
+    pub fn par_train<Oracle>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, oracle: &Oracle) -> Result<Self, String>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+        Oracle: Fn(&Id) -> bool + Send + Sync,
+    {
+        let algs = vec![
+            Box::new(algorithms::AccumulatedCardinalityRatios) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::GraphNeighborhoodSize) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeClusterCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeComponentCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::RelativeVertexDegree) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            Box::new(algorithms::StationaryProbabilities) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+        ];
+        let model_suite = training::par_train_models(tree, algs, &oracle)?;
+        Ok(Self { model_suite })
+    }
+
+    /// Parallel version of [`predict`](Self::predict).
+    pub fn par_predict(&self, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<Vec<usize>>
+    where
+        Id: Send + Sync,
+        I: Send + Sync,
+        T: DistanceValue + Send + Sync,
+        A: Send + Sync,
+        M: Fn(&I, &I) -> T + Send + Sync,
+    {
+        let mut rankings = Vec::new();
+
+        for (alg, models) in &self.model_suite {
+            rankings.extend(
+                models
+                    .par_iter()
+                    .map(|model| {
+                        let (directly_selected, ancestors) = tree.par_select_chaoda_clusters(model, 4);
+                        let graph = Graph::par_from_tree(tree, &directly_selected, &ancestors);
+                        alg.rank_items(&graph, tree)
+                    })
+                    .collect::<Vec<_>>(),
+            );
         }
 
         rankings

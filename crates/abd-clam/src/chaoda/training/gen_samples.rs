@@ -47,3 +47,34 @@ where
 
     Ok((graph.mean_anomaly_features(tree), auc))
 }
+
+/// Parallel version of [`gen_training_sample`], using the parallel versions of the `rank_items` method on the given `algorithm`.
+///
+/// # Errors
+///
+/// - See [`gen_training_sample`] for possible errors.
+#[expect(clippy::cast_precision_loss)]
+pub fn par_gen_training_sample<Id, I, T, A, M, Alg, Oracle>(
+    tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>,
+    graph: &Graph<T>,
+    algorithm: &Alg,
+    oracle: &Oracle,
+) -> Result<(AnomalyFeatures, f64), String>
+where
+    Id: Send + Sync,
+    I: Send + Sync,
+    T: DistanceValue + Send + Sync,
+    A: Send + Sync,
+    M: Send + Sync,
+    Alg: AsRef<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>> + Send + Sync,
+    Oracle: Fn(&Id) -> bool + Send + Sync,
+{
+    let ranks = algorithm.as_ref().par_rank_items(graph, tree);
+    let n = tree.cardinality() as f64;
+    let y_pred = ranks.iter().map(|&rank| 1.0 - (rank as f64 / n)).collect::<Vec<_>>();
+
+    let y_true = tree.items.iter().map(|(a, _, _)| oracle(a)).collect::<Vec<_>>();
+    let auc = roc_auc_score(&y_true, &y_pred)?;
+
+    Ok((graph.mean_anomaly_features(tree), auc))
+}

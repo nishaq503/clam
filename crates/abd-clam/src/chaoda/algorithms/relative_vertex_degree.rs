@@ -2,7 +2,7 @@
 
 use crate::{DistanceValue, NamedAlgorithm, Tree, chaoda::Node};
 
-use super::{AnomalyFeatures, Graph, GraphAlgorithm, ParGraphAlgorithm};
+use super::{AnomalyFeatures, Graph, GraphAlgorithm};
 
 /// A `Node` is more anomalous if it has fewer neighbors in the graph relative to other nodes in the graph.
 #[derive(Debug, Clone)]
@@ -19,14 +19,4 @@ where
         // The more edges a node has, the less anomalous it is, the higher the rank.
         graph.iter_nodes().map(|n| (n, n.num_edges())).collect()
     }
-}
-
-impl<Id, I, T, A, M> ParGraphAlgorithm<Id, I, T, A, M> for RelativeVertexDegree
-where
-    Id: Send + Sync,
-    I: Send + Sync,
-    T: DistanceValue + Send + Sync,
-    A: Send + Sync,
-    M: Send + Sync,
-{
 }
