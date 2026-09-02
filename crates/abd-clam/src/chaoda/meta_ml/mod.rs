@@ -14,12 +14,29 @@ pub use linear_regression::LinearRegression;
 ///
 /// Higher scores indicate that the `Cluster` should be used in the `Graph`, while lower scores indicate that it should not be used.
 pub trait MetaMlPredictor<T, A>: Send + Sync {
+    /// Convert the object into a `Box<dyn MetaMlPredictor<T, A>>`.
+    fn into_boxed(self) -> Box<dyn MetaMlPredictor<T, A>>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(self)
+    }
+
     /// Predict the quality of a `Cluster` for use in a `Graph` based on its anomaly features.
     ///
     /// # Errors
     ///
     /// - If the model fails to make a prediction.
     fn predict(&self, cluster: &Cluster<T, (A, AnomalyFeatures)>) -> Result<f64, String>;
+}
+
+impl<T, A, Predictor> MetaMlPredictor<T, A> for Predictor
+where
+    Predictor: AsRef<dyn MetaMlPredictor<T, A>> + Send + Sync,
+{
+    fn predict(&self, cluster: &Cluster<T, (A, AnomalyFeatures)>) -> Result<f64, String> {
+        self.as_ref().predict(cluster)
+    }
 }
 
 /// A trait for models that can be trained to predict the quality of a `Cluster` for use in a `Graph` based on its anomaly features.

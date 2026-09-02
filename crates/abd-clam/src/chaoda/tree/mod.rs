@@ -94,13 +94,13 @@ impl<Id, I, T, A, M> Tree<Id, I, T, (A, AnomalyFeatures), M> {
     ///   not themselves selected.
     pub(crate) fn select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> (Vec<usize>, Vec<usize>)
     where
-        P: AsRef<dyn MetaMlPredictor<T, A>>,
+        P: MetaMlPredictor<T, A>,
     {
         // Rank clusters by their score according to the `predictor`, filtering out clusters that are too shallow.
         let mut rankings = self
             .iter_clusters()
             .filter(|c| c.depth >= min_depth)
-            .map(|c| (c, predictor.as_ref().predict(c)))
+            .map(|c| (c, predictor.predict(c)))
             .collect::<SizedHeap<_, _>>();
 
         // Greedily select clusters in order of their rank, ignoring ancestors and descendants of previously selected clusters, until there are no more clusters

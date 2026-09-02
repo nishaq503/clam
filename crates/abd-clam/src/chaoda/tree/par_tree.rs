@@ -92,7 +92,7 @@ where
     /// Parallel version of [`Self::select_chaoda_clusters`].
     pub(crate) fn par_select_chaoda_clusters<P>(&self, predictor: &P, min_depth: usize) -> (Vec<usize>, Vec<usize>)
     where
-        P: AsRef<dyn MetaMlPredictor<T, A>> + Send + Sync,
+        P: MetaMlPredictor<T, A> + Send + Sync,
     {
         // Rank clusters by their score according to the `predictor`, filtering out clusters that are too shallow.
         let mut rankings = self
@@ -100,7 +100,7 @@ where
             .par_iter()
             .filter_map(|(_, _, loc)| loc.as_cluster())
             .filter(|c| c.depth >= min_depth)
-            .map(|c| (c, predictor.as_ref().predict(c)))
+            .map(|c| (c, predictor.predict(c)))
             .collect::<SizedHeap<_, _>>();
 
         // Greedily select clusters in order of their rank, ignoring ancestors and descendants of previously selected clusters, until there are no more clusters

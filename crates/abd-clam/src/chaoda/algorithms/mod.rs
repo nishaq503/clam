@@ -25,6 +25,11 @@ pub trait GraphAlgorithm<Id, I, T, A, M>: Send + Sync
 where
     T: DistanceValue,
 {
+    /// Creates a new instance of the algorithm.
+    fn new_boxed() -> Box<dyn GraphAlgorithm<Id, I, T, A, M>>
+    where
+        Self: Sized;
+
     /// Rank the nodes in the graph based on how anomalous they are, with `1` being the lowest rank and lower ranks indicating more anomalous nodes.
     fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)>;
 

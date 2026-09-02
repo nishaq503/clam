@@ -50,12 +50,12 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
         Oracle: Fn(&Id) -> bool,
     {
         let algs = vec![
-            Box::new(algorithms::AccumulatedCardinalityRatios) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::GraphNeighborhoodSize) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeClusterCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeComponentCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeVertexDegree) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::StationaryProbabilities) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            algorithms::AccumulatedCardinalityRatios::new_boxed(),
+            algorithms::GraphNeighborhoodSize::new_boxed(),
+            algorithms::RelativeClusterCardinality::new_boxed(),
+            algorithms::RelativeComponentCardinality::new_boxed(),
+            algorithms::RelativeVertexDegree::new_boxed(),
+            algorithms::StationaryProbabilities::new_boxed(),
         ];
         let model_suite = training::train_models(tree, algs, &oracle)?;
         Ok(Self { model_suite })
@@ -97,12 +97,12 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
         Oracle: Fn(&Id) -> bool + Send + Sync,
     {
         let algs = vec![
-            Box::new(algorithms::AccumulatedCardinalityRatios) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::GraphNeighborhoodSize) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeClusterCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeComponentCardinality) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::RelativeVertexDegree) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-            Box::new(algorithms::StationaryProbabilities) as Box<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
+            algorithms::AccumulatedCardinalityRatios::new_boxed(),
+            algorithms::GraphNeighborhoodSize::new_boxed(),
+            algorithms::RelativeClusterCardinality::new_boxed(),
+            algorithms::RelativeComponentCardinality::new_boxed(),
+            algorithms::RelativeVertexDegree::new_boxed(),
+            algorithms::StationaryProbabilities::new_boxed(),
         ];
         let model_suite = training::par_train_models(tree, algs, &oracle)?;
         Ok(Self { model_suite })

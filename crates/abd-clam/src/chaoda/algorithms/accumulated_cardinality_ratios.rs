@@ -19,6 +19,13 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for AccumulatedCardinalityRa
 where
     T: DistanceValue,
 {
+    fn new_boxed() -> Box<dyn GraphAlgorithm<Id, I, T, A, M>>
+    where
+        Self: Sized,
+    {
+        Box::new(Self)
+    }
+
     fn rank_nodes<'a>(&self, graph: &'a Graph<T>, tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         let mut scores = graph
             .iter_nodes()

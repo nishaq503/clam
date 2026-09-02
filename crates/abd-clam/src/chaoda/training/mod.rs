@@ -60,7 +60,6 @@ where
     let layer_graphs = (min_depth..=tree_depth)
         .step_by(step_size)
         .map(Layer::new)
-        .map(|m| Box::new(m) as Box<dyn MetaMlPredictor<T, A>>)
         .map(|predictor| {
             let (directly_selected, ancestors) = tree.select_chaoda_clusters(&predictor, min_depth);
             Graph::from_tree(tree, &directly_selected, &ancestors)
@@ -78,24 +77,18 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Initialize the meta-ml models for each graph algorithm. These models will be trained over the epochs.
-    let mut models_in_training = algs.iter().map(|_| vec![]).collect::<Vec<_>>();
-
-    let max_epochs = 10; // TODO(Najib): Tune this based on convergence of the training process.
+    // Over the course of several epochs, train new models and accumulate more training data for each graph algorithm and meta-ml model.
+    let max_epochs = 10; // TODO(Najib): Set the number of epochs based on convergence of the training process, after testing with a few datasets.
     for epoch in 0..max_epochs {
         let mut roc_scores = vec![];
 
-        for ((alg, alg_models), alg_data) in algs.iter().zip(&mut models_in_training).zip(&mut training_data) {
+        for (alg, alg_data) in algs.iter().zip(&mut training_data) {
             // For each algorithm, fit new models using the data we have so far.
             let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(alg_data)?;
             let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(alg_data)?;
-            *alg_models = vec![
-                Box::new(lr_model) as Box<dyn MetaMlPredictor<T, A>>,
-                Box::new(dt_model) as Box<dyn MetaMlPredictor<T, A>>,
-            ];
 
             // Generate more data for use in the next epoch
-            for model in alg_models {
+            for model in &[lr_model.into_boxed(), dt_model.into_boxed()] {
                 // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
                 let (directly_selected, ancestors) = tree.select_chaoda_clusters(model, min_depth);
                 let graph = Graph::from_tree(tree, &directly_selected, &ancestors);
@@ -116,16 +109,14 @@ where
     }
 
     // Train fresh models on all accumulated data.
-    let mut trained_models = vec![];
-    for alg_data in training_data {
-        let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(&alg_data)?;
-        let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(&alg_data)?;
-
-        trained_models.push(vec![
-            Box::new(lr_model) as Box<dyn MetaMlPredictor<T, A>>,
-            Box::new(dt_model) as Box<dyn MetaMlPredictor<T, A>>,
-        ]);
-    }
+    let trained_models = training_data
+        .iter()
+        .map(|alg_data| {
+            let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(alg_data)?;
+            let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(alg_data)?;
+            Ok(vec![lr_model.into_boxed(), dt_model.into_boxed()])
+        })
+        .collect::<Result<Vec<_>, String>>()?;
 
     Ok(algs.into_iter().zip(trained_models).collect())
 }
@@ -157,7 +148,7 @@ where
     let layer_depths = (min_depth..=tree_depth).step_by(step_size).collect::<Vec<_>>();
     let layer_graphs = layer_depths
         .into_par_iter()
-        .map(|d| Box::new(Layer::new(d)) as Box<dyn MetaMlPredictor<T, A>>)
+        .map(Layer::new)
         .map(|predictor| {
             let (directly_selected, ancestors) = tree.par_select_chaoda_clusters(&predictor, min_depth);
             Graph::par_from_tree(tree, &directly_selected, &ancestors)
@@ -175,27 +166,21 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Initialize the meta-ml models for each graph algorithm. These models will be trained over the epochs.
-    let mut models_in_training = algs.iter().map(|_| vec![]).collect::<Vec<_>>();
-
     let max_epochs = 10; // TODO(Najib): Tune this based on convergence of the training process.
     for epoch in 0..max_epochs {
         let mut roc_scores = vec![];
 
         let new_scores = algs
             .par_iter()
-            .zip(&mut models_in_training)
             .zip(&mut training_data)
-            .map(|((alg, alg_models), alg_data)| {
+            .map(|(alg, alg_data)| {
                 // For each algorithm, train new models using the data we have so far.
-                let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(alg_data)?;
-                let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(alg_data)?;
-                *alg_models = vec![
-                    Box::new(lr_model) as Box<dyn MetaMlPredictor<T, A>>,
-                    Box::new(dt_model) as Box<dyn MetaMlPredictor<T, A>>,
-                ];
+                let (lr_model, dt_model) = rayon::join(
+                    || <LinearRegression as MetaMlTrainer<T, A>>::fit(alg_data),
+                    || <DecisionTree as MetaMlTrainer<T, A>>::fit(alg_data),
+                );
 
-                alg_models
+                [lr_model?.into_boxed(), dt_model?.into_boxed()]
                     .iter()
                     .map(|model| {
                         // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
@@ -223,12 +208,11 @@ where
     let trained_models = training_data
         .into_par_iter()
         .map(|alg_data| {
-            let lr_model = <LinearRegression as MetaMlTrainer<T, A>>::fit(&alg_data)?;
-            let dt_model = <DecisionTree as MetaMlTrainer<T, A>>::fit(&alg_data)?;
-            Ok(vec![
-                Box::new(lr_model) as Box<dyn MetaMlPredictor<T, A> + Send + Sync>,
-                Box::new(dt_model) as Box<dyn MetaMlPredictor<T, A> + Send + Sync>,
-            ])
+            let (lr_model, dt_model) = rayon::join(
+                || <LinearRegression as MetaMlTrainer<T, A>>::fit(&alg_data),
+                || <DecisionTree as MetaMlTrainer<T, A>>::fit(&alg_data),
+            );
+            Ok(vec![lr_model?.into_boxed(), dt_model?.into_boxed()])
         })
         .collect::<Result<Vec<_>, String>>()?;
 

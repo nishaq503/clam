@@ -15,6 +15,13 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for RelativeClusterCardinali
 where
     T: DistanceValue,
 {
+    fn new_boxed() -> Box<dyn GraphAlgorithm<Id, I, T, A, M>>
+    where
+        Self: Sized,
+    {
+        Box::new(Self)
+    }
+
     fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         // The more items in the node, the less anomalous it is, the higher the rank.
         graph.iter_nodes().map(|n| (n, n.num_items())).collect()

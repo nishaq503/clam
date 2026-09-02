@@ -19,6 +19,13 @@ impl<Id, I, T, A, M> GraphAlgorithm<Id, I, T, A, M> for RelativeComponentCardina
 where
     T: DistanceValue,
 {
+    fn new_boxed() -> Box<dyn GraphAlgorithm<Id, I, T, A, M>>
+    where
+        Self: Sized,
+    {
+        Box::new(Self)
+    }
+
     fn rank_nodes<'a>(&self, graph: &'a Graph<T>, _: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Vec<(&'a Node<T>, usize)> {
         graph
             .iter_components()
