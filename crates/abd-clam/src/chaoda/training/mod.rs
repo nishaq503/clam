@@ -16,6 +16,20 @@ mod gen_samples;
 
 pub use gen_samples::{gen_training_sample, par_gen_training_sample};
 
+/// A trait for types that can be used as anomaly labels in the training process.
+///
+/// We provide an implementation of this trait for `bool`.
+pub trait AnomalyLabel {
+    /// Returns whether the label indicates that the item is an anomaly.
+    fn is_anomaly(&self) -> bool;
+}
+
+impl AnomalyLabel for bool {
+    fn is_anomaly(&self) -> bool {
+        *self
+    }
+}
+
 /// A type-alias for the nested vector of trained Meta-ML models.
 ///
 /// - The outer vector corresponds to the graph algorithms.
@@ -29,9 +43,6 @@ type TrainedModels<T, A, Alg> = Vec<(Alg, Vec<Box<dyn MetaMlPredictor<T, A>>>)>;
 /// - `tree`: A pre-built tree to use for training the models. The tree will be annotated with anomaly features before training and de-annotated just before
 ///   returning from this function.
 /// - `algorithms`: A list of the graph algorithms to use.
-/// - `oracle`: A function that takes item IDs and returns whether the item is an anomaly or not. This is used to guide the training of the models.
-/// - `initial_layer_depths`: The depths of the initial layers for the Meta-ML models: [`min_depth`, `max_depth`, `step_size`]. Training will be begin with
-///   layer-graphs of each eligible depth of clusters from the tree.
 ///
 /// # Returns
 ///
@@ -41,16 +52,12 @@ type TrainedModels<T, A, Alg> = Vec<(Alg, Vec<Box<dyn MetaMlPredictor<T, A>>>)>;
 ///
 /// - If the ROC scores fail to compute.
 /// - Training any model fails.
-pub fn train_models<Id, I, T, A, M, Alg, Oracle>(
-    tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>,
-    algs: Vec<Alg>,
-    oracle: &Oracle,
-) -> Result<TrainedModels<T, A, Alg>, String>
+pub fn train_models<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, algs: Vec<Alg>) -> Result<TrainedModels<T, A, Alg>, String>
 where
+    Id: AnomalyLabel,
     T: DistanceValue,
     M: Fn(&I, &I) -> T,
     Alg: AsRef<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>>,
-    Oracle: Fn(&Id) -> bool,
 {
     let min_depth = 4;
     let step_size = 4;
@@ -72,7 +79,7 @@ where
         .map(|alg| {
             layer_graphs
                 .iter()
-                .map(|graph| gen_training_sample(tree, graph, alg, oracle))
+                .map(|graph| gen_training_sample(tree, graph, alg))
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -92,7 +99,7 @@ where
                 // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
                 let (directly_selected, ancestors) = tree.select_chaoda_clusters(model, min_depth);
                 let graph = Graph::from_tree(tree, &directly_selected, &ancestors);
-                let new_sample = gen_training_sample(tree, &graph, alg, oracle)?;
+                let new_sample = gen_training_sample(tree, &graph, alg)?;
 
                 roc_scores.push(new_sample.1);
 
@@ -126,19 +133,14 @@ where
 /// # Errors
 ///
 /// - See [`train_models`] for possible errors.
-pub fn par_train_models<Id, I, T, A, M, Alg, Oracle>(
-    tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>,
-    algs: Vec<Alg>,
-    oracle: &Oracle,
-) -> Result<TrainedModels<T, A, Alg>, String>
+pub fn par_train_models<Id, I, T, A, M, Alg>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, algs: Vec<Alg>) -> Result<TrainedModels<T, A, Alg>, String>
 where
-    Id: Send + Sync,
+    Id: AnomalyLabel + Send + Sync,
     I: Send + Sync,
     T: DistanceValue + Send + Sync,
     A: Send + Sync,
     M: Fn(&I, &I) -> T + Send + Sync,
     Alg: AsRef<dyn algorithms::GraphAlgorithm<Id, I, T, A, M>> + Send + Sync,
-    Oracle: Fn(&Id) -> bool + Send + Sync,
 {
     let min_depth = 4;
     let step_size = 4;
@@ -161,7 +163,7 @@ where
         .map(|alg| {
             layer_graphs
                 .par_iter()
-                .map(|graph| par_gen_training_sample(tree, graph, alg, oracle))
+                .map(|graph| par_gen_training_sample(tree, graph, alg))
                 .collect::<Result<Vec<_>, _>>()
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -186,7 +188,7 @@ where
                         // For each model, create a new graph, apply the algorithm, and create training data for the next epoch.
                         let (directly_selected, ancestors) = tree.par_select_chaoda_clusters(model, min_depth);
                         let graph = Graph::par_from_tree(tree, &directly_selected, &ancestors);
-                        let new_sample = par_gen_training_sample(tree, &graph, alg, oracle)?;
+                        let new_sample = par_gen_training_sample(tree, &graph, alg)?;
                         alg_data.push(new_sample);
                         Ok(new_sample.1)
                     })

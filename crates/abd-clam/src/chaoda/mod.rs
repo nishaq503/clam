@@ -23,6 +23,7 @@ pub mod algorithms;
 
 pub use features::{AnomalyFeatures, normalize_features};
 pub use graph::{Component, Graph, Node};
+pub use training::AnomalyLabel;
 
 /// The meta-ml algorithms associated with a single graph algorithm.
 type PerGraphMetaMl<T, A> = Vec<Box<dyn MetaMlPredictor<T, A>>>;
@@ -43,11 +44,11 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
     ///
     /// - Any roc-scores fail to be computed.
     /// - Any of the meta-ml models fails to train.
-    pub fn train<Oracle>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, oracle: &Oracle) -> Result<Self, String>
+    pub fn train(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Self, String>
     where
+        Id: AnomalyLabel,
         T: DistanceValue,
         M: Fn(&I, &I) -> T,
-        Oracle: Fn(&Id) -> bool,
     {
         let algs = vec![
             algorithms::AccumulatedCardinalityRatios::new_boxed(),
@@ -57,7 +58,7 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
             algorithms::RelativeVertexDegree::new_boxed(),
             algorithms::StationaryProbabilities::new_boxed(),
         ];
-        let model_suite = training::train_models(tree, algs, &oracle)?;
+        let model_suite = training::train_models(tree, algs)?;
         Ok(Self { model_suite })
     }
 
@@ -87,14 +88,13 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
     /// # Errors
     ///
     /// - See [`train`](Self::train) for error conditions.
-    pub fn par_train<Oracle>(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>, oracle: &Oracle) -> Result<Self, String>
+    pub fn par_train(tree: &Tree<Id, I, T, (A, AnomalyFeatures), M>) -> Result<Self, String>
     where
-        Id: Send + Sync,
+        Id: AnomalyLabel + Send + Sync,
         I: Send + Sync,
         T: DistanceValue + Send + Sync,
         A: Send + Sync,
         M: Fn(&I, &I) -> T + Send + Sync,
-        Oracle: Fn(&Id) -> bool + Send + Sync,
     {
         let algs = vec![
             algorithms::AccumulatedCardinalityRatios::new_boxed(),
@@ -104,7 +104,7 @@ impl<Id, I, T, A, M> Chaoda<Id, I, T, A, M> {
             algorithms::RelativeVertexDegree::new_boxed(),
             algorithms::StationaryProbabilities::new_boxed(),
         ];
-        let model_suite = training::par_train_models(tree, algs, &oracle)?;
+        let model_suite = training::par_train_models(tree, algs)?;
         Ok(Self { model_suite })
     }
 
